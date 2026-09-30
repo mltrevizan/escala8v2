@@ -4,12 +4,16 @@ import { appState } from './state.js';
 import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
+import { initModalsModule } from './modals.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando v2 com Navegação por Abas...");
+  console.log("🚀 Inicializando v2 com Modais Isolados e Navegação por Abas...");
   initFirebase();
 
-  // Carga paralela das coleções no Firestore
+  // Injeta modais no DOM
+  initModalsModule();
+
+  // Carga paralela de dados no Firestore
   appState.servidores = await fetchCollection('servidores');
   appState.escalas = await fetchCollection('escalas');
   await initDelegaciasModule();
@@ -28,11 +32,9 @@ function updateUI() {
     `;
   }
 
-  // Renderiza a aba padrão (CRF)
   renderCalendarGrid('calendar-crf-container', 'CRF');
 }
 
-// Alternância Dinâmica de Abas
 window.switchTab = function(tabName) {
   const tabs = ['crf', 'delegacia', 'unidades', 'servidores'];
 
@@ -51,7 +53,6 @@ window.switchTab = function(tabName) {
     }
   });
 
-  // Renderizações sob demanda ao clicar na aba
   if (tabName === 'crf') {
     renderCalendarGrid('calendar-crf-container', 'CRF');
   } else if (tabName === 'delegacia') {
