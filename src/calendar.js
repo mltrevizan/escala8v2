@@ -28,33 +28,33 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   ).join('');
 
   let html = `
-    <!-- Barra Superior da Escala -->
-    <div class="p-3.5 bg-slate-50/80 border-b border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
+    <!-- Topo / Controle do Calendário -->
+    <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-2 font-sans">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-slate-800 tracking-wide uppercase">
+        <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
           ${scope === 'CRF' ? '🏛️ Escala Geral CRF & Extrajornada' : '🏢 Escala por Delegacia / Plantão Unificado'}
         </span>
       </div>
 
       ${scope === 'DELEGACIA' ? `
         <div class="flex items-center gap-2">
-          <label class="text-xs font-semibold text-slate-600">Unidade / Lotação:</label>
-          <select id="select-calendar-delegacia" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-sm">
+          <label class="text-xs font-medium text-slate-600">Unidade:</label>
+          <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1 shadow-xs">
             ${delegaciasOptions}
           </select>
         </div>
       ` : ''}
     </div>
 
-    <!-- Navegação do Mês -->
-    <div class="p-3 bg-white border-b border-slate-200/80 flex items-center justify-between font-sans">
-      <button id="btn-prev-month" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition shadow-sm">◀ Anterior</button>
-      <span class="font-extrabold text-sm text-slate-800 tracking-tight">${monthNames[currentMonth]} ${currentYear}</span>
-      <button id="btn-next-month" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition shadow-sm">Próximo ▶</button>
+    <!-- Navegação de Mês -->
+    <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between font-sans">
+      <button id="btn-prev-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs">◀ Anterior</button>
+      <span class="font-extrabold text-xs text-slate-800 uppercase tracking-wider">${monthNames[currentMonth]} ${currentYear}</span>
+      <button id="btn-next-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs">Próximo ▶</button>
     </div>
 
-    <!-- Cabeçalho dos Dias -->
-    <div class="grid grid-cols-7 text-center bg-slate-100/80 text-[11px] font-bold text-slate-600 border-b border-slate-200/80 py-2 font-sans">
+    <!-- Cabeçalho dos Dias da Semana -->
+    <div class="grid grid-cols-7 text-center bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 py-1.5 font-sans uppercase">
       <div class="text-red-600">Dom</div>
       <div>Seg</div>
       <div>Ter</div>
@@ -64,12 +64,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-600">Sáb</div>
     </div>
 
-    <!-- Grade do Mês -->
-    <div class="grid grid-cols-7 auto-rows-fr bg-slate-200/70 gap-px border-b border-r border-slate-200/80 font-sans">
+    <!-- Grade do Mês - Padrão v1 -->
+    <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r border-slate-200 font-sans">
   `;
 
   for (let i = 0; i < firstDay; i++) {
-    html += `<div class="bg-slate-100/30 p-2"></div>`;
+    html += `<div class="bg-slate-50/50 p-1"></div>`;
   }
 
   for (let day = 1; day <= totalDays; day++) {
@@ -93,38 +93,38 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // Fundo Pastel Elegante (Estilo v1)
+    // Fundo exato v1: Feriado rosa/suave, Final de Semana amarelado sutil, Dia comum branco
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
-      bgDayClass = 'bg-rose-50/50';
+      bgDayClass = 'bg-red-50/40';
     } else if (isWeekend) {
-      bgDayClass = 'bg-amber-50/40';
+      bgDayClass = 'bg-amber-50/30';
     }
 
     html += `
-      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative border-t border-l border-slate-200/60 min-h-[125px] h-auto">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-extrabold ${feriadoDoDia ? 'text-rose-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800')}">${day}</span>
+      <div class="${bgDayClass} p-1 flex flex-col justify-between relative border-t border-l border-slate-200/80 min-h-[115px] h-auto">
+        <div class="flex items-center justify-between mb-1 px-0.5">
+          <span class="text-[11px] font-extrabold ${feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800')}">${day}</span>
           ${feriadoDoDia ? `
-            <span class="text-[8px] bg-rose-100/80 text-rose-800 border border-rose-200 font-bold px-1 rounded truncate max-w-[85px]" title="${feriadoDoDia.descricao}">
-              🎉 ${feriadoDoDia.descricao}
+            <span class="text-[7.5px] bg-red-100 text-red-800 border border-red-200 font-bold px-1 rounded truncate max-w-[80px]" title="${feriadoDoDia.descricao}">
+              ${feriadoDoDia.descricao}
             </span>
           ` : ''}
         </div>
 
-        <div class="space-y-1.5 flex-1 flex flex-col justify-start">
+        <div class="space-y-1 flex-1 flex flex-col justify-start">
     `;
 
     if (scope === 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      // Cores em tom pastel com bordas sutis de baixo contraste
-      html += renderBalaoPeriodo('DIURNO', '07h30 às 19h30', diurnoEscalas, 'bg-amber-50/70 border-amber-200/70 text-amber-950');
-      html += renderBalaoPeriodo('NOTURNO', '19h30 às 07h30', noturnoEscalas, 'bg-slate-100/70 border-slate-200/90 text-slate-900');
+      // Estilo exato dos balões da v1
+      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#FFFBEB] border-[#FDE68A] text-amber-950');
+      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#F8FAFC] border-[#E2E8F0] text-slate-900');
     } else {
       if (escalasDoDia.length === 0) {
-        html += `<span class="text-[9px] text-slate-300 italic block font-light">Sem plantão</span>`;
+        html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
       } else {
         escalasDoDia.forEach(esc => {
           const srv = appState.servidores.find(s => s.id === esc.servidorId);
@@ -135,7 +135,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           html += `
             <div onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
-                 class="text-[10px] p-1.5 rounded-md border bg-indigo-50/60 border-indigo-200/60 text-indigo-950 font-semibold shadow-sm cursor-pointer hover:bg-indigo-100/80 transition">
+                 class="text-[9.5px] p-1 rounded border bg-blue-50/80 border-blue-200 text-blue-950 font-semibold shadow-2xs cursor-pointer hover:bg-blue-100 transition">
               <span class="truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
             </div>
           `;
@@ -169,9 +169,9 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
-      <div class="text-[9px] p-1 rounded-md border ${bgStyle} opacity-40 flex items-center justify-between">
+      <div class="text-[8.5px] p-0.5 px-1 rounded border ${bgStyle} opacity-35 flex items-center justify-between">
         <span class="font-semibold text-slate-500">${titulo}</span>
-        <span class="text-[8px] text-slate-400 italic">Livre</span>
+        <span class="text-[7.5px] text-slate-400 italic">Livre</span>
       </div>
     `;
   }
@@ -206,9 +206,9 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
 
     if (isExtra) {
       return `
-        <div class="font-extrabold text-purple-900 leading-tight flex items-center justify-between gap-1">
+        <div class="font-bold text-purple-900 leading-tight flex items-center justify-between gap-1">
           <span class="truncate">${nomeExibicao}</span>
-          <span class="bg-purple-600/90 text-white text-[7px] font-black px-1 rounded shrink-0">EXTRA</span>
+          <span class="bg-purple-600 text-white text-[6.5px] font-black px-0.5 rounded shrink-0">EXTRA</span>
         </div>
       `;
     }
@@ -222,12 +222,12 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   return `
     <div onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
-         class="p-1.5 rounded-lg border ${bgStyle} shadow-sm space-y-1 cursor-pointer hover:shadow-md transition">
-      <div class="flex items-center justify-between border-b border-slate-300/40 pb-0.5">
-        <span class="text-[9px] font-bold tracking-wider uppercase text-slate-700">${titulo}</span>
-        <span class="text-[8px] font-mono font-medium text-slate-500">${horario}</span>
+         class="p-1 rounded-md border ${bgStyle} shadow-2xs space-y-0.5 cursor-pointer hover:shadow-xs transition">
+      <div class="flex items-center justify-between border-b border-black/5 pb-0.5">
+        <span class="text-[8.5px] font-bold tracking-wider uppercase text-slate-700">${titulo}</span>
+        <span class="text-[7.5px] font-mono text-slate-400 font-medium">${horario}</span>
       </div>
-      <div class="space-y-0.5 text-[9.5px]">
+      <div class="space-y-0.5 text-[9px]">
         ${listaHtml}
       </div>
     </div>
@@ -261,13 +261,13 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip Flutuante com Posição Inteligente
+// Tooltip Flutuante v1
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
 
   let content = `
-    <div class="p-3 space-y-2 text-left min-w-[230px] font-sans">
+    <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
       <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
         <span>${titulo}</span>
         <span class="text-[10px] font-mono text-slate-500">${horario}</span>
@@ -280,7 +280,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
     content += `
-      <div class="pt-1.5 border-t border-slate-100 space-y-0.5">
+      <div class="pt-1 border-t border-slate-100 space-y-0.5">
         <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
           <span>${srv?.nome || 'Não informado'}</span>
           ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
@@ -304,7 +304,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
 
   const content = `
-    <div class="p-3 space-y-1 text-left min-w-[210px] font-sans">
+    <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
       <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs">${srv?.nome || 'Não informado'}</div>
       <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
       <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
@@ -321,7 +321,7 @@ function exibirElementoTooltip(event, htmlContent) {
   if (!tooltip) {
     tooltip = document.createElement('div');
     tooltip.id = 'global-calendar-tooltip';
-    tooltip.className = 'fixed z-50 bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
+    tooltip.className = 'fixed z-50 bg-white border border-slate-200 shadow-xl rounded-xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
     document.body.appendChild(tooltip);
   }
 
