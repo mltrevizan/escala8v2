@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- PREVENÇÃO DE CACHE -->
+  <!-- ÍCONE DA ABA (Remove o erro 404 de favicon.ico no console) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚔</text></svg>">
+
+  <!-- PREVENÇÃO DE CACHE (Força verificação de versão atualizada) -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -48,14 +51,18 @@
     </nav>
 
     <!-- CONTEÚDO DAS ABAS -->
+
+    <!-- Aba 1: Escala CRF (Geral / SDP) -->
     <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
+    <!-- Aba 2: Escala por Delegacia / Plantão Unificado -->
     <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div id="calendar-delegacia-container"></div>
     </main>
 
+    <!-- Aba 3: Gestão de Delegacias e Plantões Unificados -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
         <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados Mapeados</h2>
@@ -63,6 +70,7 @@
       <div id="delegacias-container"></div>
     </main>
 
+    <!-- Aba 4: Gestão e Importação de Servidores -->
     <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
@@ -78,7 +86,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v2.1.0) -->
-  <script type="module" src="./src/app.js?v=2.1.0"></script>
+  <!-- Script Principal ES6 (Atualizado para v2.1.1) -->
+  <script type="module" src="./src/app.js?v=2.1.1"></script>
 </body>
 </html>
