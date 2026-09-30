@@ -5,17 +5,17 @@ import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
 import { initModalsModule } from './modals.js';
-import { renderGestaoEscalasModule } from './gestaoEscalas.js';
+import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderFeriadosModule } from './feriados.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando v2.4 com Módulo de Feriados...");
+  console.log("🚀 Inicializando 8ª CRF - Escala v2.5.0...");
   initFirebase();
 
-  // Injeta a estrutura de modais no DOM
+  // Injeta estrutura de modais no DOM
   initModalsModule();
 
-  // Carrega as coleções do Firestore
+  // Carrega coleções do Firestore
   appState.servidores = await fetchCollection('servidores');
   appState.escalas = await fetchCollection('escalas');
   appState.feriados = await fetchCollection('feriados');
@@ -30,7 +30,7 @@ function updateUI() {
   if (statusElem) {
     statusElem.innerHTML = `
       <span class="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-1 rounded-full">
-        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores | ${appState.delegacias.length} Unidades | ${appState.feriados?.length || 0} Feriados)
+        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores | ${appState.delegacias.length} Unidades)
       </span>
     `;
   }
@@ -39,18 +39,18 @@ function updateUI() {
 }
 
 window.switchTab = function(tabName) {
-  const tabs = ['crf', 'delegacia', 'gestao', 'feriados', 'unidades', 'servidores'];
+  const tabs = ['crf', 'delegacia', 'gestao-crf', 'gestao-del', 'feriados', 'unidades', 'servidores'];
 
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-btn-${t}`);
     const content = document.getElementById(`tab-content-${t}`);
 
     if (t === tabName) {
-      btn?.classList.add('bg-indigo-600', 'text-white', 'shadow');
+      btn?.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
       btn?.classList.remove('text-slate-600', 'hover:bg-slate-100');
       content?.classList.remove('hidden');
     } else {
-      btn?.classList.remove('bg-indigo-600', 'text-white', 'shadow');
+      btn?.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
       btn?.classList.add('text-slate-600', 'hover:bg-slate-100');
       content?.classList.add('hidden');
     }
@@ -63,8 +63,10 @@ window.switchTab = function(tabName) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  } else if (tabName === 'gestao') {
-    renderGestaoEscalasModule('gestao-escalas-container');
+  } else if (tabName === 'gestao-crf') {
+    renderGestaoCrfModule('gestao-crf-container');
+  } else if (tabName === 'gestao-del') {
+    renderGestaoDelegaciasModule('gestao-delegacias-container');
   } else if (tabName === 'feriados') {
     renderFeriadosModule('feriados-container');
   } else if (tabName === 'unidades') {
