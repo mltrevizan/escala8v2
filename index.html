@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- PREVENÇÃO DE CACHE (Força verificação de versão atualizada) -->
+  <!-- PREVENÇÃO DE CACHE -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -23,7 +23,7 @@
     <header class="bg-white p-6 rounded-2xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
-        <p class="text-xs text-slate-500">Módulo de Escalas, Delegacias e Consórcios</p>
+        <p class="text-xs text-slate-500">Módulo de Escalas, Delegacias e Servidores</p>
       </div>
       <div id="app-status">
         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
@@ -40,7 +40,7 @@
     <!-- Painel de Delegacias -->
     <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
-        <h2 class="font-bold text-sm text-slate-800">Unidades & Delegacias Mapeadas</h2>
+        <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados</h2>
       </div>
       <div id="delegacias-container">
         <!-- Renderizado via delegacias.js -->
@@ -84,7 +84,7 @@
         <div>
           <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
           <select id="modal-escala-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
-            <!-- Preenchido dinamicamente via JS -->
+            <!-- Preenchido via JS -->
           </select>
         </div>
 
@@ -119,7 +119,96 @@
     </div>
   </div>
 
+  <!-- Modal Editar Servidor / Policial -->
+  <div id="modal-servidor" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-slate-900 text-sm">Editar Cadastro de Policial</h3>
+        <button onclick="window.fecharModalServidor()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+      </div>
+
+      <form onsubmit="window.salvarServidorModal(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="modal-srv-id">
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nome Completo:</label>
+          <input type="text" id="modal-srv-nome" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Cargo:</label>
+            <input type="text" id="modal-srv-cargo" required class="w-full border rounded-xl p-2 bg-slate-50">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Login:</label>
+            <input type="text" id="modal-srv-login" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Telefone / Contato:</label>
+          <input type="text" id="modal-srv-telefone" class="w-full border rounded-xl p-2 bg-slate-50">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Lotação (Delegacia):</label>
+          <select id="modal-srv-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium">
+            <!-- Preenchido via JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nível de Acesso:</label>
+          <select id="modal-srv-nivel" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
+            <option value="APJ">APJ / Agente</option>
+            <option value="DELEGADO">DELEGADO</option>
+            <option value="SUPERINTENDENTE">SUPERINTENDENTE</option>
+            <option value="COORDENADOR">COORDENADOR</option>
+            <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end gap-2">
+          <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Configuração de Plantão Unificado -->
+  <div id="modal-unificacao" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-slate-900 text-sm">Configurar Plantão Unificado</h3>
+        <button onclick="window.fecharModalUnificacao()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+      </div>
+
+      <form onsubmit="window.salvarUnificacao(event)" class="space-y-4 text-xs">
+        <input type="hidden" id="modal-unificacao-id">
+        
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Delegacia Principal:</label>
+          <input type="text" id="modal-unificacao-nome" readonly class="w-full border rounded-xl p-2 bg-slate-100 text-slate-600 font-bold">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Selecione as Delegacias que farão parte deste Plantão Unificado:</label>
+          <div id="modal-unificacao-lista" class="space-y-1.5 max-h-48 overflow-y-auto border p-2 rounded-xl bg-slate-50">
+            <!-- Checkboxes gerados via JS -->
+          </div>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end gap-2">
+          <button type="button" onclick="window.fecharModalUnificacao()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Unificação</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Início do Módulo ES6 da v2 -->
-  <script type="module" src="./src/app.js?v=2.0.6"></script>
+  <script type="module" src="./src/app.js?v=2.0.8"></script>
 </body>
 </html>
