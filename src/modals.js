@@ -283,7 +283,7 @@ function setupModalFunctions() {
       if (appState.calendarScope === 'CRF') {
         selectTipo.innerHTML = `
           <option value="REGULAR">Escala Regular (CRF)</option>
-          <option value="SDP">Extrajornada (SDP)</option>
+          <option value="EXTRAJORNADA">Extrajornada (Suplementar)</option>
         `;
       } else {
         selectTipo.innerHTML = `
