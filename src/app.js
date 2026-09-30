@@ -1,7 +1,7 @@
 // src/app.js
 import { initFirebase, fetchCollection } from './db.js';
 import { appState } from './state.js';
-import { renderServidoresTable, processCSVImport } from './servidores.js';
+import { renderServidoresTable, processCSVImportComUpsert } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
 import { initModalsModule } from './modals.js';
@@ -9,7 +9,7 @@ import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEsc
 import { renderFeriadosModule } from './feriados.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando 8ª CRF - Escala v2.5.0...");
+  console.log("🚀 Inicializando 8ª CRF - Escala v2.5.7...");
   initFirebase();
 
   // Injeta estrutura de modais no DOM
@@ -86,8 +86,8 @@ function setupEventListeners() {
       const reader = new FileReader();
       reader.onload = async (evt) => {
         try {
-          const importedCount = await processCSVImport(evt.target.result);
-          alert(`Sucesso! ${importedCount} servidores foram importados.`);
+          const result = await processCSVImportComUpsert(evt.target.result);
+          alert(`Sucesso!\n- ${result.atualizados} servidores foram atualizados.\n- ${result.criados} novos policiais foram adicionados.`);
           await initDelegaciasModule();
           renderServidoresTable('servidores-table-container');
         } catch (err) {
