@@ -29,7 +29,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   let html = `
     <!-- Topo / Controle do Calendário -->
-    <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-2 font-sans">
+    <div class="p-3.5 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-2 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
           ${scope === 'CRF' ? '🏛️ Escala Geral CRF & Extrajornada' : '🏢 Escala por Delegacia / Plantão Unificado'}
@@ -48,9 +48,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
     <!-- Navegação de Mês -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between font-sans">
-      <button id="btn-prev-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs">◀ Anterior</button>
+      <button id="btn-prev-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs transition">◀ Anterior</button>
       <span class="font-extrabold text-xs text-slate-800 uppercase tracking-wider">${monthNames[currentMonth]} ${currentYear}</span>
-      <button id="btn-next-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs">Próximo ▶</button>
+      <button id="btn-next-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs transition">Próximo ▶</button>
     </div>
 
     <!-- Cabeçalho dos Dias da Semana -->
@@ -64,7 +64,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-600">Sáb</div>
     </div>
 
-    <!-- Grade do Mês - Padrão v1 -->
+    <!-- Grade do Mês -->
     <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r border-slate-200 font-sans">
   `;
 
@@ -93,12 +93,11 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // Fundo exato v1: Feriado rosa/suave, Final de Semana amarelado sutil, Dia comum branco
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
-      bgDayClass = 'bg-red-50/40';
+      bgDayClass = 'bg-rose-50/60';
     } else if (isWeekend) {
-      bgDayClass = 'bg-amber-50/30';
+      bgDayClass = 'bg-amber-50/40';
     }
 
     html += `
@@ -119,9 +118,20 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      // Estilo exato dos balões da v1
-      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#FFFBEB] border-[#FDE68A] text-amber-950');
-      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#F8FAFC] border-[#E2E8F0] text-slate-900');
+      // Cores Mais Vivas & Marcantes para os Turnos
+      html += renderBalaoPeriodo(
+        'DIURNO', 
+        '07h30 - 19h30', 
+        diurnoEscalas, 
+        'bg-amber-100/90 border-amber-300 text-amber-950 shadow-xs'
+      );
+
+      html += renderBalaoPeriodo(
+        'NOTURNO', 
+        '19h30 - 07h30', 
+        noturnoEscalas, 
+        'bg-indigo-50 border-indigo-200 text-indigo-950 shadow-xs'
+      );
     } else {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
@@ -135,7 +145,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           html += `
             <div onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
-                 class="text-[9.5px] p-1 rounded border bg-blue-50/80 border-blue-200 text-blue-950 font-semibold shadow-2xs cursor-pointer hover:bg-blue-100 transition">
+                 class="text-[9.5px] p-1 rounded border bg-sky-100/80 border-sky-300 text-sky-950 font-semibold shadow-xs cursor-pointer hover:bg-sky-200 transition">
               <span class="truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
             </div>
           `;
@@ -169,9 +179,9 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
-      <div class="text-[8.5px] p-0.5 px-1 rounded border ${bgStyle} opacity-35 flex items-center justify-between">
-        <span class="font-semibold text-slate-500">${titulo}</span>
-        <span class="text-[7.5px] text-slate-400 italic">Livre</span>
+      <div class="text-[8.5px] p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
+        <span class="font-bold text-slate-600">${titulo}</span>
+        <span class="text-[7.5px] text-slate-500 italic">Livre</span>
       </div>
     `;
   }
@@ -208,24 +218,27 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
       return `
         <div class="font-bold text-purple-900 leading-tight flex items-center justify-between gap-1">
           <span class="truncate">${nomeExibicao}</span>
-          <span class="bg-purple-600 text-white text-[6.5px] font-black px-0.5 rounded shrink-0">EXTRA</span>
+          <span class="bg-purple-600 text-white text-[6.5px] font-black px-1 rounded shrink-0 shadow-xs">EXTRA</span>
         </div>
       `;
     }
     return `
-      <div class="font-semibold text-slate-800 leading-tight truncate">
+      <div class="font-semibold text-slate-900 leading-tight truncate">
         ${nomeExibicao}
       </div>
     `;
   }).join('');
 
+  const isDiurno = titulo === 'DIURNO';
+  const headerColorClass = isDiurno ? 'text-amber-900 border-amber-300/60' : 'text-indigo-900 border-indigo-200';
+
   return `
     <div onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
-         class="p-1 rounded-md border ${bgStyle} shadow-2xs space-y-0.5 cursor-pointer hover:shadow-xs transition">
-      <div class="flex items-center justify-between border-b border-black/5 pb-0.5">
-        <span class="text-[8.5px] font-bold tracking-wider uppercase text-slate-700">${titulo}</span>
-        <span class="text-[7.5px] font-mono text-slate-400 font-medium">${horario}</span>
+         class="p-1 rounded-md border ${bgStyle} space-y-0.5 cursor-pointer hover:brightness-95 hover:shadow-sm transition">
+      <div class="flex items-center justify-between border-b pb-0.5 ${headerColorClass}">
+        <span class="text-[8.5px] font-black tracking-wider uppercase">${titulo}</span>
+        <span class="text-[7.5px] font-mono font-bold opacity-80">${horario}</span>
       </div>
       <div class="space-y-0.5 text-[9px]">
         ${listaHtml}
@@ -261,7 +274,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip Flutuante v1
+// Tooltip Flutuante
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
