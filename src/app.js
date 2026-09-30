@@ -1,33 +1,14 @@
 // src/app.js
-import { initFirebase, fetchCollection, syncDocToFirestore } from './db.js';
+import { initFirebase, fetchCollection } from './db.js';
 import { appState } from './state.js';
 import { renderServidoresTable, processCSVImport } from './servidores.js';
-import { CONSTANTS } from './config.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
   console.log("🚀 Inicializando v2 Modular...");
   initFirebase();
 
-  // Carga inicial dos servidores
+  // Carga inicial dos servidores diretamente do Firestore
   appState.servidores = await fetchCollection('servidores');
-  
-  // Garante utilizador Admin se o banco estiver limpo
-  if (appState.servidores.length === 0) {
-    const adminSrv = {
-      id: CONSTANTS.DEFAULT_ADMIN_ID,
-      cargo: 'DELEGADO',
-      nome: 'ADMINISTRADOR DO SISTEMA',
-      login: 'admin',
-      sdpId: '8SDP',
-      delegaciaId: 'DEL_8SDP_P',
-      telefone: '(44)99999-9999',
-      funcaoCRF: 'COORDENADOR',
-      funcaoDP: 'SUPERINTENDENTE',
-      nivelAcesso: 'ADMINISTRADOR'
-    };
-    appState.servidores.push(adminSrv);
-    await syncDocToFirestore('servidores', adminSrv.id, adminSrv);
-  }
 
   updateUI();
   setupEventListeners();
