@@ -50,7 +50,7 @@ export function renderServidoresTable(containerId) {
           </span>
         </td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.editarServidor('${srv.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold">
+          <button onclick="window.editarServidor('${srv.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow">
             Editar
           </button>
         </td>
@@ -77,17 +77,65 @@ function getRoleBadgeClass(role) {
   }
 }
 
-// Importador e Parser de CSV Inteligente e Robusto
+// Modal de Edição de Servidor
+window.editarServidor = function(servidorId) {
+  const srv = appState.servidores.find(s => s.id === servidorId);
+  if (!srv) return;
+
+  const modal = document.getElementById('modal-servidor');
+  if (!modal) return;
+
+  document.getElementById('modal-srv-id').value = srv.id;
+  document.getElementById('modal-srv-nome').value = srv.nome || '';
+  document.getElementById('modal-srv-cargo').value = srv.cargo || 'AGENTE';
+  document.getElementById('modal-srv-login').value = srv.login || '';
+  document.getElementById('modal-srv-telefone').value = srv.telefone || '';
+  document.getElementById('modal-srv-nivel').value = srv.nivelAcesso || 'APJ';
+
+  const selectDelegacia = document.getElementById('modal-srv-delegacia');
+  if (selectDelegacia) {
+    selectDelegacia.innerHTML = appState.delegacias
+      .map(d => `<option value="${d.nome}" ${d.nome === srv.delegaciaId ? 'selected' : ''}>${d.nome}</option>`)
+      .join('');
+  }
+
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalServidor = function() {
+  document.getElementById('modal-servidor')?.classList.add('hidden');
+};
+
+window.salvarServidorModal = async function(e) {
+  e.preventDefault();
+
+  const id = document.getElementById('modal-srv-id').value;
+  const srvObj = appState.servidores.find(s => s.id === id);
+
+  if (srvObj) {
+    srvObj.nome = document.getElementById('modal-srv-nome').value.toUpperCase();
+    srvObj.cargo = document.getElementById('modal-srv-cargo').value.toUpperCase();
+    srvObj.login = document.getElementById('modal-srv-login').value.toLowerCase();
+    srvObj.telefone = document.getElementById('modal-srv-telefone').value;
+    srvObj.delegaciaId = document.getElementById('modal-srv-delegacia').value;
+    srvObj.nivelAcesso = document.getElementById('modal-srv-nivel').value;
+
+    await syncDocToFirestore('servidores', srvObj.id, srvObj);
+
+    window.fecharModalServidor();
+    renderServidoresTable('servidores-table-container');
+    alert("Dados do policial atualizados com sucesso!");
+  }
+};
+
+// Importador CSV
 export async function processCSVImport(csvText) {
   const lines = csvText.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length < 2) throw new Error("O arquivo CSV enviado está vazio ou fora do formato esperado.");
 
-  // Detecta se o delimitador é vírgula ou ponto-e-vírgula
   const delimiter = lines[0].includes(';') ? ';' : ',';
 
-  // Helper para limpar aspas e espaços de cada célula
   const parseLine = (line) => {
-    // Regex para lidar com valores entre aspas contendo delimitadores
     const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
     const matches = [];
     let match;
@@ -100,7 +148,6 @@ export async function processCSVImport(csvText) {
   const rawHeaders = parseLine(lines[0]);
   const headers = rawHeaders.map(h => normalizeText(h));
 
-  // Mapeamento dos índices das colunas com base no cabeçalho
   const colIndex = {
     nome: headers.findIndex(h => h.includes('nome')),
     cargo: headers.findIndex(h => h.includes('cargo')),
@@ -120,7 +167,7 @@ export async function processCSVImport(csvText) {
     if (cols.length < 2) continue;
 
     const nome = colIndex.nome !== -1 ? cols[colIndex.nome] : cols[1];
-    if (!nome) continue; // Pula linhas sem nome
+    if (!nome) continue;
 
     const cargo = colIndex.cargo !== -1 ? cols[colIndex.cargo] : cols[0];
     const login = colIndex.login !== -1 ? cols[colIndex.login] : normalizeText(nome.split(' ')[0]);
