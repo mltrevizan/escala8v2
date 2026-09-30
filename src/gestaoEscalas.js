@@ -28,7 +28,7 @@ export function renderGestaoEscalasModule(containerId) {
 
   let html = `
     <!-- Painel Superior de Ações e Filtros -->
-    <div class="p-4 bg-slate-50 border-b space-y-4">
+    <div class="p-4 bg-slate-50 border-b space-y-4 font-sans">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Painel de Gestão de Escalas & Automação</h2>
@@ -52,21 +52,21 @@ export function renderGestaoEscalasModule(containerId) {
         </div>
       </div>
 
-      <!-- Configuração de Horários Padrão (Parametrização) -->
+      <!-- Configuração de Horários Padrão (Parametrização CRF) -->
       <div class="bg-white p-3 rounded-xl border space-y-2">
-        <span class="text-xs font-bold text-slate-800 block">⏰ Parametrização de Horários Padrão de Trabalho:</span>
+        <span class="text-xs font-bold text-slate-800 block">⏰ Parametrização de Horários Padrão de Trabalho (CRF):</span>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border">
             <span class="font-bold text-indigo-700">Turno Integral (24h):</span>
-            <input type="text" id="horario-24h" value="08:00 às 08:00 (Próx. Dia)" class="border rounded px-2 py-1 font-mono text-[11px] w-full" readonly>
+            <input type="text" id="horario-24h" value="07:30 às 07:30 (Próx. Dia)" class="border rounded px-2 py-1 font-mono text-[11px] w-full bg-white text-slate-700" readonly>
           </div>
           <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border">
             <span class="font-bold text-amber-700">Diurno (12h D):</span>
-            <input type="text" id="horario-12d" value="08:00 às 20:00" class="border rounded px-2 py-1 font-mono text-[11px] w-full" readonly>
+            <input type="text" id="horario-12d" value="07:30 às 19:30" class="border rounded px-2 py-1 font-mono text-[11px] w-full bg-white text-slate-700" readonly>
           </div>
           <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border">
             <span class="font-bold text-purple-700">Noturno (12h N):</span>
-            <input type="text" id="horario-12n" value="20:00 às 08:00" class="border rounded px-2 py-1 font-mono text-[11px] w-full" readonly>
+            <input type="text" id="horario-12n" value="19:30 às 07:30" class="border rounded px-2 py-1 font-mono text-[11px] w-full bg-white text-slate-700" readonly>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@ export function renderGestaoEscalasModule(containerId) {
           <label class="block text-[10px] font-bold text-slate-600 mb-1">Filtrar por Escopo:</label>
           <select id="filtro-gestao-escopo" onchange="window.atualizarPainelGestao()" class="w-full text-xs border rounded-lg p-1.5 bg-white font-semibold">
             <option value="TODOS" ${escopoFiltro === 'TODOS' ? 'selected' : ''}>Todos os Escopos (CRF + Delegacias)</option>
-            <option value="CRF" ${escopoFiltro === 'CRF' ? 'selected' : ''}>Apenas CRF & Extrajornada (SDP)</option>
+            <option value="CRF" ${escopoFiltro === 'CRF' ? 'selected' : ''}>Apenas CRF & Extrajornada</option>
             <option value="DELEGACIA" ${escopoFiltro === 'DELEGACIA' ? 'selected' : ''}>Apenas Plantões por Delegacia</option>
           </select>
         </div>
@@ -98,9 +98,9 @@ export function renderGestaoEscalasModule(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Gerencial -->
+    <!-- Tabela Gerencial de Lançamentos -->
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs border-collapse">
+      <table class="w-full text-left text-xs border-collapse font-sans">
         <thead>
           <tr class="bg-slate-100 text-slate-700 border-b font-bold uppercase tracking-wider">
             <th class="p-3">Data</th>
@@ -132,8 +132,12 @@ export function renderGestaoEscalasModule(containerId) {
       const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
       const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
 
-      const isExtraOuSobreaviso = esc.tipo === 'SDP' || esc.tipo === 'SOBREAVISO';
-      const badgeClass = isExtraOuSobreaviso ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-indigo-50 text-indigo-900 border-indigo-200';
+      const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+      const isSobreaviso = esc.tipo === 'SOBREAVISO';
+
+      let badgeClass = 'bg-indigo-50 text-indigo-900 border-indigo-200';
+      if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
+      else if (isSobreaviso) badgeClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
 
       html += `
         <tr class="hover:bg-slate-50 transition">
@@ -142,7 +146,7 @@ export function renderGestaoEscalasModule(containerId) {
           <td class="p-3 text-slate-600">${nomeUnidade}</td>
           <td class="p-3">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
-              ${esc.tipo}
+              ${isExtra ? 'EXTRAJORNADA' : esc.tipo}
             </span>
           </td>
           <td class="p-3 font-mono text-slate-600">${esc.turno || '24h'}</td>
@@ -286,7 +290,7 @@ window.importarEscalasCSV = function(event) {
         
         if (!tipo) {
           if (isExtraStr === 'SIM' || isExtraStr === 'S' || isExtraStr === 'SDP') {
-            tipo = 'SDP';
+            tipo = 'EXTRAJORNADA';
           } else {
             tipo = 'REGULAR';
           }
