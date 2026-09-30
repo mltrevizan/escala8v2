@@ -13,7 +13,7 @@
 
   <title>8ª CRF - Sistema de Escalas v2</title>
   
-  <!-- FONTE INTER (GOOGLE FONTS) PARA REFINAMENTO TIPOGRÁFICO Padrão v1 -->
+  <!-- FONTE INTER (GOOGLE FONTS) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -25,23 +25,59 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
           }
         }
       }
     }
   </script>
 
+  <!-- REGRAS TIPOGRÁFICAS EXATAS DA V1 -->
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .cal-v1-day-num {
+      font-size: 11px !important;
+      line-height: 13px !important;
+      font-weight: 800 !important;
+    }
+    .cal-v1-header-title {
+      font-size: 8.5px !important;
+      line-height: 10px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.04em !important;
+    }
+    .cal-v1-header-time {
+      font-size: 7.5px !important;
+      line-height: 9px !important;
+      font-weight: 600 !important;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    }
+    .cal-v1-srv-name {
+      font-size: 9px !important;
+      line-height: 11.5px !important;
+      font-weight: 600 !important;
+    }
+    .cal-v1-tag-extra {
+      font-size: 6.5px !important;
+      line-height: 8px !important;
+      font-weight: 900 !important;
+      padding: 1px 3px !important;
+    }
+  </style>
+
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
-<body class="h-full flex flex-col font-sans p-3 sm:p-6 text-slate-800 bg-slate-100/80 antialiased">
+<body class="h-full flex flex-col font-sans p-3 sm:p-6 text-slate-800 bg-slate-100/80">
 
   <div class="max-w-7xl mx-auto w-full space-y-4">
     
     <!-- Header Principal -->
-    <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-black tracking-tight text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
         <p class="text-xs font-medium text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
@@ -52,7 +88,7 @@
     </header>
 
     <!-- Barra de Navegação por Abas -->
-    <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap gap-1">
+    <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm">
         <span>📅</span> Escala CRF / Extrajornada
       </button>
@@ -76,27 +112,27 @@
     <!-- CONTEÚDO DAS ABAS -->
 
     <!-- Aba 1: Escala CRF (Grade) -->
-    <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
     <!-- Aba 2: Escala por Delegacia (Grade) -->
-    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-delegacia-container"></div>
     </main>
 
     <!-- Aba 3: MÓDULO DE GESTÃO DE ESCALAS -->
-    <main id="tab-content-gestao" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-gestao" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-escalas-container"></div>
     </main>
 
     <!-- Aba 4: MÓDULO DE FERIADOS -->
-    <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="feriados-container"></div>
     </main>
 
     <!-- Aba 5: Gestão de Unidades -->
-    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
         <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados Mapeados</h2>
       </div>
@@ -104,7 +140,7 @@
     </main>
 
     <!-- Aba 6: Servidores -->
-    <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+    <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
         <div class="flex items-center gap-2">
@@ -119,7 +155,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v2.4.1) -->
-  <script type="module" src="./src/app.js?v=2.4.1"></script>
+  <!-- Script Principal ES6 (v2.4.7) -->
+  <script type="module" src="./src/app.js?v=2.4.7"></script>
 </body>
 </html>
