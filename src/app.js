@@ -6,10 +6,10 @@ import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando v2 Modular...");
+  console.log("🚀 Inicializando v2 com Navegação por Abas...");
   initFirebase();
 
-  // Carga paralela de coleções
+  // Carga paralela das coleções no Firestore
   appState.servidores = await fetchCollection('servidores');
   appState.escalas = await fetchCollection('escalas');
   await initDelegaciasModule();
@@ -28,10 +28,43 @@ function updateUI() {
     `;
   }
 
-  renderCalendarGrid('calendar-container');
-  renderDelegaciasCards('delegacias-container');
-  renderServidoresTable('servidores-table-container');
+  // Renderiza a aba padrão (CRF)
+  renderCalendarGrid('calendar-crf-container', 'CRF');
 }
+
+// Alternância Dinâmica de Abas
+window.switchTab = function(tabName) {
+  const tabs = ['crf', 'delegacia', 'unidades', 'servidores'];
+
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tab-btn-${t}`);
+    const content = document.getElementById(`tab-content-${t}`);
+
+    if (t === tabName) {
+      btn?.classList.add('bg-indigo-600', 'text-white', 'shadow');
+      btn?.classList.remove('text-slate-600', 'hover:bg-slate-100');
+      content?.classList.remove('hidden');
+    } else {
+      btn?.classList.remove('bg-indigo-600', 'text-white', 'shadow');
+      btn?.classList.add('text-slate-600', 'hover:bg-slate-100');
+      content?.classList.add('hidden');
+    }
+  });
+
+  // Renderizações sob demanda ao clicar na aba
+  if (tabName === 'crf') {
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+  } else if (tabName === 'delegacia') {
+    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
+      appState.selectedDelegaciaId = appState.delegacias[0].id;
+    }
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  } else if (tabName === 'unidades') {
+    renderDelegaciasCards('delegacias-container');
+  } else if (tabName === 'servidores') {
+    renderServidoresTable('servidores-table-container');
+  }
+};
 
 function setupEventListeners() {
   const csvInput = document.getElementById('csv-file-input');
@@ -47,7 +80,7 @@ function setupEventListeners() {
           alert(`Sucesso! ${importedCount} servidores foram importados e gravados no Firestore.`);
           
           await initDelegaciasModule();
-          updateUI();
+          renderServidoresTable('servidores-table-container');
         } catch (err) {
           alert("Erro ao processar CSV: " + err.message);
         }
