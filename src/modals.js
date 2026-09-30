@@ -4,13 +4,13 @@ import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderServidoresTable } from './servidores.js';
 import { renderDelegaciasCards } from './delegacias.js';
+import { renderGestaoEscalasModule } from './gestaoEscalas.js';
 
-// Injeta a estrutura HTML de todos os modais no DOM
 export function initModalsModule() {
   const container = document.createElement('div');
   container.id = 'modals-root';
   container.innerHTML = `
-    <!-- Modal Adicionar/Editar Escala -->
+    <!-- Modal Adicionar/Editar Escala Individual -->
     <div id="modal-escala" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
       <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
         <div class="flex items-center justify-between border-b pb-3">
@@ -52,7 +52,6 @@ export function initModalsModule() {
             </div>
           </div>
 
-          <!-- Réplica Automática -->
           <div class="bg-indigo-50/50 border border-indigo-100 p-3 rounded-xl space-y-2">
             <div class="flex items-center justify-between">
               <span class="font-bold text-indigo-900 text-[11px]">⚡ Réplica Automática (Opcional):</span>
@@ -88,6 +87,79 @@ export function initModalsModule() {
               <button type="button" onclick="window.fecharModalEscala()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
               <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Plantão</button>
             </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL GERADOR DE ESCALA EM LOTE -->
+    <div id="modal-gerador-lote" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h3 class="font-bold text-slate-900 text-sm">⚡ Gerador Automatizado de Escala em Lote</h3>
+          <button onclick="window.fecharModalGeradorLote()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+        </div>
+
+        <form onsubmit="window.executarGeradorLote(event)" class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Servidor / Policial:</label>
+            <select id="gerador-servidor" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Inicial:</label>
+              <input type="date" id="gerador-data-inicio" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono font-bold">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Final:</label>
+              <input type="date" id="gerador-data-fim" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono font-bold">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Escopo de Atuação:</label>
+              <select id="gerador-escopo" required onchange="window.atualizarOpcoesGerador()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
+                <option value="CRF">CRF & Extrajornada (SDP)</option>
+                <option value="DELEGACIA">Plantão por Delegacia</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
+              <select id="gerador-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700"></select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
+            <select id="gerador-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Regra / Rodízio:</label>
+              <select id="gerador-regra" class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+                <option value="24x72">Escala 24x72 (A cada 4 dias)</option>
+                <option value="12x36">Escala 12x36 (A cada 2 dias)</option>
+                <option value="DIARIO">Diário (Todos os dias)</option>
+                <option value="DIAS_UTEIS">Segunda a Sexta (Dias Úteis)</option>
+                <option value="FINS_SEMANA">Sábados e Domingos</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Turno:</label>
+              <select id="gerador-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-semibold">
+                <option value="24h">24 Horas (Integral)</option>
+                <option value="12h (D)">12 Horas (Diurno)</option>
+                <option value="12h (N)">12 Horas (Noturno)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t flex justify-end gap-2">
+            <button type="button" onclick="window.fecharModalGeradorLote()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow">Gerar Escalas</button>
           </div>
         </form>
       </div>
@@ -183,9 +255,8 @@ export function initModalsModule() {
   setupModalFunctions();
 }
 
-// Funções Globais de Controle dos Modais
 function setupModalFunctions() {
-  // Modal de Escalas
+  // Modal de Escala Individual
   window.abrirModalEscala = function(dateStr = null, escalaId = null) {
     const modal = document.getElementById('modal-escala');
     if (!modal) return;
@@ -239,7 +310,7 @@ function setupModalFunctions() {
     } else {
       tituloModal.innerText = "Lançar Novo Plantão";
       document.getElementById('modal-escala-id').value = '';
-      document.getElementById('modal-escala-data').value = dateStr;
+      document.getElementById('modal-escala-data').value = dateStr || new Date().toISOString().split('T')[0];
       btnExcluir?.classList.add('hidden');
     }
 
@@ -314,8 +385,7 @@ function setupModalFunctions() {
     }
 
     window.fecharModalEscala();
-    const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
-    renderCalendarGrid(currentContainer, appState.calendarScope);
+    refreshViews();
   };
 
   window.excluirEscalaAtual = async function() {
@@ -328,8 +398,123 @@ function setupModalFunctions() {
     await syncDocToFirestore('escalas', escalaId, null, true);
 
     window.fecharModalEscala();
-    const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
-    renderCalendarGrid(currentContainer, appState.calendarScope);
+    refreshViews();
+  };
+
+  // Gerador de Escala em Lote
+  window.abrirModalGeradorLote = function() {
+    const modal = document.getElementById('modal-gerador-lote');
+    if (!modal) return;
+
+    const selectServidor = document.getElementById('gerador-servidor');
+    selectServidor.innerHTML = appState.servidores
+      .map(s => `<option value="${s.id}">${s.nome} (${s.cargo})</option>`)
+      .join('');
+
+    const selectDelegacia = document.getElementById('gerador-delegacia');
+    selectDelegacia.innerHTML = appState.delegacias
+      .map(d => `<option value="${d.id}">${d.nome}</option>`)
+      .join('');
+
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('gerador-data-inicio').value = hoje;
+    document.getElementById('gerador-data-fim').value = hoje;
+
+    window.atualizarOpcoesGerador();
+    modal.classList.remove('hidden');
+  };
+
+  window.fecharModalGeradorLote = function() {
+    document.getElementById('modal-gerador-lote')?.classList.add('hidden');
+  };
+
+  window.atualizarOpcoesGerador = function() {
+    const escopo = document.getElementById('gerador-escopo').value;
+    const selectTipo = document.getElementById('gerador-tipo');
+
+    if (escopo === 'CRF') {
+      selectTipo.innerHTML = `
+        <option value="REGULAR">Escala Regular (CRF)</option>
+        <option value="SDP">Extrajornada (SDP)</option>
+      `;
+    } else {
+      selectTipo.innerHTML = `
+        <option value="PLANTONISTA">Plantão Local</option>
+        <option value="SOBREAVISO">Sobreaviso</option>
+      `;
+    }
+  };
+
+  window.executarGeradorLote = async function(e) {
+    e.preventDefault();
+
+    const servidorId = document.getElementById('gerador-servidor').value;
+    const dataInicioStr = document.getElementById('gerador-data-inicio').value;
+    const dataFimStr = document.getElementById('gerador-data-fim').value;
+    const escopo = document.getElementById('gerador-escopo').value;
+    const tipo = document.getElementById('gerador-tipo').value;
+    const delegaciaId = document.getElementById('gerador-delegacia').value;
+    const regra = document.getElementById('gerador-regra').value;
+    const turno = document.getElementById('gerador-turno').value;
+
+    const inicio = new Date(dataInicioStr + 'T00:00:00');
+    const fim = new Date(dataFimStr + 'T00:00:00');
+
+    if (inicio > fim) {
+      alert("A data inicial não pode ser posterior à data final.");
+      return;
+    }
+
+    let geradosCount = 0;
+    let dataAtual = new Date(inicio);
+
+    while (dataAtual <= fim) {
+      const diaSemana = dataAtual.getDay(); // 0 = Dom, 6 = Sáb
+      let criar = false;
+
+      if (regra === 'DIARIO') {
+        criar = true;
+      } else if (regra === 'DIAS_UTEIS' && diaSemana >= 1 && diaSemana <= 5) {
+        criar = true;
+      } else if (regra === 'FINS_SEMANA' && (diaSemana === 0 || diaSemana === 6)) {
+        criar = true;
+      } else if (regra === '24x72' || regra === '12x36') {
+        criar = true;
+      }
+
+      if (criar) {
+        const dateStr = dataAtual.toISOString().split('T')[0];
+        const newId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+        const novaEscala = {
+          id: newId,
+          data: dateStr,
+          servidorId,
+          delegaciaId,
+          tipo,
+          turno,
+          scope: escopo,
+          sdpId: '8SDP'
+        };
+
+        appState.escalas.push(novaEscala);
+        await syncDocToFirestore('escalas', novaEscala.id, novaEscala);
+        geradosCount++;
+      }
+
+      // Incremento de dias segundo a regra
+      if (regra === '24x72') {
+        dataAtual.setDate(dataAtual.getDate() + 4);
+      } else if (regra === '12x36') {
+        dataAtual.setDate(dataAtual.getDate() + 2);
+      } else {
+        dataAtual.setDate(dataAtual.getDate() + 1);
+      }
+    }
+
+    alert(`Sucesso! ${geradosCount} plantões foram gerados automaticamente.`);
+    window.fecharModalGeradorLote();
+    refreshViews();
   };
 
   // Modal de Servidores
@@ -383,7 +568,7 @@ function setupModalFunctions() {
     }
   };
 
-  // Modal de Unificação de Plantão
+  // Modal de Unificação
   window.gerenciarUnificacao = function(delegaciaId) {
     const del = appState.delegacias.find(d => d.id === delegaciaId);
     if (!del) return;
@@ -430,8 +615,14 @@ function setupModalFunctions() {
       
       window.fecharModalUnificacao();
       renderDelegaciasCards('delegacias-container');
-      renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+      refreshViews();
       alert("Configuração salva com sucesso!");
     }
   };
+}
+
+function refreshViews() {
+  const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
+  renderCalendarGrid(currentContainer, appState.calendarScope);
+  renderGestaoEscalasModule('gestao-escalas-container');
 }
