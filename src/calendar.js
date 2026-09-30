@@ -18,7 +18,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
-  // Data atual de referência para destaque de HOJE
   const hoje = new Date();
   const hojeAno = hoje.getFullYear();
   const hojeMes = hoje.getMonth();
@@ -43,7 +42,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   ).join('');
 
   let html = `
-    <!-- Topo de Controle e Filtros -->
+    <!-- Topo de Controle -->
     <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
@@ -63,14 +62,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
     <!-- Navegação de Mês Agrupada + Filtro por SDP à Direita -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
-      <!-- Bloco de Navegação Centralizado e Compacto -->
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
         <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">◀ Anterior</button>
         <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
         <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">Próximo ▶</button>
       </div>
 
-      <!-- Filtro de SDP (Aparece no Espaço Livre da Direita) -->
       <div class="flex items-center gap-2">
         <label class="text-[11px] font-bold text-slate-600">Filtro SDP/Origem:</label>
         <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
@@ -103,9 +100,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-    // Verificação se este dia é O DIA ATUAL (HOJE)
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
-
     const feriadoDoDia = (feriados || []).find(f => f.data === dateStr);
 
     let escalasDoDia = appState.escalas.filter(e => {
@@ -122,12 +117,10 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // Aplicação do Filtro por SDP se selecionado diferente de TODOS
     if (sdpFiltroAtual !== 'TODOS') {
       escalasDoDia = escalasDoDia.filter(e => e.delegaciaId === sdpFiltroAtual || e.sdpId === sdpFiltroAtual);
     }
 
-    // Fundo base e destaque especial de borda para o DIA ATUAL (HOJE)
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
       bgDayClass = 'bg-rose-50/60';
@@ -135,7 +128,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       bgDayClass = 'bg-amber-50/40';
     }
 
-    // Borda reforçada caso seja o dia de Hoje
     const hojeBorderClass = isHoje 
       ? 'border-2 border-indigo-600 bg-indigo-50/20 shadow-inner z-10' 
       : 'border-t border-l border-slate-200/80';
@@ -144,7 +136,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
         <div class="flex items-center justify-between mb-1 px-0.5">
           <div class="flex items-center gap-1">
-            <span class="text-[11px] font-extrabold ${isHoje ? 'text-indigo-800' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
+            <span class="cal-v1-day-num ${isHoje ? 'text-indigo-800' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
               ${day}
             </span>
             ${isHoje ? '<span class="text-[7px] bg-indigo-600 text-white font-extrabold px-1 rounded uppercase tracking-tighter">HOJE</span>' : ''}
@@ -191,8 +183,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             <div onclick="window.abrirModalDetalhesTurno('Plantão Local', '${esc.data}', '${esc.id}')"
                  onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
-                 class="text-[9.5px] p-1 rounded border bg-sky-100/80 border-sky-300 text-sky-950 font-semibold shadow-xs cursor-pointer hover:bg-sky-200 transition">
-              <span class="truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
+                 class="p-1 rounded border bg-sky-100/80 border-sky-300 text-sky-950 font-semibold shadow-xs cursor-pointer hover:bg-sky-200 transition">
+              <span class="cal-v1-srv-name truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
             </div>
           `;
         });
@@ -225,8 +217,8 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
-      <div class="text-[8.5px] p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
-        <span class="font-bold text-slate-600">${titulo}</span>
+      <div class="p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
+        <span class="cal-v1-header-title text-slate-600">${titulo}</span>
         <span class="text-[7.5px] text-slate-500 italic">Livre</span>
       </div>
     `;
@@ -262,14 +254,14 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
 
     if (isExtra) {
       return `
-        <div class="font-bold text-purple-900 leading-tight flex items-center justify-between gap-1">
+        <div class="cal-v1-srv-name text-purple-900 flex items-center justify-between gap-1">
           <span class="truncate">${nomeExibicao}</span>
-          <span class="bg-purple-600 text-white text-[6.5px] font-black px-1 rounded shrink-0 shadow-xs">EXTRA</span>
+          <span class="cal-v1-tag-extra bg-purple-600 text-white rounded shrink-0 shadow-xs">EXTRA</span>
         </div>
       `;
     }
     return `
-      <div class="font-semibold text-slate-900 leading-tight truncate">
+      <div class="cal-v1-srv-name text-slate-900 truncate">
         ${nomeExibicao}
       </div>
     `;
@@ -284,10 +276,10 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
          onmouseleave="window.ocultarTooltip()"
          class="p-1 rounded-md border ${bgStyle} space-y-0.5 cursor-pointer hover:brightness-95 hover:shadow-sm transition">
       <div class="flex items-center justify-between border-b pb-0.5 ${headerColorClass}">
-        <span class="text-[8.5px] font-black tracking-wider uppercase">${titulo}</span>
-        <span class="text-[7.5px] font-mono font-bold opacity-80">${horario}</span>
+        <span class="cal-v1-header-title uppercase">${titulo}</span>
+        <span class="cal-v1-header-time opacity-80">${horario}</span>
       </div>
-      <div class="space-y-0.5 text-[9px]">
+      <div class="space-y-0.5">
         ${listaHtml}
       </div>
     </div>
@@ -326,7 +318,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Modal Responsivo para Dispositivos Móveis (Ao Clicar/Tocar no Período)
+// Modal Responsivo para Móvel
 window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
   let modal = document.getElementById('modal-detalhes-turno');
   if (!modal) {
@@ -394,9 +386,9 @@ function criarModalDetalhesTurnoDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-// Tooltip Flutuante (Desktop)
+// Tooltip Flutuante
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
-  if (window.innerWidth < 768) return; // Em telas menores de celular, usa-se o clique no modal
+  if (window.innerWidth < 768) return;
 
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
