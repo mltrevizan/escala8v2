@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8ª CRF - Escala v2 Modular</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- SDK Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body class="h-full flex flex-col font-sans p-6 text-slate-800">
+
+  <div class="max-w-xl mx-auto w-full space-y-6 bg-white p-6 rounded-2xl shadow-md border">
+    <h1 class="text-xl font-bold text-slate-900 border-b pb-2">8ª CRF - Teste de Infraestrutura v2</h1>
+    
+    <div id="app-status">
+      <p class="text-xs text-slate-500">Carregando módulos da v2...</p>
+    </div>
+
+    <form id="form-test-login" class="space-y-3 bg-slate-50 p-4 rounded-xl border">
+      <h3 class="font-bold text-sm text-slate-700">Teste do Módulo de Autenticação</h3>
+      <p class="text-xs text-slate-500">Teste o login de primeiro acesso do Administrador (Senha: <code>Central321</code>):</p>
+      
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">Senha de Teste:</label>
+        <input type="password" id="test-pass-input" value="Central321" class="w-full border rounded p-2 text-xs font-mono">
+      </div>
+
+      <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded text-xs shadow">
+        Testar Autenticação Atômica
+      </button>
+    </form>
+  </div>
+
+  <!-- Início do Módulo ES6 da v2 -->
+  <script type="module" src="./src/app.js?v=2.0.0"></script>
+</body>
+</html>
