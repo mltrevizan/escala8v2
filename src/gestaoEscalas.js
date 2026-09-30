@@ -2,6 +2,11 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
+// Fallback para manter compatibilidade e evitar travamento no app.js
+export function renderGestaoEscalasModule(containerId) {
+  renderGestaoCrfModule(containerId);
+}
+
 // =========================================================================
 // 1. GESTÃO DE ESCALAS CRF & EXTRAJORNADA (Menu 1)
 // =========================================================================
@@ -12,13 +17,14 @@ export function renderGestaoCrfModule(containerId) {
   const { currentYear, currentMonth } = appState;
   const buscaPolicial = document.getElementById('filtro-gestao-crf-busca')?.value?.toLowerCase() || '';
 
-  const escalasFiltradas = appState.escalas.filter(esc => {
+  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+    if (!esc.data) return false;
     const [ano, mes] = esc.data.split('-').map(Number);
     if (ano !== currentYear || mes !== currentMonth + 1) return false;
     if (esc.scope !== 'CRF') return false;
 
     if (buscaPolicial) {
-      const srv = appState.servidores.find(s => s.id === esc.servidorId);
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       const nomeSrv = srv ? srv.nome.toLowerCase() : '';
       if (!nomeSrv.includes(buscaPolicial)) return false;
     }
@@ -41,10 +47,6 @@ export function renderGestaoCrfModule(containerId) {
           <button onclick="window.abrirModalGeradorLote('CRF')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition">
             ⚡ Gerar em Lote
           </button>
-          <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV CRF</span>
-            <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'CRF')">
-          </label>
           <button onclick="window.exportarEscalasCSV('CRF')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition">
             📊 Exportar CSV
           </button>
@@ -104,9 +106,10 @@ export function renderGestaoDelegaciasModule(containerId) {
   const { currentYear, currentMonth, selectedDelegaciaId } = appState;
   const buscaPolicial = document.getElementById('filtro-gestao-del-busca')?.value?.toLowerCase() || '';
 
-  const delSelecionada = appState.delegacias.find(d => d.id === selectedDelegaciaId) || appState.delegacias[0];
+  const delSelecionada = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId) || (appState.delegacias || [])[0];
 
-  const escalasFiltradas = appState.escalas.filter(esc => {
+  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+    if (!esc.data) return false;
     const [ano, mes] = esc.data.split('-').map(Number);
     if (ano !== currentYear || mes !== currentMonth + 1) return false;
     if (esc.scope !== 'DELEGACIA') return false;
@@ -120,7 +123,7 @@ export function renderGestaoDelegaciasModule(containerId) {
     }
 
     if (buscaPolicial) {
-      const srv = appState.servidores.find(s => s.id === esc.servidorId);
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       const nomeSrv = srv ? srv.nome.toLowerCase() : '';
       if (!nomeSrv.includes(buscaPolicial)) return false;
     }
@@ -147,10 +150,6 @@ export function renderGestaoDelegaciasModule(containerId) {
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition">
             ⚡ Gerar em Lote
           </button>
-          <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV Local</span>
-            <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'DELEGACIA')">
-          </label>
           <button onclick="window.exportarEscalasCSV('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition">
             📊 Exportar CSV
           </button>
@@ -191,7 +190,7 @@ export function renderGestaoDelegaciasModule(containerId) {
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition">
-            🗑️ Limpar Mês Local
+            🗑️️ Limpar Mês Local
           </button>
           <span class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
             Total Unidade: ${escalasFiltradas.length} Plantões
@@ -237,8 +236,8 @@ function renderTabelaEscalas(listaEscalas) {
     listaEscalas.sort((a, b) => a.data.localeCompare(b.data));
 
     listaEscalas.forEach(esc => {
-      const servidor = appState.servidores.find(s => s.id === esc.servidorId);
-      const delegacia = appState.delegacias.find(d => d.id === esc.delegaciaId);
+      const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const delegacia = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
 
       const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
       const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
@@ -304,7 +303,7 @@ window.salvarHorarioCustomizadoDelegacia = async function(idDel) {
   const input24h = document.getElementById('horario-del-24h')?.value;
   const input12h = document.getElementById('horario-del-12h')?.value;
 
-  const del = appState.delegacias.find(d => d.id === idDel);
+  const del = (appState.delegacias || []).find(d => d.id === idDel);
   if (del) {
     del.horario24h = input24h;
     del.horario12h = input12h;
@@ -327,7 +326,8 @@ window.limparEscalasDoMes = async function(scope) {
   const { currentYear, currentMonth } = appState;
   if (!confirm(`TEM CERTEZA? Isso excluirá TODOS os plantões do escopo ${scope} do mês ${currentMonth + 1}/${currentYear}!`)) return;
 
-  const aRemover = appState.escalas.filter(esc => {
+  const aRemover = (appState.escalas || []).filter(esc => {
+    if (!esc.data) return false;
     const [ano, mes] = esc.data.split('-').map(Number);
     return ano === currentYear && mes === currentMonth + 1 && esc.scope === scope;
   });
