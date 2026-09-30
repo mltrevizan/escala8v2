@@ -80,7 +80,7 @@ export function initModalsModule() {
 
           <div class="pt-3 border-t flex items-center justify-between">
             <button type="button" id="btn-excluir-escala" onclick="window.excluirEscalaAtual()" class="hidden px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 rounded-xl font-bold">
-              🗑️ Excluir Plantão
+              🗑️️ Excluir Plantão
             </button>
             
             <div class="flex justify-end gap-2 ml-auto">
@@ -256,7 +256,6 @@ export function initModalsModule() {
 }
 
 function setupModalFunctions() {
-  // Modal de Escala Individual
   window.abrirModalEscala = function(dateStr = null, escalaId = null) {
     const modal = document.getElementById('modal-escala');
     if (!modal) return;
@@ -401,7 +400,6 @@ function setupModalFunctions() {
     refreshViews();
   };
 
-  // Gerador de Escala em Lote
   window.abrirModalGeradorLote = function() {
     const modal = document.getElementById('modal-gerador-lote');
     if (!modal) return;
@@ -469,7 +467,7 @@ function setupModalFunctions() {
     let dataAtual = new Date(inicio);
 
     while (dataAtual <= fim) {
-      const diaSemana = dataAtual.getDay(); // 0 = Dom, 6 = Sáb
+      const diaSemana = dataAtual.getDay();
       let criar = false;
 
       if (regra === 'DIARIO') {
@@ -502,7 +500,6 @@ function setupModalFunctions() {
         geradosCount++;
       }
 
-      // Incremento de dias segundo a regra
       if (regra === '24x72') {
         dataAtual.setDate(dataAtual.getDate() + 4);
       } else if (regra === '12x36') {
@@ -517,7 +514,6 @@ function setupModalFunctions() {
     refreshViews();
   };
 
-  // Modal de Servidores
   window.editarServidor = function(servidorId) {
     const srv = appState.servidores.find(s => s.id === servidorId);
     if (!srv) return;
@@ -568,7 +564,6 @@ function setupModalFunctions() {
     }
   };
 
-  // Modal de Unificação
   window.gerenciarUnificacao = function(delegaciaId) {
     const del = appState.delegacias.find(d => d.id === delegaciaId);
     if (!del) return;
