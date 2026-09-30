@@ -32,14 +32,14 @@ export function renderServidoresTable(containerId) {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button onclick="window.abrirModalServidor()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1">
+          <button onclick="window.abrirModalServidor()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer">
             ➕ Novo Policial
           </button>
           <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
             <span>🔄 Corrigir Lotações via CSV</span>
             <input type="file" id="csv-file-input-servidores" accept=".csv" class="hidden" onchange="window.processarAtualizacaoCSV(event)">
           </label>
-          <button onclick="window.excluirTodosServidores()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition">
+          <button onclick="window.excluirTodosServidores()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
             🗑️ Excluir Todos
           </button>
         </div>
@@ -157,10 +157,10 @@ window.filtrarServidoresInline = function() {
         <td class="p-3 text-slate-500 font-mono text-[11px]">${srv.subdivisao || '-'}</td>
         <td class="p-3 font-mono text-slate-700">${srv.telefone || '-'}</td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs transition">
+          <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs transition cursor-pointer">
             Editar
           </button>
-          <button onclick="window.excluirServidor('${srv.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition">
+          <button onclick="window.excluirServidor('${srv.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition cursor-pointer">
             Excluir
           </button>
         </td>
@@ -201,7 +201,6 @@ export async function processCSVImportComUpsert(csvText) {
     const sep = line.includes(';') ? ';' : ',';
     const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
 
-    // Mapeamento dinâmico dos índices de colunas com base no cabeçalho
     if (i === 0 && (parts.includes('CARGO') || parts.includes('NOME'))) {
       idxCargo = parts.indexOf('CARGO') !== -1 ? parts.indexOf('CARGO') : 0;
       idxNome = parts.indexOf('NOME') !== -1 ? parts.indexOf('NOME') : 1;
@@ -220,7 +219,6 @@ export async function processCSVImportComUpsert(csvText) {
 
       if (!nome || normalizeText(nome) === 'nome') continue;
 
-      // Localiza ou cadastra a unidade correspondente
       let delObj = (appState.delegacias || []).find(d => 
         normalizeText(d.nome) === normalizeText(delegaciaNome)
       );
@@ -240,7 +238,6 @@ export async function processCSVImportComUpsert(csvText) {
         await syncDocToFirestore('delegacias', newDelId, delObj);
       }
 
-      // Busca servidor por nome aproximado / normalizado
       const srvExistente = (appState.servidores || []).find(s => 
         normalizeText(s.nome) === normalizeText(nome)
       );
@@ -291,8 +288,11 @@ window.excluirTodosServidores = async function() {
   renderServidoresTable('servidores-table-container');
 };
 
+// JANELA MODAL PARA CRIAR / EDITAR SERVIDOR (Ordem corrigida)
 window.abrirModalServidor = function(servidorId = null) {
   let modal = document.getElementById('modal-servidor');
+  
+  // 1. Garante a criação da estrutura do modal no DOM antes de qualquer seleção
   if (!modal) {
     criarModalServidorDOM();
     modal = document.getElementById('modal-servidor');
@@ -305,28 +305,30 @@ window.abrirModalServidor = function(servidorId = null) {
   const inputSub = document.getElementById('modal-srv-subdivisao');
   const inputTel = document.getElementById('modal-srv-telefone');
 
+  // 2. Preenche as opções de delegacias
   let delOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}">${d.nome}</option>`
   ).join('');
   if (selectDel) selectDel.innerHTML = delOptions;
 
+  // 3. Define os valores de edição ou criação
   if (servidorId) {
     const srv = (appState.servidores || []).find(s => s.id === servidorId);
     if (srv) {
-      inputId.value = srv.id;
-      inputNome.value = srv.nome || '';
-      inputCargo.value = srv.cargo || 'APJ';
-      selectDel.value = srv.delegaciaId || (appState.delegacias[0]?.id || '');
-      inputSub.value = srv.subdivisao || '';
-      inputTel.value = srv.telefone || '';
+      if (inputId) inputId.value = srv.id;
+      if (inputNome) inputNome.value = srv.nome || '';
+      if (inputCargo) inputCargo.value = srv.cargo || 'APJ';
+      if (selectDel) selectDel.value = srv.delegaciaId || (appState.delegacias[0]?.id || '');
+      if (inputSub) inputSub.value = srv.subdivisao || '';
+      if (inputTel) inputTel.value = srv.telefone || '';
     }
   } else {
-    inputId.value = '';
-    inputNome.value = '';
-    inputCargo.value = 'APJ';
-    selectDel.value = appState.delegacias[0]?.id || '';
-    inputSub.value = '';
-    inputTel.value = '';
+    if (inputId) inputId.value = '';
+    if (inputNome) inputNome.value = '';
+    if (inputCargo) inputCargo.value = 'APJ';
+    if (selectDel) selectDel.value = appState.delegacias[0]?.id || '';
+    if (inputSub) inputSub.value = '8ª SDP';
+    if (inputTel) inputTel.value = '';
   }
 
   modal.classList.remove('hidden');
@@ -380,7 +382,7 @@ window.salvarServidorModal = async function(e) {
     if (!appState.servidores) appState.servidores = [];
     appState.servidores.push(novoServidor);
 
-    await syncDocToFirestore('servidores', novoServidor.id, novoServidor);
+    await syncDocToFirestore('servidores', newId, novoServidor);
   }
 
   window.fecharModalServidor();
@@ -405,7 +407,7 @@ function criarModalServidorDOM() {
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
         <div class="flex items-center justify-between border-b pb-3">
           <h3 class="font-bold text-slate-900 text-sm">Cadastrar / Editar Policial</h3>
-          <button onclick="window.fecharModalServidor()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+          <button type="button" onclick="window.fecharModalServidor()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
         <form onsubmit="window.salvarServidorModal(event)" class="space-y-3 text-xs">
@@ -444,8 +446,8 @@ function criarModalServidorDOM() {
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2">
-            <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs">Salvar Servidor</button>
+            <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Servidor</button>
           </div>
         </form>
       </div>
