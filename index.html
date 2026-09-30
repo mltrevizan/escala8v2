@@ -36,13 +36,16 @@
     <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-2 rounded-2xl shadow-sm border flex flex-wrap gap-1 border-b">
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow">
-        <span>📅</span> Escala CRF
+        <span>📅</span> Escala CRF / Extrajornada
       </button>
       <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🏢</span> Escala por Delegacia
       </button>
       <button id="tab-btn-gestao" onclick="window.switchTab('gestao')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>⚙️</span> Gestão de Escalas
+      </button>
+      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+        <span>🎉</span> Feriados
       </button>
       <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🚔</span> Delegacias & Unificações
@@ -69,7 +72,12 @@
       <div id="gestao-escalas-container"></div>
     </main>
 
-    <!-- Aba 4: Gestão de Unidades -->
+    <!-- Aba 4: MÓDULO DE FERIADOS -->
+    <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div id="feriados-container"></div>
+    </main>
+
+    <!-- Aba 5: Gestão de Unidades -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
         <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados Mapeados</h2>
@@ -77,7 +85,7 @@
       <div id="delegacias-container"></div>
     </main>
 
-    <!-- Aba 5: Servidores -->
+    <!-- Aba 6: Servidores -->
     <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
@@ -93,7 +101,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v2.3.0) -->
-  <script type="module" src="./src/app.js?v=2.2.3"></script>
+  <!-- Script Principal ES6 (v2.4.0) -->
+  <script type="module" src="./src/app.js?v=2.4.0"></script>
 </body>
 </html>
