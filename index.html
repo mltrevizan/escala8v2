@@ -11,22 +11,40 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <title>8ª CRF - Escala v2 Modular</title>
+  <title>8ª CRF - Sistema de Escalas v2</title>
+  
+  <!-- FONTE INTER (GOOGLE FONTS) PARA REFINAMENTO TIPOGRÁFICO Padrão v1 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- TAILWIND CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
 
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
-<body class="h-full flex flex-col font-sans p-4 sm:p-6 text-slate-800">
+<body class="h-full flex flex-col font-sans p-3 sm:p-6 text-slate-800 bg-slate-100/80 antialiased">
 
-  <div class="max-w-6xl mx-auto w-full space-y-4">
+  <div class="max-w-7xl mx-auto w-full space-y-4">
     
     <!-- Header Principal -->
-    <header class="bg-white p-5 rounded-2xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h1 class="text-xl font-bold text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
-        <p class="text-xs text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
+        <h1 class="text-xl font-black tracking-tight text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
+        <p class="text-xs font-medium text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
       </div>
       <div id="app-status">
         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
@@ -34,23 +52,23 @@
     </header>
 
     <!-- Barra de Navegação por Abas -->
-    <nav class="bg-white p-2 rounded-2xl shadow-sm border flex flex-wrap gap-1 border-b">
-      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow">
+    <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-wrap gap-1">
+      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm">
         <span>📅</span> Escala CRF / Extrajornada
       </button>
-      <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🏢</span> Escala por Delegacia
       </button>
-      <button id="tab-btn-gestao" onclick="window.switchTab('gestao')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-gestao" onclick="window.switchTab('gestao')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>⚙️</span> Gestão de Escalas
       </button>
-      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🎉</span> Feriados
       </button>
-      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🚔</span> Delegacias & Unificações
       </button>
-      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>👮</span> Servidores
       </button>
     </nav>
@@ -58,39 +76,39 @@
     <!-- CONTEÚDO DAS ABAS -->
 
     <!-- Aba 1: Escala CRF (Grade) -->
-    <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
     <!-- Aba 2: Escala por Delegacia (Grade) -->
-    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
       <div id="calendar-delegacia-container"></div>
     </main>
 
     <!-- Aba 3: MÓDULO DE GESTÃO DE ESCALAS -->
-    <main id="tab-content-gestao" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <main id="tab-content-gestao" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
       <div id="gestao-escalas-container"></div>
     </main>
 
     <!-- Aba 4: MÓDULO DE FERIADOS -->
-    <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
       <div id="feriados-container"></div>
     </main>
 
     <!-- Aba 5: Gestão de Unidades -->
-    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
+    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+      <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
         <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados Mapeados</h2>
       </div>
       <div id="delegacias-container"></div>
     </main>
 
     <!-- Aba 6: Servidores -->
-    <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+      <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
         <div class="flex items-center gap-2">
-          <label class="cursor-pointer bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow">
+          <label class="cursor-pointer bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-sm">
             <span>📥 Importar CSV</span>
             <input type="file" id="csv-file-input" accept=".csv" class="hidden">
           </label>
@@ -101,7 +119,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v2.4.0) -->
-  <script type="module" src="./src/app.js?v=2.4.0"></script>
+  <!-- Script Principal ES6 (v2.4.1) -->
+  <script type="module" src="./src/app.js?v=2.4.1"></script>
 </body>
 </html>
