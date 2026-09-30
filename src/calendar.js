@@ -29,10 +29,10 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   ).join('');
 
   let html = `
-    <!-- Barra Superior da Escala -->
+    <!-- Barra Superior -->
     <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-slate-700 font-mono">
+        <span class="text-xs font-bold text-slate-800 font-sans tracking-wide">
           ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF & EXTRAJORNADA' : '🏢 ESCALA POR DELEGACIA / PLANTÃO UNIFICADO'}
         </span>
       </div>
@@ -47,30 +47,30 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação do Mês -->
+    <!-- Navegação de Mês -->
     <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
       <button id="btn-prev-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">◀ Anterior</button>
-      <span class="font-bold text-sm text-slate-800">${monthNames[currentMonth]} ${currentYear}</span>
+      <span class="font-bold text-sm text-slate-800 tracking-tight">${monthNames[currentMonth]} ${currentYear}</span>
       <button id="btn-next-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">Próximo ▶</button>
     </div>
 
-    <!-- Dias da Semana -->
-    <div class="grid grid-cols-7 text-center bg-slate-100 text-[11px] font-bold text-slate-600 border-b py-2">
-      <div class="text-red-600">Dom</div>
+    <!-- Cabeçalho dos Dias da Semana -->
+    <div class="grid grid-cols-7 text-center bg-slate-200 text-[11px] font-bold text-slate-700 border-b py-2">
+      <div class="text-red-700">Dom</div>
       <div>Seg</div>
       <div>Ter</div>
       <div>Qua</div>
       <div>Qui</div>
       <div>Sex</div>
-      <div class="text-indigo-600">Sáb</div>
+      <div class="text-indigo-700">Sáb</div>
     </div>
 
-    <!-- Grade do Mês -->
-    <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+    <!-- Grade do Mês Dinâmica -->
+    <div class="grid grid-cols-7 auto-rows-fr bg-slate-300 gap-px border-b border-r">
   `;
 
   for (let i = 0; i < firstDay; i++) {
-    html += `<div class="bg-slate-50/50 min-h-[105px] p-1"></div>`;
+    html += `<div class="bg-slate-100/60 p-2"></div>`;
   }
 
   for (let day = 1; day <= totalDays; day++) {
@@ -92,16 +92,19 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
+    // Fundo diferenciado para Fins de Semana e Feriados
+    const bgDayClass = isWeekend ? 'bg-amber-50/40' : 'bg-white';
+
     html += `
-      <div class="bg-white min-h-[105px] p-1.5 flex flex-col justify-between hover:bg-indigo-50/20 transition relative group border-t border-l">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-bold ${isWeekend ? 'text-indigo-600' : 'text-slate-700'}">${day}</span>
+      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative group border-t border-l h-auto min-h-[110px]">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-bold font-sans ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
           <button onclick="window.abrirModalEscala('${dateStr}')" class="opacity-0 group-hover:opacity-100 text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-1.5 py-0.5 rounded font-bold transition shadow">
             + Plantão
           </button>
         </div>
 
-        <div class="space-y-1 flex-1 overflow-y-auto max-h-[90px]">
+        <div class="space-y-1.5 flex-1">
     `;
 
     if (escalasDoDia.length === 0) {
@@ -113,39 +116,34 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
         
         const isDelegado = servidor?.cargo?.toUpperCase().includes('DELEGADO');
         const prefixoCargo = isDelegado ? 'DEL.' : 'AG.';
-        const nomeExibicao = servidor ? `${prefixoCargo} ${servidor.nome.split(' ')[0]}` : 'Policial';
+        const nomeFormatado = servidor ? `${prefixoCargo} ${servidor.nome.split(' ')[0]}` : 'Policial';
 
-        // Estilização por Tipo/Modalidade
         const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
         const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
-        let badgeClass = 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100';
-        let tagClass = 'bg-indigo-200 text-indigo-800';
-        let labelTipo = esc.turno || '24h';
-
-        if (isDelegado) {
-          badgeClass = 'bg-amber-50 text-amber-950 border-amber-300 font-bold hover:bg-amber-100';
-          tagClass = 'bg-amber-200 text-amber-900';
-        }
-
-        if (isExtra) {
-          badgeClass = 'bg-orange-100 text-orange-950 border-orange-400 font-bold hover:bg-orange-200';
-          tagClass = 'bg-orange-500 text-white';
-          labelTipo = `EXTRA ${esc.turno || ''}`;
+        // Padrão Visual v1: A cor do card indica o PERÍODO
+        let cardBgClass = 'bg-blue-50 border-blue-200 text-blue-950 hover:bg-blue-100'; // Turno Regular (Ex: Diurno / 24h)
+        if (esc.turno === '12h (N)') {
+          cardBgClass = 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'; // Turno Noturno
         } else if (isSobreaviso) {
-          badgeClass = 'bg-purple-50 text-purple-900 border-purple-300 font-bold hover:bg-purple-100';
-          tagClass = 'bg-purple-200 text-purple-900';
-          labelTipo = 'SOB';
+          cardBgClass = 'bg-purple-50 border-purple-200 text-purple-950 hover:bg-purple-100';
         }
 
-        // Dados do Tooltip Flutuante
+        // Nome do Policial em ROXO se for Extrajornada
+        const nomeColorClass = isExtra ? 'text-purple-700 font-extrabold' : 'text-slate-900 font-bold';
+        const tagExtra = isExtra ? `<span class="text-[8px] bg-purple-600 text-white font-extrabold px-1 rounded mr-1">EXTRA</span>` : '';
+
+        // Descrição textual interna do turno
+        const turnoDesc = getTurnoTexto(esc.turno);
+
+        // Tooltip Rico no Hover
         const tooltipText = `
-          <div class='p-2 space-y-1 text-left min-w-[180px]'>
+          <div class='p-2 space-y-1 text-left min-w-[190px] font-sans'>
             <div class='font-bold text-slate-900 border-b pb-1'>${servidor?.nome || 'Não informado'}</div>
             <div class='text-[10px] text-slate-600'><b>Cargo:</b> ${servidor?.cargo || 'Agente'}</div>
             <div class='text-[10px] text-slate-600'><b>Lotação:</b> ${delegacia?.nome || 'CRF'}</div>
-            <div class='text-[10px] text-slate-600'><b>Tipo:</b> ${isExtra ? 'Extrajornada' : esc.tipo}</div>
-            <div class='text-[10px] text-slate-600'><b>Turno:</b> ${getHorarioExtenso(esc.turno)}</div>
+            <div class='text-[10px] text-slate-600'><b>Modalidade:</b> ${isExtra ? 'Extrajornada' : esc.tipo}</div>
+            <div class='text-[10px] text-slate-600'><b>Horário:</b> ${getHorarioExtenso(esc.turno)}</div>
             <div class='text-[10px] text-slate-600'><b>Contato:</b> ${servidor?.telefone || '-'}</div>
           </div>
         `.replace(/'/g, "&apos;");
@@ -154,9 +152,13 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           <div onclick="window.abrirModalEscala(null, '${esc.id}')" 
                onmouseenter="window.mostrarTooltip(event, '${tooltipText}')"
                onmouseleave="window.ocultarTooltip()"
-               class="text-[9px] p-1 rounded font-semibold border ${badgeClass} flex items-center justify-between cursor-pointer shadow-sm hover:shadow transition">
-            <span class="truncate max-w-[70px]">${nomeExibicao}</span>
-            <span class="text-[7px] px-1 rounded font-extrabold ${tagClass} uppercase tracking-tighter">${labelTipo}</span>
+               class="text-[10px] p-1.5 rounded-lg border ${cardBgClass} flex flex-col justify-between cursor-pointer shadow-sm hover:shadow transition">
+            <div class="flex items-center justify-between leading-tight mb-0.5">
+              <span class="${nomeColorClass} truncate">${tagExtra}${nomeFormatado}</span>
+            </div>
+            <div class="text-[8px] text-slate-500 font-medium leading-none">
+              ${turnoDesc}
+            </div>
           </div>
         `;
       });
@@ -172,6 +174,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   container.innerHTML = html;
 
   setupCalendarEvents(containerId, scope);
+}
+
+function getTurnoTexto(turno) {
+  if (turno === '12h (D)') return 'Diurno • 08h às 20h';
+  if (turno === '12h (N)') return 'Noturno • 20h às 08h';
+  return 'Integral • 24 Horas';
 }
 
 function getHorarioExtenso(turno) {
@@ -207,7 +215,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Lógica de Tooltip Flutuante Global
+// Tooltip Flutuante Inteligente
 window.mostrarTooltip = function(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
