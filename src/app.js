@@ -3,13 +3,15 @@ import { initFirebase, fetchCollection } from './db.js';
 import { appState } from './state.js';
 import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
+import { renderCalendarGrid } from './calendar.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
   console.log("🚀 Inicializando v2 Modular...");
   initFirebase();
 
-  // Carga inicial em paralelo
+  // Carga paralela de coleções
   appState.servidores = await fetchCollection('servidores');
+  appState.escalas = await fetchCollection('escalas');
   await initDelegaciasModule();
 
   updateUI();
@@ -26,6 +28,7 @@ function updateUI() {
     `;
   }
 
+  renderCalendarGrid('calendar-container');
   renderDelegaciasCards('delegacias-container');
   renderServidoresTable('servidores-table-container');
 }
@@ -43,7 +46,6 @@ function setupEventListeners() {
           const importedCount = await processCSVImport(evt.target.result);
           alert(`Sucesso! ${importedCount} servidores foram importados e gravados no Firestore.`);
           
-          // Re-inicializa delegacias caso surjam novas unidades do CSV
           await initDelegaciasModule();
           updateUI();
         } catch (err) {
