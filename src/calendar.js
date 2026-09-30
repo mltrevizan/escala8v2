@@ -33,7 +33,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-700 font-mono">
-          ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF & SDP' : '🏢 ESCALA POR DELEGACIA / PLANTÃO UNIFICADO'}
+          ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF' : '🏢 ESCALA POR DELEGACIA'}
         </span>
       </div>
 
