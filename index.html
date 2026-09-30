@@ -67,7 +67,59 @@
     </section>
   </div>
 
+  <!-- Modal Adicionar/Editar Escala -->
+  <div id="modal-escala" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 class="font-bold text-slate-900 text-sm">Adicionar Plantão na Escala</h3>
+        <button onclick="window.fecharModalEscala()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+      </div>
+
+      <form onsubmit="window.salvarEscalaModal(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Data:</label>
+          <input type="date" id="modal-escala-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
+          <select id="modal-escala-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
+            <!-- Preenchido dinamicamente via JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Servidor / Policial:</label>
+          <select id="modal-escala-servidor" required class="w-full border rounded-xl p-2 bg-slate-50">
+            <!-- Preenchido via JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
+          <select id="modal-escala-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50">
+            <!-- Preenchido via JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Turno:</label>
+          <select id="modal-escala-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-semibold">
+            <option value="24h">24 Horas (Integral)</option>
+            <option value="12h (D)">12 Horas (Diurno)</option>
+            <option value="12h (N)">12 Horas (Noturno)</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end gap-2">
+          <button type="button" onclick="window.fecharModalEscala()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Plantão</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Início do Módulo ES6 da v2 -->
-  <script type="module" src="./src/app.js?v=2.0.5"></script>
+  <script type="module" src="./src/app.js?v=2.0.6"></script>
 </body>
 </html>
