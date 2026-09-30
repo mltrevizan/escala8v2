@@ -28,11 +28,11 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   ).join('');
 
   let html = `
-    <!-- Barra Superior -->
-    <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
+    <!-- Barra Superior da Escala -->
+    <div class="p-4 bg-slate-50 border-b flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-slate-800 tracking-wide">
-          ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF & EXTRAJORNADA' : '🏢 ESCALA POR DELEGACIA / PLANTÃO UNIFICADO'}
+        <span class="text-xs font-bold text-slate-800 tracking-wide uppercase">
+          ${scope === 'CRF' ? '🏛️ Escala Geral CRF & Extrajornada' : '🏢 Escala por Delegacia / Plantão Unificado'}
         </span>
       </div>
 
@@ -47,29 +47,29 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     </div>
 
     <!-- Navegação do Mês -->
-    <div class="p-4 bg-slate-50 border-b flex items-center justify-between font-sans">
-      <button id="btn-prev-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">◀ Anterior</button>
-      <span class="font-bold text-sm text-slate-800 tracking-tight">${monthNames[currentMonth]} ${currentYear}</span>
-      <button id="btn-next-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">Próximo ▶</button>
+    <div class="p-3 bg-white border-b flex items-center justify-between font-sans">
+      <button id="btn-prev-month" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition shadow-sm">◀ Anterior</button>
+      <span class="font-extrabold text-sm text-slate-800 tracking-tight">${monthNames[currentMonth]} ${currentYear}</span>
+      <button id="btn-next-month" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition shadow-sm">Próximo ▶</button>
     </div>
 
     <!-- Cabeçalho dos Dias -->
-    <div class="grid grid-cols-7 text-center bg-slate-200 text-[11px] font-bold text-slate-700 border-b py-2 font-sans">
-      <div class="text-red-700">Dom</div>
+    <div class="grid grid-cols-7 text-center bg-slate-100 text-[11px] font-bold text-slate-600 border-b py-2 font-sans">
+      <div class="text-red-600">Dom</div>
       <div>Seg</div>
       <div>Ter</div>
       <div>Qua</div>
       <div>Qui</div>
       <div>Sex</div>
-      <div class="text-indigo-700">Sáb</div>
+      <div class="text-indigo-600">Sáb</div>
     </div>
 
     <!-- Grade do Mês -->
-    <div class="grid grid-cols-7 auto-rows-fr bg-slate-300 gap-px border-b border-r font-sans">
+    <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r font-sans">
   `;
 
   for (let i = 0; i < firstDay; i++) {
-    html += `<div class="bg-slate-100/60 p-2"></div>`;
+    html += `<div class="bg-slate-100/40 p-2"></div>`;
   }
 
   for (let day = 1; day <= totalDays; day++) {
@@ -91,12 +91,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    const bgDayClass = isWeekend ? 'bg-amber-50/40' : 'bg-white';
+    const bgDayClass = isWeekend ? 'bg-amber-50/50' : 'bg-white';
 
     html += `
-      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative border-t border-l min-h-[120px] h-auto">
+      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative border-t border-l min-h-[125px] h-auto">
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-bold ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
+          <span class="text-xs font-black ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
         </div>
 
         <div class="space-y-1.5 flex-1 flex flex-col justify-start">
@@ -106,8 +106,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      html += renderBalaoPeriodo('DIURNO', '07h30 às 19h30', diurnoEscalas, 'bg-amber-50 border-amber-200 text-amber-950');
-      html += renderBalaoPeriodo('NOTURNO', '19h30 às 07h30', noturnoEscalas, 'bg-slate-100 border-slate-300 text-slate-900');
+      html += renderBalaoPeriodo('DIURNO', '07h30 às 19h30', diurnoEscalas, 'bg-amber-50/80 border-amber-200 text-amber-950');
+      html += renderBalaoPeriodo('NOTURNO', '19h30 às 07h30', noturnoEscalas, 'bg-slate-100/80 border-slate-300 text-slate-900');
     } else {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[9px] text-slate-300 italic block font-light">Sem plantão</span>`;
@@ -116,13 +116,13 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const srv = appState.servidores.find(s => s.id === esc.servidorId);
           const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
           const prefixo = isDel ? 'DEL.' : 'AG.';
-          const nome = srv ? `${prefixo} ${srv.nome.split(' ')[0]}` : 'Policial';
+          const nomeCurto = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
           html += `
             <div onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
-                 class="text-[10px] p-1.5 rounded-lg border bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm cursor-pointer">
-              ${nome} (${esc.turno || '24h'})
+                 class="text-[10px] p-1.5 rounded-lg border bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm cursor-pointer hover:bg-blue-100 transition">
+              <span class="truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
             </div>
           `;
         });
@@ -141,10 +141,23 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   setupCalendarEvents(containerId, scope);
 }
 
+// Formata o nome para exibir o máximo possível sem quebrar
+function formatarNomeOperacional(nomeCompleto, prefixo) {
+  if (!nomeCompleto) return prefixo;
+  const partes = nomeCompleto.trim().split(/\s+/);
+  if (partes.length === 1) return `${prefixo} ${partes[0]}`;
+  
+  // Exibe Prefixo + Primeiro e Último Nome (ou Sobrenome intermediário se couber)
+  const primeiroNome = partes[0];
+  const ultimoSobrenome = partes[partes.length - 1];
+  
+  return `${prefixo} ${primeiroNome} ${ultimoSobrenome}`;
+}
+
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
-      <div class="text-[9px] p-1 rounded-md border ${bgStyle} opacity-60 flex items-center justify-between">
+      <div class="text-[9px] p-1 rounded-md border ${bgStyle} opacity-50 flex items-center justify-between">
         <span class="font-bold">${titulo}</span>
         <span class="text-[8px] text-slate-400 italic">Livre</span>
       </div>
@@ -177,21 +190,30 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
     const prefixo = isDel ? 'DEL.' : 'AG.';
-    const nome = srv ? `${prefixo} ${srv.nome.split(' ')[0]}` : 'Policial';
+    const nomeExibicao = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
     if (isExtra) {
-      return `<div class="font-extrabold text-purple-700 leading-tight"><span class="bg-purple-600 text-white text-[7px] px-0.5 rounded mr-1">EXTRA</span>${nome}</div>`;
+      return `
+        <div class="font-extrabold text-purple-800 leading-tight flex items-center justify-between gap-1">
+          <span class="truncate">${nomeExibicao}</span>
+          <span class="bg-purple-600 text-white text-[7px] font-black px-1 rounded shrink-0">EXTRA</span>
+        </div>
+      `;
     }
-    return `<div class="font-bold text-slate-900 leading-tight">${nome}</div>`;
+    return `
+      <div class="font-bold text-slate-900 leading-tight truncate">
+        ${nomeExibicao}
+      </div>
+    `;
   }).join('');
 
   return `
     <div onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
-         class="p-1.5 rounded-lg border ${bgStyle} shadow-sm space-y-1 cursor-pointer hover:brightness-95 transition">
-      <div class="flex items-center justify-between border-b border-black/10 pb-0.5">
-        <span class="text-[9px] font-black uppercase tracking-wider">${titulo}</span>
-        <span class="text-[7.5px] opacity-75 font-mono">${horario}</span>
+         class="p-1.5 rounded-xl border ${bgStyle} shadow-sm space-y-1 cursor-pointer hover:shadow transition">
+      <div class="flex items-center justify-between border-b border-slate-300/60 pb-0.5">
+        <span class="text-[9px] font-black tracking-wider uppercase text-slate-800">${titulo}</span>
+        <span class="text-[8px] font-mono font-bold text-slate-500">${horario}</span>
       </div>
       <div class="space-y-0.5 text-[9.5px]">
         ${listaHtml}
@@ -227,13 +249,13 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip para Grupos de Plantão (Diurno/Noturno)
+// Tooltip para Grupos de Plantão com Cálculo Inteligente de Posição
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
 
   let content = `
-    <div class="p-2.5 space-y-2 text-left min-w-[220px] font-sans">
+    <div class="p-3 space-y-2 text-left min-w-[230px] font-sans">
       <div class="font-black text-slate-900 border-b pb-1 text-xs flex items-center justify-between">
         <span>${titulo}</span>
         <span class="text-[10px] font-mono text-slate-500">${horario}</span>
@@ -247,8 +269,9 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 
     content += `
       <div class="pt-1.5 border-t border-slate-100 space-y-0.5">
-        <div class="font-bold ${isExtra ? 'text-purple-700' : 'text-slate-800'} text-xs">
-          ${isExtra ? '[EXTRA] ' : ''}${srv?.nome || 'Não informado'}
+        <div class="font-bold ${isExtra ? 'text-purple-700' : 'text-slate-800'} text-xs flex items-center justify-between">
+          <span>${srv?.nome || 'Não informado'}</span>
+          ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
         </div>
         <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
         <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
@@ -261,7 +284,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   exibirElementoTooltip(event, content);
 };
 
-// Tooltip para Plantão Único (Delegacias)
+// Tooltip para Plantão Único
 window.mostrarTooltipEscala = function(event, escalaId) {
   const esc = appState.escalas.find(e => e.id === escalaId);
   if (!esc) return;
@@ -270,7 +293,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
 
   const content = `
-    <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
+    <div class="p-3 space-y-1 text-left min-w-[210px] font-sans">
       <div class="font-bold text-slate-900 border-b pb-1 text-xs">${srv?.nome || 'Não informado'}</div>
       <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
       <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
@@ -282,18 +305,41 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   exibirElementoTooltip(event, content);
 };
 
+// Posição Inteligente da Tooltip (Evita sair da tela)
 function exibirElementoTooltip(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
     tooltip = document.createElement('div');
     tooltip.id = 'global-calendar-tooltip';
-    tooltip.className = 'fixed z-50 bg-white border border-slate-300 shadow-2xl rounded-xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
+    tooltip.className = 'fixed z-50 bg-white/95 backdrop-blur-md border border-slate-300 shadow-2xl rounded-2xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
     document.body.appendChild(tooltip);
   }
 
   tooltip.innerHTML = htmlContent;
-  tooltip.style.left = `${event.clientX + 14}px`;
-  tooltip.style.top = `${event.clientY + 14}px`;
+
+  // Renderiza temporariamente oculto para medir dimensões
+  tooltip.style.left = '0px';
+  tooltip.style.top = '0px';
+  
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+
+  let posX = event.clientX + 14;
+  let posY = event.clientY + 14;
+
+  // Ajuste se ultrapassar a borda direita
+  if (posX + tooltipRect.width > screenWidth - 10) {
+    posX = event.clientX - tooltipRect.width - 10;
+  }
+
+  // Ajuste se ultrapassar a borda inferior (Inverte a posição para cima)
+  if (posY + tooltipRect.height > screenHeight - 10) {
+    posY = event.clientY - tooltipRect.height - 10;
+  }
+
+  tooltip.style.left = `${Math.max(10, posX)}px`;
+  tooltip.style.top = `${Math.max(10, posY)}px`;
   tooltip.classList.remove('opacity-0');
 }
 
