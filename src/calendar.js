@@ -26,8 +26,7 @@ export function renderCalendarGrid(containerId) {
   let delegaciasOptions = appState.delegacias.map(d => 
     `<option value="${d.id}" ${selectedDelegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
-  
-   // src/calendar.js (Início do renderCalendarGrid)
+
   let html = `
     <!-- Alternância Principal de Escala -->
     <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
@@ -49,7 +48,6 @@ export function renderCalendarGrid(containerId) {
         </div>
       ` : ''}
     </div>
-
 
     <!-- Navegação do Mês -->
     <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
@@ -82,7 +80,6 @@ export function renderCalendarGrid(containerId) {
     const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-    // Busca TODAS as escalas do dia relativas ao escopo ativo (sem sub-filtros escondidos)
     const escalasDoDia = appState.escalas.filter(e => {
       if (e.data !== dateStr) return false;
       if (e.scope !== calendarScope) return false;
@@ -116,7 +113,6 @@ export function renderCalendarGrid(containerId) {
         const servidor = appState.servidores.find(s => s.id === esc.servidorId);
         const nomeExibicao = servidor ? servidor.nome.split(' ')[0] : 'Policial';
         
-        // Estilização distinta para identificar o tipo visualmente sem precisar filtrar
         const isExtraOuSobreaviso = esc.tipo === 'SDP' || esc.tipo === 'SOBREAVISO';
         const badgeClass = isExtraOuSobreaviso 
           ? 'bg-amber-100 text-amber-900 border-amber-300' 
@@ -205,7 +201,6 @@ window.abrirModalEscala = function(dateStr) {
     .map(d => `<option value="${d.id}">${d.nome}</option>`)
     .join('');
 
-  // Ajusta as opções do tipo de plantão com base na visão atual
   const selectTipo = document.getElementById('modal-escala-tipo');
   if (selectTipo) {
     if (appState.calendarScope === 'CRF') {
@@ -244,7 +239,7 @@ window.salvarEscalaModal = async function(e) {
     data,
     servidorId,
     delegaciaId,
-    tipo,        // 'REGULAR', 'SDP', 'PLANTONISTA' ou 'SOBREAVISO'
+    tipo,
     turno,
     scope: appState.calendarScope,
     sdpId: '8SDP'
