@@ -16,42 +16,61 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
-<body class="h-full flex flex-col font-sans p-6 text-slate-800">
+<body class="h-full flex flex-col font-sans p-4 sm:p-6 text-slate-800">
 
-  <div class="max-w-6xl mx-auto w-full space-y-6">
-    <!-- Header principal -->
-    <header class="bg-white p-6 rounded-2xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="max-w-6xl mx-auto w-full space-y-4">
+    
+    <!-- Header Principal -->
+    <header class="bg-white p-5 rounded-2xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
-        <p class="text-xs text-slate-500">Módulo de Escalas, Delegacias e Servidores</p>
+        <p class="text-xs text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
       </div>
       <div id="app-status">
         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
       </div>
     </header>
 
-    <!-- Seção do Calendário de Escalas -->
-    <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div id="calendar-container">
-        <!-- Renderizado dinamicamente via calendar.js -->
-      </div>
-    </section>
+    <!-- Barra de Navegação por Abas -->
+    <nav class="bg-white p-2 rounded-2xl shadow-sm border flex flex-wrap gap-1 border-b">
+      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow">
+        <span>📅</span> Escala CRF / SDP
+      </button>
+      <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+        <span>🏢</span> Escala por Delegacia
+      </button>
+      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+        <span>🚔</span> Delegacias & Unificações
+      </button>
+      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+        <span>👮</span> Servidores
+      </button>
+    </nav>
 
-    <!-- Painel de Delegacias -->
-    <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <!-- CONTEÚDO DAS ABAS -->
+
+    <!-- Aba 1: Escala CRF (Geral / SDP) -->
+    <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div id="calendar-crf-container"></div>
+    </main>
+
+    <!-- Aba 2: Escala por Delegacia / Plantão Unificado -->
+    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div id="calendar-delegacia-container"></div>
+    </main>
+
+    <!-- Aba 3: Gestão de Delegacias e Plantões Unificados -->
+    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
-        <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados</h2>
+        <h2 class="font-bold text-sm text-slate-800">Delegacias e Plantões Unificados Mapeados</h2>
       </div>
-      <div id="delegacias-container">
-        <!-- Renderizado via delegacias.js -->
-      </div>
-    </section>
+      <div id="delegacias-container"></div>
+    </main>
 
-    <!-- Seção de Importação CSV e Tabela de Servidores -->
-    <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <!-- Aba 4: Gestão e Importação de Servidores -->
+    <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
-        
         <div class="flex items-center gap-2">
           <label class="cursor-pointer bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow">
             <span>📥 Importar CSV</span>
@@ -59,13 +78,12 @@
           </label>
         </div>
       </div>
+      <div id="servidores-table-container"></div>
+    </main>
 
-      <!-- Tabela Renderizada -->
-      <div id="servidores-table-container">
-        <!-- Renderizado via servidores.js -->
-      </div>
-    </section>
   </div>
+
+  <!-- MODAIS -->
 
   <!-- Modal Adicionar/Editar Escala -->
   <div id="modal-escala" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
@@ -84,7 +102,7 @@
         <div>
           <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
           <select id="modal-escala-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
-            <!-- Preenchido via JS -->
+            <!-- Preenchido dinamicamente via JS -->
           </select>
         </div>
 
@@ -194,7 +212,7 @@
         </div>
 
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Selecione as Delegacias que farão parte deste Plantão Unificado:</label>
+          <label class="block font-bold text-slate-700 mb-1">Selecione as Delegacias participantes deste Plantão Unificado:</label>
           <div id="modal-unificacao-lista" class="space-y-1.5 max-h-48 overflow-y-auto border p-2 rounded-xl bg-slate-50">
             <!-- Checkboxes gerados via JS -->
           </div>
@@ -208,7 +226,7 @@
     </div>
   </div>
 
-  <!-- Início do Módulo ES6 da v2 -->
-  <script type="module" src="./src/app.js?v=2.0.8"></script>
+  <!-- Script principal ES6 -->
+  <script type="module" src="./src/app.js?v=2.0.9"></script>
 </body>
 </html>
