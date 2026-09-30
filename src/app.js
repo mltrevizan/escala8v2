@@ -5,18 +5,20 @@ import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
 import { initModalsModule } from './modals.js';
-import { renderGestaoEscalasModule } from './gestaoEscalas.js'; // 👈 Novo Módulo
+import { renderGestaoEscalasModule } from './gestaoEscalas.js';
+import { renderFeriadosModule } from './feriados.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando v2.2 com Módulo Gerencial de Escalas...");
+  console.log("🚀 Inicializando v2.4 com Módulo de Feriados...");
   initFirebase();
 
-  // Injeta modais
+  // Injeta a estrutura de modais no DOM
   initModalsModule();
 
-  // Carga das coleções
+  // Carrega as coleções do Firestore
   appState.servidores = await fetchCollection('servidores');
   appState.escalas = await fetchCollection('escalas');
+  appState.feriados = await fetchCollection('feriados');
   await initDelegaciasModule();
 
   updateUI();
@@ -28,7 +30,7 @@ function updateUI() {
   if (statusElem) {
     statusElem.innerHTML = `
       <span class="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-1 rounded-full">
-        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores | ${appState.delegacias.length} Unidades)
+        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores | ${appState.delegacias.length} Unidades | ${appState.feriados?.length || 0} Feriados)
       </span>
     `;
   }
@@ -37,7 +39,7 @@ function updateUI() {
 }
 
 window.switchTab = function(tabName) {
-  const tabs = ['crf', 'delegacia', 'gestao', 'unidades', 'servidores'];
+  const tabs = ['crf', 'delegacia', 'gestao', 'feriados', 'unidades', 'servidores'];
 
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-btn-${t}`);
@@ -63,6 +65,8 @@ window.switchTab = function(tabName) {
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   } else if (tabName === 'gestao') {
     renderGestaoEscalasModule('gestao-escalas-container');
+  } else if (tabName === 'feriados') {
+    renderFeriadosModule('feriados-container');
   } else if (tabName === 'unidades') {
     renderDelegaciasCards('delegacias-container');
   } else if (tabName === 'servidores') {
