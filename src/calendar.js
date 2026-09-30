@@ -177,15 +177,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 }
 
 function getTurnoTexto(turno) {
-  if (turno === '12h (D)') return 'Diurno • 08h às 20h';
-  if (turno === '12h (N)') return 'Noturno • 20h às 08h';
+  if (turno === '12h (D)') return 'Diurno • 07h30 às 19h30';
+  if (turno === '12h (N)') return 'Noturno • 19h30 às 07h30';
   return 'Integral • 24 Horas';
 }
 
 function getHorarioExtenso(turno) {
-  if (turno === '12h (D)') return '12h Diurno (08:00 às 20:00)';
-  if (turno === '12h (N)') return '12h Noturno (20:00 às 08:00)';
-  return '24h Integral (08:00 às 08:00)';
+  if (turno === '12h (D)') return '12h Diurno (07:30 às 19:30)';
+  if (turno === '12h (N)') return '12h Noturno (19:30 às 07:30)';
+  return '24h Integral (07:30 às 07:30)';
 }
 
 function setupCalendarEvents(containerId, scope) {
