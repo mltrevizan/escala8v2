@@ -10,11 +10,12 @@ export function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-export function renderCalendarGrid(containerId) {
+export function renderCalendarGrid(containerId, scope = 'CRF') {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { currentYear, currentMonth, calendarScope, selectedDelegaciaId } = appState;
+  appState.calendarScope = scope;
+  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
@@ -28,20 +29,17 @@ export function renderCalendarGrid(containerId) {
   ).join('');
 
   let html = `
-    <!-- Alternância Principal de Escala -->
+    <!-- Barra Superior da Escala -->
     <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
-      <div class="flex items-center gap-2 bg-slate-200 p-1 rounded-xl">
-        <button id="btn-scope-crf" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${calendarScope === 'CRF' ? 'bg-indigo-700 text-white shadow' : 'text-slate-700 hover:text-slate-900'}">
-          🏛️ Plantão CRF (Geral & SDP)
-        </button>
-        <button id="btn-scope-delegacia" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${calendarScope === 'DELEGACIA' ? 'bg-indigo-700 text-white shadow' : 'text-slate-700 hover:text-slate-900'}">
-          🏢 Plantão por Delegacia
-        </button>
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold text-slate-700 font-mono">
+          ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF & SDP' : '🏢 ESCALA POR DELEGACIA / PLANTÃO UNIFICADO'}
+        </span>
       </div>
 
-      ${calendarScope === 'DELEGACIA' ? `
+      ${scope === 'DELEGACIA' ? `
         <div class="flex items-center gap-2">
-          <label class="text-xs font-bold text-slate-700">Selecione a Unidade:</label>
+          <label class="text-xs font-bold text-slate-700">Unidade / Lotação:</label>
           <select id="select-calendar-delegacia" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-sm">
             ${delegaciasOptions}
           </select>
@@ -49,14 +47,14 @@ export function renderCalendarGrid(containerId) {
       ` : ''}
     </div>
 
-    <!-- Navegação do Mês -->
+    <!-- Navegação de Mês -->
     <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
       <button id="btn-prev-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">◀ Anterior</button>
       <span class="font-bold text-sm text-slate-800">${monthNames[currentMonth]} ${currentYear}</span>
       <button id="btn-next-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">Próximo ▶</button>
     </div>
 
-    <!-- Cabeçalho dos Dias -->
+    <!-- Dias da Semana -->
     <div class="grid grid-cols-7 text-center bg-slate-100 text-[11px] font-bold text-slate-600 border-b py-2">
       <div class="text-red-600">Dom</div>
       <div>Seg</div>
@@ -82,9 +80,9 @@ export function renderCalendarGrid(containerId) {
 
     const escalasDoDia = appState.escalas.filter(e => {
       if (e.data !== dateStr) return false;
-      if (e.scope !== calendarScope) return false;
+      if (e.scope !== scope) return false;
       
-      if (calendarScope === 'DELEGACIA') {
+      if (scope === 'DELEGACIA') {
         const delObj = appState.delegacias.find(d => d.id === selectedDelegaciaId);
         if (delObj && delObj.delegaciasIds) {
           return delObj.delegaciasIds.includes(e.delegaciaId);
@@ -141,26 +139,13 @@ export function renderCalendarGrid(containerId) {
   html += `</div>`;
   container.innerHTML = html;
 
-  setupCalendarEvents();
+  setupCalendarEvents(containerId, scope);
 }
 
-function setupCalendarEvents() {
-  document.getElementById('btn-scope-crf')?.addEventListener('click', () => {
-    appState.calendarScope = 'CRF';
-    renderCalendarGrid('calendar-container');
-  });
-
-  document.getElementById('btn-scope-delegacia')?.addEventListener('click', () => {
-    appState.calendarScope = 'DELEGACIA';
-    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
-      appState.selectedDelegaciaId = appState.delegacias[0].id;
-    }
-    renderCalendarGrid('calendar-container');
-  });
-
+function setupCalendarEvents(containerId, scope) {
   document.getElementById('select-calendar-delegacia')?.addEventListener('change', (e) => {
     appState.selectedDelegaciaId = e.target.value;
-    renderCalendarGrid('calendar-container');
+    renderCalendarGrid(containerId, scope);
   });
 
   document.getElementById('btn-prev-month')?.addEventListener('click', () => {
@@ -170,7 +155,7 @@ function setupCalendarEvents() {
     } else {
       appState.currentMonth--;
     }
-    renderCalendarGrid('calendar-container');
+    renderCalendarGrid(containerId, scope);
   });
 
   document.getElementById('btn-next-month')?.addEventListener('click', () => {
@@ -180,11 +165,11 @@ function setupCalendarEvents() {
     } else {
       appState.currentMonth++;
     }
-    renderCalendarGrid('calendar-container');
+    renderCalendarGrid(containerId, scope);
   });
 }
 
-// Modal de Lançamento de Plantões
+// Modal
 window.abrirModalEscala = function(dateStr) {
   const modal = document.getElementById('modal-escala');
   if (!modal) return;
@@ -249,7 +234,8 @@ window.salvarEscalaModal = async function(e) {
   await syncDocToFirestore('escalas', novaEscala.id, novaEscala);
 
   window.fecharModalEscala();
-  renderCalendarGrid('calendar-container');
+  const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
+  renderCalendarGrid(currentContainer, appState.calendarScope);
 };
 
 window.removerEscala = async function(escalaId) {
@@ -258,5 +244,6 @@ window.removerEscala = async function(escalaId) {
   appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
   await syncDocToFirestore('escalas', escalaId, null, true);
 
-  renderCalendarGrid('calendar-container');
+  const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
+  renderCalendarGrid(currentContainer, appState.calendarScope);
 };
