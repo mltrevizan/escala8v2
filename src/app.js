@@ -5,15 +5,16 @@ import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
 import { initModalsModule } from './modals.js';
+import { renderGestaoEscalasModule } from './gestaoEscalas.js'; // 👈 Novo Módulo
 
 window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando v2 com Modais Isolados e Navegação por Abas...");
+  console.log("🚀 Inicializando v2.2 com Módulo Gerencial de Escalas...");
   initFirebase();
 
-  // Injeta modais no DOM
+  // Injeta modais
   initModalsModule();
 
-  // Carga paralela de dados no Firestore
+  // Carga das coleções
   appState.servidores = await fetchCollection('servidores');
   appState.escalas = await fetchCollection('escalas');
   await initDelegaciasModule();
@@ -36,7 +37,7 @@ function updateUI() {
 }
 
 window.switchTab = function(tabName) {
-  const tabs = ['crf', 'delegacia', 'unidades', 'servidores'];
+  const tabs = ['crf', 'delegacia', 'gestao', 'unidades', 'servidores'];
 
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-btn-${t}`);
@@ -60,6 +61,8 @@ window.switchTab = function(tabName) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  } else if (tabName === 'gestao') {
+    renderGestaoEscalasModule('gestao-escalas-container');
   } else if (tabName === 'unidades') {
     renderDelegaciasCards('delegacias-container');
   } else if (tabName === 'servidores') {
@@ -78,8 +81,7 @@ function setupEventListeners() {
       reader.onload = async (evt) => {
         try {
           const importedCount = await processCSVImport(evt.target.result);
-          alert(`Sucesso! ${importedCount} servidores foram importados e gravados no Firestore.`);
-          
+          alert(`Sucesso! ${importedCount} servidores foram importados.`);
           await initDelegaciasModule();
           renderServidoresTable('servidores-table-container');
         } catch (err) {
