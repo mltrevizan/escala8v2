@@ -14,7 +14,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   if (!container) return;
 
   appState.calendarScope = scope;
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
+  const { currentYear, currentMonth, selectedDelegaciaId, feriados } = appState;
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
@@ -77,6 +77,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+    // Checa se o dia é feriado
+    const feriadoDoDia = (feriados || []).find(f => f.data === dateStr);
+
     const escalasDoDia = appState.escalas.filter(e => {
       if (e.data !== dateStr) return false;
       if (e.scope !== scope) return false;
@@ -91,12 +94,23 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    const bgDayClass = isWeekend ? 'bg-amber-50/50' : 'bg-white';
+    // Cor de fundo do dia (Fim de semana ou Feriado)
+    let bgDayClass = 'bg-white';
+    if (feriadoDoDia) {
+      bgDayClass = 'bg-red-50/60';
+    } else if (isWeekend) {
+      bgDayClass = 'bg-amber-50/50';
+    }
 
     html += `
       <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative border-t border-l min-h-[125px] h-auto">
         <div class="flex items-center justify-between mb-1">
-          <span class="text-xs font-black ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
+          <span class="text-xs font-black ${feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800')}">${day}</span>
+          ${feriadoDoDia ? `
+            <span class="text-[8px] bg-red-100 text-red-800 border border-red-200 font-extrabold px-1 rounded truncate max-w-[85px]" title="${feriadoDoDia.descricao}">
+              🎉 ${feriadoDoDia.descricao}
+            </span>
+          ` : ''}
         </div>
 
         <div class="space-y-1.5 flex-1 flex flex-col justify-start">
@@ -141,13 +155,11 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   setupCalendarEvents(containerId, scope);
 }
 
-// Formata o nome para exibir o máximo possível sem quebrar
 function formatarNomeOperacional(nomeCompleto, prefixo) {
   if (!nomeCompleto) return prefixo;
   const partes = nomeCompleto.trim().split(/\s+/);
   if (partes.length === 1) return `${prefixo} ${partes[0]}`;
   
-  // Exibe Prefixo + Primeiro e Último Nome (ou Sobrenome intermediário se couber)
   const primeiroNome = partes[0];
   const ultimoSobrenome = partes[partes.length - 1];
   
@@ -249,7 +261,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip para Grupos de Plantão com Cálculo Inteligente de Posição
+// Tooltip com Posição Inteligente
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
@@ -284,7 +296,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   exibirElementoTooltip(event, content);
 };
 
-// Tooltip para Plantão Único
 window.mostrarTooltipEscala = function(event, escalaId) {
   const esc = appState.escalas.find(e => e.id === escalaId);
   if (!esc) return;
@@ -305,7 +316,6 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   exibirElementoTooltip(event, content);
 };
 
-// Posição Inteligente da Tooltip (Evita sair da tela)
 function exibirElementoTooltip(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
@@ -317,7 +327,6 @@ function exibirElementoTooltip(event, htmlContent) {
 
   tooltip.innerHTML = htmlContent;
 
-  // Renderiza temporariamente oculto para medir dimensões
   tooltip.style.left = '0px';
   tooltip.style.top = '0px';
   
@@ -328,12 +337,10 @@ function exibirElementoTooltip(event, htmlContent) {
   let posX = event.clientX + 14;
   let posY = event.clientY + 14;
 
-  // Ajuste se ultrapassar a borda direita
   if (posX + tooltipRect.width > screenWidth - 10) {
     posX = event.clientX - tooltipRect.width - 10;
   }
 
-  // Ajuste se ultrapassar a borda inferior (Inverte a posição para cima)
   if (posY + tooltipRect.height > screenHeight - 10) {
     posY = event.clientY - tooltipRect.height - 10;
   }
