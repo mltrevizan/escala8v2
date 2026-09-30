@@ -18,18 +18,33 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
+  // Data atual de referência para destaque de HOJE
+  const hoje = new Date();
+  const hojeAno = hoje.getFullYear();
+  const hojeMes = hoje.getMonth();
+  const hojeDia = hoje.getDate();
+
   const monthNames = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
   ];
 
-  let delegaciasOptions = appState.delegacias.map(d => 
+  const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
+
+  let sdpOptions = `
+    <option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todos os SDPs / Unidades</option>
+  `;
+  (appState.delegacias || []).forEach(d => {
+    sdpOptions += `<option value="${d.id}" ${sdpFiltroAtual === d.id ? 'selected' : ''}>${d.nome}</option>`;
+  });
+
+  let delegaciasOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${selectedDelegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
 
   let html = `
-    <!-- Topo / Controle do Calendário -->
-    <div class="p-3.5 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-2 font-sans">
+    <!-- Topo de Controle e Filtros -->
+    <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
           ${scope === 'CRF' ? '🏛️ Escala Geral CRF & Extrajornada' : '🏢 Escala por Delegacia / Plantão Unificado'}
@@ -39,18 +54,29 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ${scope === 'DELEGACIA' ? `
         <div class="flex items-center gap-2">
           <label class="text-xs font-medium text-slate-600">Unidade:</label>
-          <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1 shadow-xs">
+          <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1.5 shadow-xs">
             ${delegaciasOptions}
           </select>
         </div>
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês -->
-    <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between font-sans">
-      <button id="btn-prev-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs transition">◀ Anterior</button>
-      <span class="font-extrabold text-xs text-slate-800 uppercase tracking-wider">${monthNames[currentMonth]} ${currentYear}</span>
-      <button id="btn-next-month" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold shadow-xs transition">Próximo ▶</button>
+    <!-- Navegação de Mês Agrupada + Filtro por SDP à Direita -->
+    <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
+      <!-- Bloco de Navegação Centralizado e Compacto -->
+      <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
+        <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">◀ Anterior</button>
+        <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
+        <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">Próximo ▶</button>
+      </div>
+
+      <!-- Filtro de SDP (Aparece no Espaço Livre da Direita) -->
+      <div class="flex items-center gap-2">
+        <label class="text-[11px] font-bold text-slate-600">Filtro SDP/Origem:</label>
+        <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
+          ${sdpOptions}
+        </select>
+      </div>
     </div>
 
     <!-- Cabeçalho dos Dias da Semana -->
@@ -77,9 +103,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+    // Verificação se este dia é O DIA ATUAL (HOJE)
+    const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
+
     const feriadoDoDia = (feriados || []).find(f => f.data === dateStr);
 
-    const escalasDoDia = appState.escalas.filter(e => {
+    let escalasDoDia = appState.escalas.filter(e => {
       if (e.data !== dateStr) return false;
       if (e.scope !== scope) return false;
       
@@ -93,6 +122,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
+    // Aplicação do Filtro por SDP se selecionado diferente de TODOS
+    if (sdpFiltroAtual !== 'TODOS') {
+      escalasDoDia = escalasDoDia.filter(e => e.delegaciaId === sdpFiltroAtual || e.sdpId === sdpFiltroAtual);
+    }
+
+    // Fundo base e destaque especial de borda para o DIA ATUAL (HOJE)
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
       bgDayClass = 'bg-rose-50/60';
@@ -100,12 +135,23 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       bgDayClass = 'bg-amber-50/40';
     }
 
+    // Borda reforçada caso seja o dia de Hoje
+    const hojeBorderClass = isHoje 
+      ? 'border-2 border-indigo-600 bg-indigo-50/20 shadow-inner z-10' 
+      : 'border-t border-l border-slate-200/80';
+
     html += `
-      <div class="${bgDayClass} p-1 flex flex-col justify-between relative border-t border-l border-slate-200/80 min-h-[115px] h-auto">
+      <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
         <div class="flex items-center justify-between mb-1 px-0.5">
-          <span class="text-[11px] font-extrabold ${feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800')}">${day}</span>
+          <div class="flex items-center gap-1">
+            <span class="text-[11px] font-extrabold ${isHoje ? 'text-indigo-800' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
+              ${day}
+            </span>
+            ${isHoje ? '<span class="text-[7px] bg-indigo-600 text-white font-extrabold px-1 rounded uppercase tracking-tighter">HOJE</span>' : ''}
+          </div>
+
           ${feriadoDoDia ? `
-            <span class="text-[7.5px] bg-red-100 text-red-800 border border-red-200 font-bold px-1 rounded truncate max-w-[80px]" title="${feriadoDoDia.descricao}">
+            <span class="text-[7.5px] bg-red-100 text-red-800 border border-red-200 font-bold px-1 rounded truncate max-w-[75px]" title="${feriadoDoDia.descricao}">
               ${feriadoDoDia.descricao}
             </span>
           ` : ''}
@@ -118,7 +164,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      // Cores Mais Vivas & Marcantes para os Turnos
       html += renderBalaoPeriodo(
         'DIURNO', 
         '07h30 - 19h30', 
@@ -139,11 +184,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
         escalasDoDia.forEach(esc => {
           const srv = appState.servidores.find(s => s.id === esc.servidorId);
           const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
-          const prefixo = isDel ? 'DEL.' : 'AG.';
+          const prefixo = isDel ? 'DEL.' : 'APJ';
           const nomeCurto = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
           html += `
-            <div onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
+            <div onclick="window.abrirModalDetalhesTurno('Plantão Local', '${esc.data}', '${esc.id}')"
+                 onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="text-[9.5px] p-1 rounded border bg-sky-100/80 border-sky-300 text-sky-950 font-semibold shadow-xs cursor-pointer hover:bg-sky-200 transition">
               <span class="truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
@@ -211,7 +257,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
-    const prefixo = isDel ? 'DEL.' : 'AG.';
+    const prefixo = isDel ? 'DEL.' : 'APJ';
     const nomeExibicao = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
     if (isExtra) {
@@ -233,7 +279,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   const headerColorClass = isDiurno ? 'text-amber-900 border-amber-300/60' : 'text-indigo-900 border-indigo-200';
 
   return `
-    <div onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
+    <div onclick="window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}')"
+         onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
          class="p-1 rounded-md border ${bgStyle} space-y-0.5 cursor-pointer hover:brightness-95 hover:shadow-sm transition">
       <div class="flex items-center justify-between border-b pb-0.5 ${headerColorClass}">
@@ -246,6 +293,11 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     </div>
   `;
 }
+
+window.mudarFiltroSdp = function(valor) {
+  appState.filtroSdp = valor;
+  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+};
 
 function setupCalendarEvents(containerId, scope) {
   document.getElementById('select-calendar-delegacia')?.addEventListener('change', (e) => {
@@ -274,8 +326,78 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip Flutuante
+// Modal Responsivo para Dispositivos Móveis (Ao Clicar/Tocar no Período)
+window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
+  let modal = document.getElementById('modal-detalhes-turno');
+  if (!modal) {
+    criarModalDetalhesTurnoDOM();
+    modal = document.getElementById('modal-detalhes-turno');
+  }
+
+  const ids = idsString.split(',');
+  const escalas = appState.escalas.filter(e => ids.includes(e.id));
+
+  const tituloEl = document.getElementById('modal-turno-titulo');
+  const corpoEl = document.getElementById('modal-turno-corpo');
+
+  if (tituloEl) tituloEl.innerHTML = `${titulo} <span class="text-xs font-mono font-normal text-slate-500">(${horario})</span>`;
+
+  let htmlContent = '';
+
+  if (escalas.length === 0) {
+    htmlContent = `<p class="text-xs text-slate-500 italic p-4 text-center">Nenhum policial escalado para este período.</p>`;
+  } else {
+    escalas.forEach(esc => {
+      const srv = appState.servidores.find(s => s.id === esc.servidorId);
+      const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+      const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+      htmlContent += `
+        <div class="p-3 bg-slate-50 border rounded-xl space-y-1">
+          <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-900'} text-xs flex items-center justify-between">
+            <span>${srv?.nome || 'Não informado'}</span>
+            ${isExtra ? '<span class="text-[9px] bg-purple-600 text-white px-1.5 py-0.5 rounded font-extrabold">EXTRA</span>' : ''}
+          </div>
+          <div class="text-xs text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
+          <div class="text-xs text-slate-600"><b>Lotação / SDP:</b> ${del?.nome || 'CRF'}</div>
+          <div class="text-xs text-slate-600"><b>Contato/Tel:</b> ${srv?.telefone || '-'}</div>
+        </div>
+      `;
+    });
+  }
+
+  if (corpoEl) corpoEl.innerHTML = htmlContent;
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalDetalhesTurno = function() {
+  document.getElementById('modal-detalhes-turno')?.classList.add('hidden');
+};
+
+function criarModalDetalhesTurnoDOM() {
+  const modalHTML = `
+    <div id="modal-detalhes-turno" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 id="modal-turno-titulo" class="font-black text-slate-900 text-sm"></h3>
+          <button onclick="window.fecharModalDetalhesTurno()" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+        </div>
+
+        <div id="modal-turno-corpo" class="space-y-2 overflow-y-auto flex-1 pr-1"></div>
+
+        <div class="pt-2 border-t flex justify-end shrink-0">
+          <button onclick="window.fecharModalDetalhesTurno()" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs">Fechar</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Tooltip Flutuante (Desktop)
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
+  if (window.innerWidth < 768) return; // Em telas menores de celular, usa-se o clique no modal
+
   const ids = idsString.split(',');
   const escalas = appState.escalas.filter(e => ids.includes(e.id));
 
@@ -298,7 +420,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
           <span>${srv?.nome || 'Não informado'}</span>
           ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
         </div>
-        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
+        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
         <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
         <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
       </div>
@@ -310,6 +432,8 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 };
 
 window.mostrarTooltipEscala = function(event, escalaId) {
+  if (window.innerWidth < 768) return;
+
   const esc = appState.escalas.find(e => e.id === escalaId);
   if (!esc) return;
 
@@ -319,7 +443,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   const content = `
     <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
       <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs">${srv?.nome || 'Não informado'}</div>
-      <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
+      <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
       <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
       <div class="text-[10px] text-slate-600"><b>Turno:</b> ${esc.turno || '24h'}</div>
       <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
