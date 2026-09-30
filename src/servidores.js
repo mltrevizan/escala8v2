@@ -6,57 +6,157 @@ export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  if (appState.servidores.length === 0) {
-    container.innerHTML = `
-      <div class="p-6 text-center text-slate-500 text-sm">
-        Nenhum servidor cadastrado até o momento.
-      </div>
-    `;
-    return;
-  }
+  const busca = document.getElementById('filtro-servidor-busca')?.value?.toLowerCase() || '';
+  const delFiltro = document.getElementById('filtro-servidor-delegacia')?.value || 'TODAS';
+  const subFiltro = document.getElementById('filtro-servidor-subdivisao')?.value || 'TODAS';
+
+  // Obter lista única de Subdivisões cadastradas nos servidores
+  const subdivisoesUnicas = [...new Set(
+    (appState.servidores || [])
+      .map(s => s.subdivisao)
+      .filter(Boolean)
+  )].sort();
+
+  // Filtragem Dinâmica
+  const servidoresFiltrados = (appState.servidores || []).filter(srv => {
+    // 1. Filtro Texto (Nome, Cargo, Telefone)
+    if (busca) {
+      const nomeNorm = (srv.nome || '').toLowerCase();
+      const cargoNorm = (srv.cargo || '').toLowerCase();
+      const telNorm = (srv.telefone || '').toLowerCase();
+      if (!nomeNorm.includes(busca) && !cargoNorm.includes(busca) && !telNorm.includes(busca)) {
+        return false;
+      }
+    }
+
+    // 2. Filtro Por Delegacia
+    if (delFiltro !== 'TODAS' && srv.delegaciaId !== delFiltro) {
+      return false;
+    }
+
+    // 3. Filtro Por Subdivisão
+    if (subFiltro !== 'TODAS' && srv.subdivisao !== subFiltro) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Ordenação Alfabética por Nome
+  servidoresFiltrados.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let delegaciasOptions = `
+    <option value="TODAS" ${delFiltro === 'TODAS' ? 'selected' : ''}>Todas as Delegacias / Unidades</option>
+  `;
+  (appState.delegacias || []).forEach(d => {
+    delegaciasOptions += `<option value="${d.id}" ${delFiltro === d.id ? 'selected' : ''}>${d.nome}</option>`;
+  });
+
+  let subdivisaoOptions = `
+    <option value="TODAS" ${subFiltro === 'TODAS' ? 'selected' : ''}>Todas as Subdivisões</option>
+  `;
+  subdivisoesUnicas.forEach(sub => {
+    subdivisaoOptions += `<option value="${sub}" ${subFiltro === sub ? 'selected' : ''}>${sub}</option>`;
+  });
 
   let html = `
+    <!-- Barra Superior com Controles e Filtros de Busca -->
+    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-sm text-slate-800">Cadastro Geral de Servidores</h2>
+          <p class="text-[11px] text-slate-500">Gerencie e filtre policiais lotados no sistema da 8ª CRF</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="window.abrirModalServidor()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1">
+            ➕ Novo Policial
+          </button>
+        </div>
+      </div>
+
+      <!-- Filtros Dinâmicos -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+        <!-- Campo de Digitação / Busca em Tempo Real -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Rápida (Nome, Cargo, Tel):</label>
+          <input type="text" id="filtro-servidor-busca" value="${busca}" oninput="window.atualizarTabelaServidores()" placeholder="Digite para filtrar..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <!-- Filtro Delegacia -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏢 Filtrar por Unidade / Lotação:</label>
+          <select id="filtro-servidor-delegacia" onchange="window.atualizarTabelaServidores()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-bold text-slate-800">
+            ${delegaciasOptions}
+          </select>
+        </div>
+
+        <!-- Filtro Subdivisão -->
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔰 Filtrar por Subdivisão / Regional:</label>
+          <select id="filtro-servidor-subdivisao" onchange="window.atualizarTabelaServidores()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-bold text-slate-800">
+            ${subdivisaoOptions}
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end text-[11px] text-slate-500 font-medium">
+        Exibindo <b class="text-slate-800 mx-1">${servidoresFiltrados.length}</b> de ${appState.servidores.length} servidores cadastrados.
+      </div>
+    </div>
+
+    <!-- Tabela de Servidores -->
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs border-collapse">
+      <table class="w-full text-left text-xs border-collapse font-sans">
         <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b font-bold uppercase tracking-wider">
-            <th class="p-3">Nome / Cargo</th>
-            <th class="p-3">Login / Contato</th>
-            <th class="p-3">Lotação (Delegacia)</th>
-            <th class="p-3">Nível de Acesso</th>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
+            <th class="p-3">Nome do Servidor</th>
+            <th class="p-3">Cargo</th>
+            <th class="p-3">Lotação / Delegacia</th>
+            <th class="p-3">Subdivisão</th>
+            <th class="p-3">Telefone / Prontidão</th>
             <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
   `;
 
-  appState.servidores.forEach(srv => {
+  if (servidoresFiltrados.length === 0) {
     html += `
-      <tr class="hover:bg-slate-50 transition">
-        <td class="p-3">
-          <div class="font-bold text-slate-800">${srv.nome || 'SEM NOME'}</div>
-          <div class="text-[10px] text-slate-500">${srv.cargo || 'Não Informado'}</div>
-        </td>
-        <td class="p-3">
-          <div class="font-mono text-slate-700">${srv.login || '-'}</div>
-          <div class="text-[10px] text-slate-500">${srv.telefone || '-'}</div>
-        </td>
-        <td class="p-3 text-slate-700 font-medium">
-          ${srv.delegaciaId || 'Não Vinculado'}
-        </td>
-        <td class="p-3">
-          <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${getRoleBadgeClass(srv.nivelAcesso)}">
-            ${srv.nivelAcesso || 'APJ'}
-          </span>
-        </td>
-        <td class="p-3 text-right space-x-1">
-          <button onclick="window.editarServidor('${srv.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow">
-            Editar
-          </button>
+      <tr>
+        <td colspan="6" class="p-6 text-center text-slate-500 italic">
+          Nenhum servidor encontrado com os critérios do filtro.
         </td>
       </tr>
     `;
-  });
+  } else {
+    servidoresFiltrados.forEach(srv => {
+      const del = appState.delegacias.find(d => d.id === srv.delegaciaId);
+      const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
+
+      html += `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="p-3 font-bold text-slate-900">${srv.nome || 'Sem Nome'}</td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${isDel ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-100 text-slate-800 border-slate-300'}">
+              ${srv.cargo || 'APJ'}
+            </span>
+          </td>
+          <td class="p-3 text-slate-700 font-medium">${del ? del.nome : (srv.delegaciaNome || '-')}</td>
+          <td class="p-3 text-slate-500 font-mono text-[11px]">${srv.subdivisao || '-'}</td>
+          <td class="p-3 font-mono text-slate-700">${srv.telefone || '-'}</td>
+          <td class="p-3 text-right space-x-1">
+            <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs transition">
+              Editar
+            </button>
+            <button onclick="window.excluirServidor('${srv.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition">
+              Excluir
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+  }
 
   html += `
         </tbody>
@@ -67,36 +167,48 @@ export function renderServidoresTable(containerId) {
   container.innerHTML = html;
 }
 
-function getRoleBadgeClass(role) {
-  switch (role) {
-    case 'ADMINISTRADOR': return 'bg-purple-100 text-purple-800 border border-purple-300';
-    case 'COORDENADOR': return 'bg-blue-100 text-blue-800 border border-blue-300';
-    case 'SUPERINTENDENTE': return 'bg-indigo-100 text-indigo-800 border border-indigo-300';
-    case 'DELEGADO': return 'bg-amber-100 text-amber-800 border border-amber-300';
-    default: return 'bg-slate-100 text-slate-700 border border-slate-300';
+window.atualizarTabelaServidores = function() {
+  renderServidoresTable('servidores-table-container');
+};
+
+// JANELA MODAL PARA CRIAR / EDITAR SERVIDOR
+window.abrirModalServidor = function(servidorId = null) {
+  let modal = document.getElementById('modal-servidor');
+  if (!modal) {
+    criarModalServidorDOM();
+    modal = document.getElementById('modal-servidor');
   }
-}
 
-// Modal de Edição de Servidor
-window.editarServidor = function(servidorId) {
-  const srv = appState.servidores.find(s => s.id === servidorId);
-  if (!srv) return;
+  const inputId = document.getElementById('modal-srv-id');
+  const inputNome = document.getElementById('modal-srv-nome');
+  const inputCargo = document.getElementById('modal-srv-cargo');
+  const selectDel = document.getElementById('modal-srv-delegacia');
+  const inputSub = document.getElementById('modal-srv-subdivisao');
+  const inputTel = document.getElementById('modal-srv-telefone');
 
-  const modal = document.getElementById('modal-servidor');
-  if (!modal) return;
+  // Opções de Delegacias no Modal
+  let delOptions = (appState.delegacias || []).map(d => 
+    `<option value="${d.id}">${d.nome}</option>`
+  ).join('');
+  if (selectDel) selectDel.innerHTML = delOptions;
 
-  document.getElementById('modal-srv-id').value = srv.id;
-  document.getElementById('modal-srv-nome').value = srv.nome || '';
-  document.getElementById('modal-srv-cargo').value = srv.cargo || 'AGENTE';
-  document.getElementById('modal-srv-login').value = srv.login || '';
-  document.getElementById('modal-srv-telefone').value = srv.telefone || '';
-  document.getElementById('modal-srv-nivel').value = srv.nivelAcesso || 'APJ';
-
-  const selectDelegacia = document.getElementById('modal-srv-delegacia');
-  if (selectDelegacia) {
-    selectDelegacia.innerHTML = appState.delegacias
-      .map(d => `<option value="${d.nome}" ${d.nome === srv.delegaciaId ? 'selected' : ''}>${d.nome}</option>`)
-      .join('');
+  if (servidorId) {
+    const srv = appState.servidores.find(s => s.id === servidorId);
+    if (srv) {
+      inputId.value = srv.id;
+      inputNome.value = srv.nome || '';
+      inputCargo.value = srv.cargo || 'APJ';
+      selectDel.value = srv.delegaciaId || (appState.delegacias[0]?.id || '');
+      inputSub.value = srv.subdivisao || '';
+      inputTel.value = srv.telefone || '';
+    }
+  } else {
+    inputId.value = '';
+    inputNome.value = '';
+    inputCargo.value = 'APJ';
+    selectDel.value = appState.delegacias[0]?.id || '';
+    inputSub.value = '';
+    inputTel.value = '';
   }
 
   modal.classList.remove('hidden');
@@ -110,93 +222,147 @@ window.salvarServidorModal = async function(e) {
   e.preventDefault();
 
   const id = document.getElementById('modal-srv-id').value;
-  const srvObj = appState.servidores.find(s => s.id === id);
+  const nome = document.getElementById('modal-srv-nome').value.trim();
+  const cargo = document.getElementById('modal-srv-cargo').value;
+  const delegaciaId = document.getElementById('modal-srv-delegacia').value;
+  const subdivisao = document.getElementById('modal-srv-subdivisao').value.trim();
+  const telefone = document.getElementById('modal-srv-telefone').value.trim();
 
-  if (srvObj) {
-    srvObj.nome = document.getElementById('modal-srv-nome').value.toUpperCase();
-    srvObj.cargo = document.getElementById('modal-srv-cargo').value.toUpperCase();
-    srvObj.login = document.getElementById('modal-srv-login').value.toLowerCase();
-    srvObj.telefone = document.getElementById('modal-srv-telefone').value;
-    srvObj.delegaciaId = document.getElementById('modal-srv-delegacia').value;
-    srvObj.nivelAcesso = document.getElementById('modal-srv-nivel').value;
-
-    await syncDocToFirestore('servidores', srvObj.id, srvObj);
-
-    window.fecharModalServidor();
-    renderServidoresTable('servidores-table-container');
-    alert("Dados do policial atualizados com sucesso!");
+  if (!nome) {
+    alert("Informe o nome do servidor.");
+    return;
   }
+
+  const delObj = appState.delegacias.find(d => d.id === delegaciaId);
+
+  if (id) {
+    const srv = appState.servidores.find(s => s.id === id);
+    if (srv) {
+      srv.nome = nome;
+      srv.cargo = cargo;
+      srv.delegaciaId = delegaciaId;
+      srv.delegaciaNome = delObj ? delObj.nome : '';
+      srv.subdivisao = subdivisao;
+      srv.telefone = telefone;
+
+      await syncDocToFirestore('servidores', srv.id, srv);
+    }
+  } else {
+    const newId = 'srv_' + Date.now();
+    const novoServidor = {
+      id: newId,
+      nome,
+      cargo,
+      delegaciaId,
+      delegaciaNome: delObj ? delObj.nome : '',
+      subdivisao,
+      telefone
+    };
+
+    if (!appState.servidores) appState.servidores = [];
+    appState.servidores.push(novoServidor);
+
+    await syncDocToFirestore('servidores', novoServidor.id, novoServidor);
+  }
+
+  window.fecharModalServidor();
+  window.atualizarTabelaServidores();
 };
 
-// Importador CSV
+window.excluirServidor = async function(servidorId) {
+  const srv = appState.servidores.find(s => s.id === servidorId);
+  const nome = srv ? srv.nome : 'este servidor';
+
+  if (!confirm(`Deseja realmente EXCLUIR o servidor "${nome}"?`)) return;
+
+  appState.servidores = appState.servidores.filter(s => s.id !== servidorId);
+  await syncDocToFirestore('servidores', servidorId, null, true);
+
+  window.atualizarTabelaServidores();
+};
+
+function criarModalServidorDOM() {
+  const modalHTML = `
+    <div id="modal-servidor" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h3 class="font-bold text-slate-900 text-sm">Cadastrar / Editar Policial</h3>
+          <button onclick="window.fecharModalServidor()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarServidorModal(event)" class="space-y-3 text-xs">
+          <input type="hidden" id="modal-srv-id">
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nome Completo:</label>
+            <input type="text" id="modal-srv-nome" required placeholder="Ex: Carlos Eduardo Silva" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Cargo / Função:</label>
+              <select id="modal-srv-cargo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+                <option value="APJ">APJ (Agente de Pol. Judiciária)</option>
+                <option value="DELEGADO DE POLICIA">Delegado de Polícia</option>
+                <option value="ESCRIVAO DE POLICIA">Escrivão de Polícia</option>
+                <option value="INVESTIGADOR DE POLICIA">Investigador de Polícia</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Telefone / Prontidão:</label>
+              <input type="text" id="modal-srv-telefone" placeholder="(00) 00000-0000" class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Lotação / Delegacia Principal:</label>
+            <select id="modal-srv-delegacia" class="w-full border rounded-xl p-2 bg-slate-50 font-bold"></select>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Subdivisão / Regional:</label>
+            <input type="text" id="modal-srv-subdivisao" placeholder="Ex: 8ª SDP" class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+          </div>
+
+          <div class="pt-3 border-t flex justify-end gap-2">
+            <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs">Salvar Servidor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Suporte para importação via CSV
 export async function processCSVImport(csvText) {
-  const lines = csvText.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-  if (lines.length < 2) throw new Error("O arquivo CSV enviado está vazio ou fora do formato esperado.");
-
-  const delimiter = lines[0].includes(';') ? ';' : ',';
-
-  const parseLine = (line) => {
-    const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
-    const matches = [];
-    let match;
-    while ((match = regex.exec(line)) !== null) {
-      matches.push((match[1] !== undefined ? match[1] : match[2]).trim());
-    }
-    return matches;
-  };
-
-  const rawHeaders = parseLine(lines[0]);
-  const headers = rawHeaders.map(h => normalizeText(h));
-
-  const colIndex = {
-    nome: headers.findIndex(h => h.includes('nome')),
-    cargo: headers.findIndex(h => h.includes('cargo')),
-    login: headers.findIndex(h => h.includes('login')),
-    sdp: headers.findIndex(h => h.includes('sdp')),
-    delegacia: headers.findIndex(h => h.includes('delegacia') || h.includes('lotacao')),
-    telefone: headers.findIndex(h => h.includes('telefone') || h.includes('celular')),
-    funcaoCRF: headers.findIndex(h => h.includes('funcao_crf') || h.includes('crf')),
-    funcaoDP: headers.findIndex(h => h.includes('funcao_dp') || h.includes('dp')),
-    nivelAcesso: headers.findIndex(h => h.includes('nivel') || h.includes('acesso'))
-  };
-
+  const lines = csvText.split('\n');
   let count = 0;
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseLine(lines[i]);
-    if (cols.length < 2) continue;
+    const line = lines[i].trim();
+    if (!line) continue;
 
-    const nome = colIndex.nome !== -1 ? cols[colIndex.nome] : cols[1];
-    if (!nome) continue;
+    const parts = line.split(';');
+    if (parts.length >= 2) {
+      const nome = parts[0].trim();
+      const cargo = parts[1].trim() || 'APJ';
+      const delegaciaNome = parts[2]?.trim() || '';
+      const subdivisao = parts[3]?.trim() || '';
+      const telefone = parts[4]?.trim() || '';
 
-    const cargo = colIndex.cargo !== -1 ? cols[colIndex.cargo] : cols[0];
-    const login = colIndex.login !== -1 ? cols[colIndex.login] : normalizeText(nome.split(' ')[0]);
-    const sdpId = colIndex.sdp !== -1 ? cols[colIndex.sdp] : '8SDP';
-    const delegaciaId = colIndex.delegacia !== -1 ? cols[colIndex.delegacia] : 'DEL_8SDP_P';
-    const telefone = colIndex.telefone !== -1 ? cols[colIndex.telefone] : '';
-    const funcaoCRF = colIndex.funcaoCRF !== -1 ? cols[colIndex.funcaoCRF] : 'OPERACIONAL';
-    const funcaoDP = colIndex.funcaoDP !== -1 ? cols[colIndex.funcaoDP] : 'OPERACIONAL';
-    const nivelAcesso = colIndex.nivelAcesso !== -1 ? cols[colIndex.nivelAcesso] : 'APJ';
-
-    const srvId = 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-
-    const newServidor = {
-      id: srvId,
-      nome: nome.toUpperCase(),
-      cargo: cargo.toUpperCase(),
-      login: login.toLowerCase(),
-      sdpId: sdpId,
-      delegaciaId: delegaciaId,
-      telefone: telefone,
-      funcaoCRF: funcaoCRF,
-      funcaoDP: funcaoDP,
-      nivelAcesso: nivelAcesso
-    };
-
-    appState.servidores.push(newServidor);
-    await syncDocToFirestore('servidores', newServidor.id, newServidor);
-    count++;
+      if (nome) {
+        const id = 'srv_' + Date.now() + '_' + i;
+        const srv = { id, nome, cargo, delegaciaNome, subdivisao, telefone };
+        
+        if (!appState.servidores) appState.servidores = [];
+        appState.servidores.push(srv);
+        await syncDocToFirestore('servidores', id, srv);
+        count++;
+      }
+    }
   }
-
   return count;
 }
