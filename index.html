@@ -12,20 +12,30 @@
 </head>
 <body class="h-full flex flex-col font-sans p-6 text-slate-800">
 
-  <div class="max-w-4xl mx-auto w-full space-y-6">
+  <div class="max-w-5xl mx-auto w-full space-y-6">
     <!-- Header principal -->
     <header class="bg-white p-6 rounded-2xl shadow-sm border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
-        <p class="text-xs text-slate-500">Módulo de Gestão de Equipes e Autenticação</p>
+        <p class="text-xs text-slate-500">Gestão de Equipes, Delegacias e Consórcios</p>
       </div>
       <div id="app-status">
         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
       </div>
     </header>
 
-    <!-- Seção de Importação CSV e Tabela -->
-    <main class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <!-- Painel de Delegacias -->
+    <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
+        <h2 class="font-bold text-sm text-slate-800">Unidades & Delegacias Mapeadas</h2>
+      </div>
+      <div id="delegacias-container">
+        <!-- Renderizado via delegacias.js -->
+      </div>
+    </section>
+
+    <!-- Seção de Importação CSV e Tabela de Servidores -->
+    <section class="bg-white rounded-2xl shadow-sm border overflow-hidden">
       <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 class="font-bold text-sm text-slate-800">Servidores Cadastrados</h2>
         
@@ -39,12 +49,12 @@
 
       <!-- Tabela Renderizada -->
       <div id="servidores-table-container">
-        <!-- Renderizado dinamicamente via servidores.js -->
+        <!-- Renderizado via servidores.js -->
       </div>
-    </main>
+    </section>
   </div>
 
   <!-- Início do Módulo ES6 da v2 -->
-  <script type="module" src="./src/app.js?v=2.0.1"></script>
+  <script type="module" src="./src/app.js?v=2.0.2"></script>
 </body>
 </html>
