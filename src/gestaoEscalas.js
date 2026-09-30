@@ -206,7 +206,7 @@ window.limparEscalasDoMes = async function() {
   window.atualizarPainelGestao();
 };
 
-// Importar Escalas via CSV
+// Importar Escalas com Relatório Automático de Inconsistências/Falhas
 window.importarEscalasCSV = function(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -219,35 +219,83 @@ window.importarEscalasCSV = function(event) {
       if (lines.length < 2) throw new Error("Arquivo CSV inválido ou vazio.");
 
       const delimiter = lines[0].includes(';') ? ';' : ',';
+
+      const parseLine = (line) => {
+        const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
+        const matches = [];
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+          matches.push((match[1] !== undefined ? match[1] : match[2]).trim());
+        }
+        return matches;
+      };
+
+      const rawHeaders = parseLine(lines[0]);
+      const headers = rawHeaders.map(h => normalizeText(h));
+
+      const colIndex = {
+        data: headers.findIndex(h => h.includes('data')),
+        periodo: headers.findIndex(h => h.includes('periodo') || h.includes('turno')),
+        extrajornada: headers.findIndex(h => h.includes('extra') || h.includes('extrajornada')),
+        nome: headers.findIndex(h => h.includes('nome')),
+        login: headers.findIndex(h => h.includes('login')),
+        delegacia: headers.findIndex(h => h.includes('delegacia') || h.includes('unidade') || h.includes('lotacao')),
+        tipo: headers.findIndex(h => h.includes('tipo'))
+      };
+
       let importados = 0;
+      let falhas = [];
 
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(delimiter).map(c => c.replace(/"/g, '').trim());
-        if (cols.length < 3) continue;
+        const lineText = lines[i];
+        const cols = parseLine(lineText);
+        if (cols.length < 2) continue;
 
-        // Formato esperado: Data(YYYY-MM-DD ou DD/MM/YYYY); PolicialLoginOuNome; DelegaciaNome; Tipo; Turno; Escopo
-        let rawData = cols[0];
+        let rawData = colIndex.data !== -1 ? cols[colIndex.data] : cols[0];
+        if (!rawData) {
+          falhas.push({ linha: lineText, motivo: "Data não informada ou coluna ausente" });
+          continue;
+        }
+
         let dataIso = rawData;
         if (rawData.includes('/')) {
           const [d, m, a] = rawData.split('/');
           dataIso = `${a}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
         }
 
-        const termoPolicial = cols[1]?.toLowerCase();
+        const loginVal = colIndex.login !== -1 ? cols[colIndex.login]?.toLowerCase() : '';
+        const nomeVal = colIndex.nome !== -1 ? cols[colIndex.nome]?.toLowerCase() : '';
+
         const servidor = appState.servidores.find(s => 
-          s.login?.toLowerCase() === termoPolicial || s.nome?.toLowerCase().includes(termoPolicial)
+          (loginVal && s.login?.toLowerCase() === loginVal) ||
+          (nomeVal && s.nome?.toLowerCase().includes(nomeVal))
         );
 
-        if (!servidor) continue;
+        if (!servidor) {
+          falhas.push({ linha: lineText, motivo: `Policial não encontrado (${loginVal || nomeVal || 'não informado'})` });
+          continue;
+        }
 
-        const termoDelegacia = cols[2]?.toLowerCase();
+        const delVal = colIndex.delegacia !== -1 ? cols[colIndex.delegacia]?.toLowerCase() : '';
         const delegacia = appState.delegacias.find(d => 
-          d.nome?.toLowerCase().includes(termoDelegacia)
+          d.nome?.toLowerCase().includes(delVal) || d.id?.toLowerCase() === delVal
         );
 
-        const tipo = cols[3] || 'REGULAR';
-        const turno = cols[4] || '24h';
-        const scope = cols[5] || 'CRF';
+        const isExtraStr = colIndex.extrajornada !== -1 ? cols[colIndex.extrajornada]?.toUpperCase() : '';
+        let tipo = colIndex.tipo !== -1 ? cols[colIndex.tipo]?.toUpperCase() : '';
+        
+        if (!tipo) {
+          if (isExtraStr === 'SIM' || isExtraStr === 'S' || isExtraStr === 'SDP') {
+            tipo = 'SDP';
+          } else {
+            tipo = 'REGULAR';
+          }
+        }
+
+        let periodoVal = colIndex.periodo !== -1 ? cols[colIndex.periodo]?.toUpperCase() : '24H';
+        let turno = '24h';
+        if (periodoVal.includes('DIURNO')) turno = '12h (D)';
+        else if (periodoVal.includes('NOTURNO')) turno = '12h (N)';
 
         const newId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
         const novaEscala = {
@@ -255,9 +303,9 @@ window.importarEscalasCSV = function(event) {
           data: dataIso,
           servidorId: servidor.id,
           delegaciaId: delegacia ? delegacia.id : (appState.delegacias[0]?.id || ''),
-          tipo: tipo.toUpperCase(),
+          tipo: tipo,
           turno: turno,
-          scope: scope.toUpperCase(),
+          scope: 'CRF',
           sdpId: '8SDP'
         };
 
@@ -266,7 +314,14 @@ window.importarEscalasCSV = function(event) {
         importados++;
       }
 
-      alert(`Sucesso! ${importados} escalas foram importadas do CSV.`);
+      let msg = `Processamento concluído!\n\n✅ Importados com sucesso: ${importados}`;
+      
+      if (falhas.length > 0) {
+        msg += `\n❌ Plantões não importados: ${falhas.length}\n\nUm arquivo CSV com a lista de pendências será baixado automaticamente.`;
+        gerarCSVFalhasImportacao(lines[0], falhas, delimiter);
+      }
+
+      alert(msg);
       window.atualizarPainelGestao();
     } catch (err) {
       alert("Erro ao importar CSV de escalas: " + err.message);
@@ -275,7 +330,25 @@ window.importarEscalasCSV = function(event) {
   reader.readAsText(file);
 };
 
-// Exportar escalas para CSV
+// Gerador de CSV com os registros não incluídos
+function gerarCSVFalhasImportacao(cabecalhoOriginal, falhasArray, delimiter) {
+  let csvContent = "data:text/csv;charset=utf-8,";
+  csvContent += cabecalhoOriginal + `${delimiter}"MOTIVO_NAO_INCLUSAO"\n`;
+
+  falhasArray.forEach(item => {
+    csvContent += `${item.linha}${delimiter}"${item.motivo}"\n`;
+  });
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `escalas_nao_importadas_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// Exportar escalas filtradas para CSV
 window.exportarEscalasCSV = function() {
   const { currentYear, currentMonth } = appState;
   const escalasDoMes = appState.escalas.filter(esc => {
