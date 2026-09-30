@@ -36,7 +36,7 @@ export function renderServidoresTable(containerId) {
             ➕ Novo Policial
           </button>
           <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>🔄 Atualizar / Importar CSV</span>
+            <span>🔄 Corrigir Lotações via CSV</span>
             <input type="file" id="csv-file-input-servidores" accept=".csv" class="hidden" onchange="window.processarAtualizacaoCSV(event)">
           </label>
           <button onclick="window.excluirTodosServidores()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition">
@@ -178,7 +178,7 @@ window.processarAtualizacaoCSV = function(event) {
     try {
       const texto = e.target.result;
       const { atualizados, criados } = await processCSVImportComUpsert(texto);
-      alert(`Sucesso!\n- ${atualizados} servidores tiveram sua lotação/subdivisão corrigidas.\n- ${criados} novos policiais foram adicionados.`);
+      alert(`Sucesso!\n- ${atualizados} servidores tiveram sua lotação e subdivisão corrigidas.\n- ${criados} novos policiais foram adicionados.`);
       renderServidoresTable('servidores-table-container');
     } catch (err) {
       alert("Erro ao processar CSV: " + err.message);
@@ -192,31 +192,37 @@ export async function processCSVImportComUpsert(csvText) {
   let atualizados = 0;
   let criados = 0;
 
+  let idxCargo = 0, idxNome = 1, idxSdp = 3, idxDelegacia = 4, idxTel = 5;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Detecta separador (; ou ,)
     const sep = line.includes(';') ? ';' : ',';
     const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
 
-    // Pula linha de cabeçalho
-    if (i === 0 && (parts[0].toLowerCase().includes('nome') || parts[0].toLowerCase().includes('servidor'))) {
+    // Mapeamento dinâmico dos índices de colunas com base no cabeçalho
+    if (i === 0 && (parts.includes('CARGO') || parts.includes('NOME'))) {
+      idxCargo = parts.indexOf('CARGO') !== -1 ? parts.indexOf('CARGO') : 0;
+      idxNome = parts.indexOf('NOME') !== -1 ? parts.indexOf('NOME') : 1;
+      idxSdp = parts.indexOf('SDP') !== -1 ? parts.indexOf('SDP') : 3;
+      idxDelegacia = parts.indexOf('DELEGACIA') !== -1 ? parts.indexOf('DELEGACIA') : 4;
+      idxTel = parts.indexOf('TELEFONE') !== -1 ? parts.indexOf('TELEFONE') : 5;
       continue;
     }
 
-    if (parts.length >= 1) {
-      const nome = parts[0];
-      const cargo = parts[1] || 'APJ';
-      const delegaciaNome = parts[2] || '';
-      const subdivisao = parts[3] || '8ª SDP';
-      const telefone = parts[4] || '';
+    if (parts.length >= 2) {
+      const cargo = parts[idxCargo] || 'APJ';
+      const nome = parts[idxNome];
+      const subdivisao = parts[idxSdp] || '8ª SDP';
+      const delegaciaNome = parts[idxDelegacia] || '';
+      const telefone = parts[idxTel] || '';
 
-      if (!nome) continue;
+      if (!nome || normalizeText(nome) === 'nome') continue;
 
-      // Busca ou cria a Delegacia correspondente para gerar o vínculo correto
+      // Localiza ou cadastra a unidade correspondente
       let delObj = (appState.delegacias || []).find(d => 
-        d.nome.toLowerCase().trim() === delegaciaNome.toLowerCase().trim()
+        normalizeText(d.nome) === normalizeText(delegaciaNome)
       );
 
       if (!delObj && delegaciaNome) {
@@ -234,13 +240,12 @@ export async function processCSVImportComUpsert(csvText) {
         await syncDocToFirestore('delegacias', newDelId, delObj);
       }
 
-      // Busca servidor existente pelo nome (case insensitive)
+      // Busca servidor por nome aproximado / normalizado
       const srvExistente = (appState.servidores || []).find(s => 
         normalizeText(s.nome) === normalizeText(nome)
       );
 
       if (srvExistente) {
-        // Atualiza Lotação e Subdivisão mantendo os demais dados
         srvExistente.cargo = cargo || srvExistente.cargo;
         srvExistente.delegaciaId = delObj ? delObj.id : srvExistente.delegaciaId;
         srvExistente.delegaciaNome = delegaciaNome || srvExistente.delegaciaNome;
@@ -250,7 +255,6 @@ export async function processCSVImportComUpsert(csvText) {
         await syncDocToFirestore('servidores', srvExistente.id, srvExistente);
         atualizados++;
       } else {
-        // Cria novo servidor
         const newSrvId = 'srv_' + Date.now() + '_' + i;
         const novoSrv = {
           id: newSrvId,
@@ -275,11 +279,7 @@ export async function processCSVImportComUpsert(csvText) {
 }
 
 window.excluirTodosServidores = async function() {
-  const confirm1 = confirm("⚠️ ATENÇÃO: Deseja realmente EXCLUIR TODOS OS SERVIDORES do banco de dados?");
-  if (!confirm1) return;
-
-  const confirm2 = confirm("Confirmar limpeza total? Esta ação apagará permanentemente a lista de policiais.");
-  if (!confirm2) return;
+  if (!confirm("⚠️ ATENÇÃO: Deseja realmente EXCLUIR TODOS OS SERVIDORES?")) return;
 
   const total = (appState.servidores || []).length;
   for (const srv of [...appState.servidores]) {
@@ -287,7 +287,7 @@ window.excluirTodosServidores = async function() {
   }
 
   appState.servidores = [];
-  alert(`Limpeza concluída! ${total} servidores foram removidos.`);
+  alert(`Limpeza realizada com sucesso! ${total} servidores removidos.`);
   renderServidoresTable('servidores-table-container');
 };
 
