@@ -1,14 +1,16 @@
 // src/delegacias.js
 import { appState } from './state.js';
-import { syncDocToFirestore } from './db.js';
+import { syncDocToFirestore, fetchCollection } from './db.js';
 
 export async function initDelegaciasModule() {
+  // Garante a busca direto da coleção real do Firestore sem sobrescrever com exemplos
   if (!appState.delegacias || appState.delegacias.length === 0) {
-    appState.delegacias = [
-      { id: 'del_crf', nome: '8ª CRF - Central de Regulação', tipo: 'SEDE', subdivisao: '8ª SDP', horario24h: '07:30 às 07:30', horario12h: '07:30 às 19:30' },
-      { id: 'del_1dp', nome: '1ª Delegacia de Polícia', tipo: 'UNIDADE', subdivisao: '8ª SDP', horario24h: '08:00 às 08:00', horario12h: '08:00 às 20:00' },
-      { id: 'del_2dp', nome: '2ª Delegacia de Polícia', tipo: 'UNIDADE', subdivisao: '8ª SDP', horario24h: '08:00 às 08:00', horario12h: '08:00 às 20:00' }
-    ];
+    const doBanco = await fetchCollection('delegacias');
+    if (doBanco && doBanco.length > 0) {
+      appState.delegacias = doBanco;
+    } else {
+      appState.delegacias = appState.delegacias || [];
+    }
   }
 }
 
@@ -112,7 +114,7 @@ window.filtrarDelegaciasInline = function() {
     tbody.innerHTML = `
       <tr>
         <td colspan="6" class="p-6 text-center text-slate-500 italic">
-          Nenhuma unidade localizada com o filtro selecionado.
+          Nenhuma unidade localizada. Clique em "Nova Unidade / Plantão" para cadastrar.
         </td>
       </tr>
     `;
@@ -155,12 +157,9 @@ window.filtrarDelegaciasInline = function() {
           <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs transition">
             Editar
           </button>
-
-          ${!isSede ? `
-            <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition">
-              Excluir
-            </button>
-          ` : ''}
+          <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition">
+            Excluir
+          </button>
         </td>
       </tr>
     `;
