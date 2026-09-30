@@ -103,14 +103,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     `;
 
     if (scope === 'CRF') {
-      // Separação em 2 Períodos Fixos: Diurno (07h30-19h30) e Noturno (19h30-07h30)
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
       html += renderBalaoPeriodo('DIURNO', '07h30 às 19h30', diurnoEscalas, 'bg-amber-50 border-amber-200 text-amber-950');
       html += renderBalaoPeriodo('NOTURNO', '19h30 às 07h30', noturnoEscalas, 'bg-slate-100 border-slate-300 text-slate-900');
     } else {
-      // Visão Delegacias (Pode conter 24h ou períodos customizados)
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[9px] text-slate-300 italic block font-light">Sem plantão</span>`;
       } else {
@@ -121,7 +119,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const nome = srv ? `${prefixo} ${srv.nome.split(' ')[0]}` : 'Policial';
 
           html += `
-            <div class="text-[10px] p-1.5 rounded-lg border bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm">
+            <div onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
+                 onmouseleave="window.ocultarTooltip()"
+                 class="text-[10px] p-1.5 rounded-lg border bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm cursor-pointer">
               ${nome} (${esc.turno || '24h'})
             </div>
           `;
@@ -141,7 +141,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   setupCalendarEvents(containerId, scope);
 }
 
-// Renderiza o Balão Unificado do Período
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
@@ -152,7 +151,6 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     `;
   }
 
-  // Função para ordenar: 1º Regular (Delegado depois Agente), 2º Extrajornada (Delegado depois Agente)
   const ordenarEscalas = (lista) => {
     return lista.sort((a, b) => {
       const srvA = appState.servidores.find(s => s.id === a.servidorId);
@@ -161,18 +159,18 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
       const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
       const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
 
-      if (isExtraA !== isExtraB) return isExtraA - isExtraB; // Regular primeiro (0), Extra depois (1)
+      if (isExtraA !== isExtraB) return isExtraA - isExtraB;
 
       const isDelA = srvA?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
       const isDelB = srvB?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
 
-      return isDelA - isDelB; // Delegado (0) antes de Agente (1)
+      return isDelA - isDelB;
     });
   };
 
   const ordenadas = ordenarEscalas([...escalasArray]);
+  const idsString = ordenadas.map(e => e.id).join(',');
 
-  // Montagem do conteúdo simplificado no calendário
   let listaHtml = ordenadas.map(esc => {
     const srv = appState.servidores.find(s => s.id === esc.servidorId);
     const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
@@ -187,35 +185,10 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     return `<div class="font-bold text-slate-900 leading-tight">${nome}</div>`;
   }).join('');
 
-  // Montagem do Tooltip Rico
-  let tooltipHtml = `
-    <div class='p-2 space-y-1 text-left min-w-[210px] font-sans'>
-      <div class='font-bold text-slate-900 border-b pb-1 text-xs'>${titulo} (${horario})</div>
-  `;
-
-  ordenadas.forEach(esc => {
-    const srv = appState.servidores.find(s => s.id === esc.servidorId);
-    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
-    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-
-    tooltipHtml += `
-      <div class='pt-1 border-t border-slate-100'>
-        <div class='font-bold ${isExtra ? 'text-purple-700' : 'text-slate-800'} text-[11px]'>
-          ${isExtra ? '[EXTRA] ' : ''}${srv?.nome || 'Não informado'}
-        </div>
-        <div class='text-[10px] text-slate-500'>${srv?.cargo || 'Agente'} • ${del?.nome || 'CRF'}</div>
-        <div class='text-[10px] text-slate-500'><b>Tel:</b> ${srv?.telefone || '-'}</div>
-      </div>
-    `;
-  });
-
-  tooltipHtml += `</div>`;
-  tooltipHtml = tooltipHtml.replace(/'/g, "&apos;");
-
   return `
-    <div onmouseenter="window.mostrarTooltip(event, '${tooltipHtml}')"
+    <div onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
-         class="p-1.5 rounded-lg border ${bgStyle} shadow-sm space-y-1">
+         class="p-1.5 rounded-lg border ${bgStyle} shadow-sm space-y-1 cursor-pointer hover:brightness-95 transition">
       <div class="flex items-center justify-between border-b border-black/10 pb-0.5">
         <span class="text-[9px] font-black uppercase tracking-wider">${titulo}</span>
         <span class="text-[7.5px] opacity-75 font-mono">${horario}</span>
@@ -254,21 +227,75 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip Flutuante
-window.mostrarTooltip = function(event, htmlContent) {
+// Tooltip para Grupos de Plantão (Diurno/Noturno)
+window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
+  const ids = idsString.split(',');
+  const escalas = appState.escalas.filter(e => ids.includes(e.id));
+
+  let content = `
+    <div class="p-2.5 space-y-2 text-left min-w-[220px] font-sans">
+      <div class="font-black text-slate-900 border-b pb-1 text-xs flex items-center justify-between">
+        <span>${titulo}</span>
+        <span class="text-[10px] font-mono text-slate-500">${horario}</span>
+      </div>
+  `;
+
+  escalas.forEach(esc => {
+    const srv = appState.servidores.find(s => s.id === esc.servidorId);
+    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+    content += `
+      <div class="pt-1.5 border-t border-slate-100 space-y-0.5">
+        <div class="font-bold ${isExtra ? 'text-purple-700' : 'text-slate-800'} text-xs">
+          ${isExtra ? '[EXTRA] ' : ''}${srv?.nome || 'Não informado'}
+        </div>
+        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
+        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
+        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
+      </div>
+    `;
+  });
+
+  content += `</div>`;
+  exibirElementoTooltip(event, content);
+};
+
+// Tooltip para Plantão Único (Delegacias)
+window.mostrarTooltipEscala = function(event, escalaId) {
+  const esc = appState.escalas.find(e => e.id === escalaId);
+  if (!esc) return;
+
+  const srv = appState.servidores.find(s => s.id === esc.servidorId);
+  const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+
+  const content = `
+    <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
+      <div class="font-bold text-slate-900 border-b pb-1 text-xs">${srv?.nome || 'Não informado'}</div>
+      <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'Agente'}</div>
+      <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
+      <div class="text-[10px] text-slate-600"><b>Turno:</b> ${esc.turno || '24h'}</div>
+      <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
+    </div>
+  `;
+
+  exibirElementoTooltip(event, content);
+};
+
+function exibirElementoTooltip(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
     tooltip = document.createElement('div');
     tooltip.id = 'global-calendar-tooltip';
-    tooltip.className = 'fixed z-50 bg-white border border-slate-300 shadow-xl rounded-xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
+    tooltip.className = 'fixed z-50 bg-white border border-slate-300 shadow-2xl rounded-xl text-slate-800 text-xs pointer-events-none transition-opacity duration-150 opacity-0';
     document.body.appendChild(tooltip);
   }
 
   tooltip.innerHTML = htmlContent;
-  tooltip.style.left = `${event.clientX + 12}px`;
-  tooltip.style.top = `${event.clientY + 12}px`;
+  tooltip.style.left = `${event.clientX + 14}px`;
+  tooltip.style.top = `${event.clientY + 14}px`;
   tooltip.classList.remove('opacity-0');
-};
+}
 
 window.ocultarTooltip = function() {
   const tooltip = document.getElementById('global-calendar-tooltip');
