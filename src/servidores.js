@@ -77,27 +77,59 @@ function getRoleBadgeClass(role) {
   }
 }
 
-// Importador e Parser de CSV
+// Importador e Parser de CSV Inteligente e Robusto
 export async function processCSVImport(csvText) {
-  const lines = csvText.split(/\r\n|\n/);
+  const lines = csvText.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length < 2) throw new Error("O arquivo CSV enviado está vazio ou fora do formato esperado.");
 
-  const headers = lines[0].split(';').map(h => normalizeText(h.trim()));
+  // Detecta se o delimitador é vírgula ou ponto-e-vírgula
+  const delimiter = lines[0].includes(';') ? ';' : ',';
+
+  // Helper para limpar aspas e espaços de cada célula
+  const parseLine = (line) => {
+    // Regex para lidar com valores entre aspas contendo delimitadores
+    const regex = new RegExp(`(?:^|${delimiter})(?:"([^"]*)"|([^"${delimiter}]*))`, 'g');
+    const matches = [];
+    let match;
+    while ((match = regex.exec(line)) !== null) {
+      matches.push((match[1] !== undefined ? match[1] : match[2]).trim());
+    }
+    return matches;
+  };
+
+  const rawHeaders = parseLine(lines[0]);
+  const headers = rawHeaders.map(h => normalizeText(h));
+
+  // Mapeamento dos índices das colunas com base no cabeçalho
+  const colIndex = {
+    nome: headers.findIndex(h => h.includes('nome')),
+    cargo: headers.findIndex(h => h.includes('cargo')),
+    login: headers.findIndex(h => h.includes('login')),
+    sdp: headers.findIndex(h => h.includes('sdp')),
+    delegacia: headers.findIndex(h => h.includes('delegacia') || h.includes('lotacao')),
+    telefone: headers.findIndex(h => h.includes('telefone') || h.includes('celular')),
+    funcaoCRF: headers.findIndex(h => h.includes('funcao_crf') || h.includes('crf')),
+    funcaoDP: headers.findIndex(h => h.includes('funcao_dp') || h.includes('dp')),
+    nivelAcesso: headers.findIndex(h => h.includes('nivel') || h.includes('acesso'))
+  };
+
   let count = 0;
 
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const cols = line.split(';').map(c => c.trim());
+    const cols = parseLine(lines[i]);
     if (cols.length < 2) continue;
 
-    const nome = cols[0] || '';
-    const cargo = cols[1] || 'AGENTE';
-    const login = cols[2] || normalizeText(nome.split(' ')[0]);
-    const delegaciaId = cols[3] || 'DEL_8SDP_P';
-    const telefone = cols[4] || '';
-    const nivelAcesso = cols[5] || 'APJ';
+    const nome = colIndex.nome !== -1 ? cols[colIndex.nome] : cols[1];
+    if (!nome) continue; // Pula linhas sem nome
+
+    const cargo = colIndex.cargo !== -1 ? cols[colIndex.cargo] : cols[0];
+    const login = colIndex.login !== -1 ? cols[colIndex.login] : normalizeText(nome.split(' ')[0]);
+    const sdpId = colIndex.sdp !== -1 ? cols[colIndex.sdp] : '8SDP';
+    const delegaciaId = colIndex.delegacia !== -1 ? cols[colIndex.delegacia] : 'DEL_8SDP_P';
+    const telefone = colIndex.telefone !== -1 ? cols[colIndex.telefone] : '';
+    const funcaoCRF = colIndex.funcaoCRF !== -1 ? cols[colIndex.funcaoCRF] : 'OPERACIONAL';
+    const funcaoDP = colIndex.funcaoDP !== -1 ? cols[colIndex.funcaoDP] : 'OPERACIONAL';
+    const nivelAcesso = colIndex.nivelAcesso !== -1 ? cols[colIndex.nivelAcesso] : 'APJ';
 
     const srvId = 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
@@ -106,10 +138,12 @@ export async function processCSVImport(csvText) {
       nome: nome.toUpperCase(),
       cargo: cargo.toUpperCase(),
       login: login.toLowerCase(),
+      sdpId: sdpId,
       delegaciaId: delegaciaId,
       telefone: telefone,
-      nivelAcesso: nivelAcesso,
-      sdpId: '8SDP'
+      funcaoCRF: funcaoCRF,
+      funcaoDP: funcaoDP,
+      nivelAcesso: nivelAcesso
     };
 
     appState.servidores.push(newServidor);
