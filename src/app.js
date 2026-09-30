@@ -1,14 +1,14 @@
 // src/app.js
 import { initFirebase, fetchCollection, syncDocToFirestore } from './db.js';
 import { appState } from './state.js';
-import { loginUser } from './auth.js';
+import { renderServidoresTable, processCSVImport } from './servidores.js';
 import { CONSTANTS } from './config.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
   console.log("🚀 Inicializando v2 Modular...");
   initFirebase();
 
-  // Teste inicial de carga
+  // Carga inicial dos servidores
   appState.servidores = await fetchCollection('servidores');
   
   // Garante utilizador Admin se o banco estiver limpo
@@ -27,44 +27,43 @@ window.addEventListener('DOMContentLoaded', async () => {
     };
     appState.servidores.push(adminSrv);
     await syncDocToFirestore('servidores', adminSrv.id, adminSrv);
-    console.log("👤 Usuário Administrador Padrão criado na v2!");
   }
 
-  setupEventListeners();
   updateUI();
+  setupEventListeners();
 });
 
 function updateUI() {
   const statusElem = document.getElementById('app-status');
   if (statusElem) {
     statusElem.innerHTML = `
-      <div class="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900">
-        <p class="font-bold">✅ Módulo v2 Conectado ao Firebase!</p>
-        <p class="text-xs">Servidores no Banco: <strong>${appState.servidores.length}</strong> | Perfil Atual: <strong>${appState.profile}</strong></p>
-      </div>
+      <span class="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-1 rounded-full">
+        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores)
+      </span>
     `;
   }
+
+  renderServidoresTable('servidores-table-container');
 }
 
 function setupEventListeners() {
-  const loginForm = document.getElementById('form-test-login');
-  if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const srvId = appState.servidores[0]?.id;
-      const pass = document.getElementById('test-pass-input').value;
+  const csvInput = document.getElementById('csv-file-input');
+  if (csvInput) {
+    csvInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-      try {
-        const res = await loginUser(srvId, pass);
-        if (res.success) {
-          alert(`Login efetuado com sucesso como ${res.servidor.nome}!`);
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const importedCount = await processCSVImport(evt.target.result);
+          alert(`Sucesso! ${importedCount} servidores foram importados e gravados no Firestore.`);
           updateUI();
-        } else {
-          alert(res.message);
+        } catch (err) {
+          alert("Erro ao processar CSV: " + err.message);
         }
-      } catch (err) {
-        alert(err.message);
-      }
+      };
+      reader.readAsText(file);
     });
   }
 }
