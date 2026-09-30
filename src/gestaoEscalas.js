@@ -2,7 +2,6 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
-// Fallback para manter compatibilidade e evitar travamento no app.js
 export function renderGestaoEscalasModule(containerId) {
   renderGestaoCrfModule(containerId);
 }
@@ -13,23 +12,6 @@ export function renderGestaoEscalasModule(containerId) {
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
-
-  const { currentYear, currentMonth } = appState;
-  const buscaPolicial = document.getElementById('filtro-gestao-crf-busca')?.value?.toLowerCase() || '';
-
-  const escalasFiltradas = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    if (ano !== currentYear || mes !== currentMonth + 1) return false;
-    if (esc.scope !== 'CRF') return false;
-
-    if (buscaPolicial) {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
-      if (!nomeSrv.includes(buscaPolicial)) return false;
-    }
-    return true;
-  });
 
   let html = `
     <!-- Cabeçalho de Controle CRF -->
@@ -72,29 +54,71 @@ export function renderGestaoCrfModule(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtro e Ações -->
+      <!-- Barra de Filtro -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-200">
         <div class="w-full sm:w-72">
-          <input type="text" id="filtro-gestao-crf-busca" value="${buscaPolicial}" oninput="window.atualizarPainelGestaoCrf()" placeholder="Buscar policial na CRF..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium">
+          <input type="text" id="filtro-gestao-crf-busca" oninput="window.filtrarTabelaCrfInline()" placeholder="Buscar policial na CRF..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('CRF')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition">
             🗑️ Limpar Mês CRF
           </button>
-          <span class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
-            Total CRF: ${escalasFiltradas.length} Plantões
+          <span id="total-crf-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
+            Total CRF: 0 Plantões
           </span>
         </div>
       </div>
     </div>
 
     <!-- Tabela Gerencial CRF -->
-    ${renderTabelaEscalas(escalasFiltradas)}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse font-sans">
+        <thead>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
+            <th class="p-3">Data</th>
+            <th class="p-3">Policial / Servidor</th>
+            <th class="p-3">Unidade / Lotação</th>
+            <th class="p-3">Tipo de Plantão</th>
+            <th class="p-3">Turno</th>
+            <th class="p-3 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-crf-corpo" class="divide-y divide-slate-200"></tbody>
+      </table>
+    </div>
   `;
 
   container.innerHTML = html;
+  window.filtrarTabelaCrfInline();
 }
+
+window.filtrarTabelaCrfInline = function() {
+  const tbody = document.getElementById('tabela-crf-corpo');
+  if (!tbody) return;
+
+  const { currentYear, currentMonth } = appState;
+  const busca = document.getElementById('filtro-gestao-crf-busca')?.value?.toLowerCase() || '';
+
+  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+    if (!esc.data) return false;
+    const [ano, mes] = esc.data.split('-').map(Number);
+    if (ano !== currentYear || mes !== currentMonth + 1) return false;
+    if (esc.scope !== 'CRF') return false;
+
+    if (busca) {
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
+      if (!nomeSrv.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  const totalEl = document.getElementById('total-crf-count');
+  if (totalEl) totalEl.innerText = `Total CRF: ${escalasFiltradas.length} Plantões`;
+
+  tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
+};
 
 // =========================================================================
 // 2. GESTÃO DE ESCALAS POR DELEGACIAS & PLANTÕES UNIFICADOS (Menu 2)
@@ -103,32 +127,8 @@ export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
-  const buscaPolicial = document.getElementById('filtro-gestao-del-busca')?.value?.toLowerCase() || '';
-
+  const { selectedDelegaciaId } = appState;
   const delSelecionada = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId) || (appState.delegacias || [])[0];
-
-  const escalasFiltradas = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    if (ano !== currentYear || mes !== currentMonth + 1) return false;
-    if (esc.scope !== 'DELEGACIA') return false;
-
-    if (delSelecionada) {
-      if (delSelecionada.delegaciasIds) {
-        if (!delSelecionada.delegaciasIds.includes(esc.delegaciaId)) return false;
-      } else if (esc.delegaciaId !== delSelecionada.id) {
-        return false;
-      }
-    }
-
-    if (buscaPolicial) {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
-      if (!nomeSrv.includes(buscaPolicial)) return false;
-    }
-    return true;
-  });
 
   let delegaciasOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${delSelecionada?.id === d.id ? 'selected' : ''}>${d.nome}</option>`
@@ -156,7 +156,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Seleção e Parametrização Específica por Delegacia -->
+      <!-- Seleção e Parametrização -->
       <div class="bg-sky-50/70 p-3 rounded-xl border border-sky-200 space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div class="flex items-center gap-2">
@@ -185,30 +185,21 @@ export function renderGestaoDelegaciasModule(containerId) {
       <!-- Barra de Filtros -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-200">
         <div class="w-full sm:w-72">
-          <input type="text" id="filtro-gestao-del-busca" value="${buscaPolicial}" oninput="window.atualizarPainelGestaoDel()" placeholder="Buscar policial na unidade..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium">
+          <input type="text" id="filtro-gestao-del-busca" oninput="window.filtrarTabelaDelInline()" placeholder="Buscar policial na unidade..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition">
-            🗑️️ Limpar Mês Local
+            🗑️ Limpar Mês Local
           </button>
-          <span class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
-            Total Unidade: ${escalasFiltradas.length} Plantões
+          <span id="total-del-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
+            Total Unidade: 0 Plantões
           </span>
         </div>
       </div>
     </div>
 
     <!-- Tabela Gerencial Delegacias -->
-    ${renderTabelaEscalas(escalasFiltradas)}
-  `;
-
-  container.innerHTML = html;
-}
-
-// Componente Tabela de Lançamentos
-function renderTabelaEscalas(listaEscalas) {
-  let html = `
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs border-collapse font-sans">
         <thead>
@@ -221,62 +212,99 @@ function renderTabelaEscalas(listaEscalas) {
             <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-200">
+        <tbody id="tabela-del-corpo" class="divide-y divide-slate-200"></tbody>
+      </table>
+    </div>
   `;
 
+  container.innerHTML = html;
+  window.filtrarTabelaDelInline();
+}
+
+window.filtrarTabelaDelInline = function() {
+  const tbody = document.getElementById('tabela-del-corpo');
+  if (!tbody) return;
+
+  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
+  const busca = document.getElementById('filtro-gestao-del-busca')?.value?.toLowerCase() || '';
+
+  const delSelecionada = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId) || (appState.delegacias || [])[0];
+
+  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+    if (!esc.data) return false;
+    const [ano, mes] = esc.data.split('-').map(Number);
+    if (ano !== currentYear || mes !== currentMonth + 1) return false;
+    if (esc.scope !== 'DELEGACIA') return false;
+
+    if (delSelecionada) {
+      if (delSelecionada.delegaciasIds) {
+        if (!delSelecionada.delegaciasIds.includes(esc.delegaciaId)) return false;
+      } else if (esc.delegaciaId !== delSelecionada.id) {
+        return false;
+      }
+    }
+
+    if (busca) {
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
+      if (!nomeSrv.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  const totalEl = document.getElementById('total-del-count');
+  if (totalEl) totalEl.innerText = `Total Unidade: ${escalasFiltradas.length} Plantões`;
+
+  tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
+};
+
+function renderLinhasTabela(listaEscalas) {
   if (listaEscalas.length === 0) {
-    html += `
+    return `
       <tr>
         <td colspan="6" class="p-6 text-center text-slate-500 italic">
           Nenhum plantão localizado para este filtro neste mês.
         </td>
       </tr>
     `;
-  } else {
-    listaEscalas.sort((a, b) => a.data.localeCompare(b.data));
-
-    listaEscalas.forEach(esc => {
-      const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const delegacia = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-
-      const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
-      const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
-
-      const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-
-      let badgeClass = 'bg-indigo-50 text-indigo-900 border-indigo-200';
-      if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
-
-      html += `
-        <tr class="hover:bg-slate-50 transition">
-          <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
-          <td class="p-3 font-semibold text-slate-800">${nomeServidor}</td>
-          <td class="p-3 text-slate-600">${nomeUnidade}</td>
-          <td class="p-3">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
-              ${isExtra ? 'EXTRAJORNADA' : esc.tipo}
-            </span>
-          </td>
-          <td class="p-3 font-mono text-slate-600">${esc.turno || '24h'}</td>
-          <td class="p-3 text-right space-x-1">
-            <button onclick="window.abrirModalEscala(null, '${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs">
-              Editar
-            </button>
-            <button onclick="window.excluirEscalaGestao('${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs">
-              Excluir
-            </button>
-          </td>
-        </tr>
-      `;
-    });
   }
 
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
-  return html;
+  listaEscalas.sort((a, b) => a.data.localeCompare(b.data));
+
+  return listaEscalas.map(esc => {
+    const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const delegacia = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+
+    const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
+    const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
+
+    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+    let badgeClass = 'bg-indigo-50 text-indigo-900 border-indigo-200';
+    if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
+
+    return `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
+        <td class="p-3 font-semibold text-slate-800">${nomeServidor}</td>
+        <td class="p-3 text-slate-600">${nomeUnidade}</td>
+        <td class="p-3">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
+            ${isExtra ? 'EXTRAJORNADA' : esc.tipo}
+          </span>
+        </td>
+        <td class="p-3 font-mono text-slate-600">${esc.turno || '24h'}</td>
+        <td class="p-3 text-right space-x-1">
+          <button onclick="window.abrirModalEscala(null, '${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs">
+            Editar
+          </button>
+          <button onclick="window.excluirEscalaGestao('${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs">
+            Excluir
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function formatarDataBr(dataIso) {
@@ -287,16 +315,16 @@ function formatarDataBr(dataIso) {
 }
 
 window.atualizarPainelGestaoCrf = function() {
-  renderGestaoCrfModule('gestao-crf-container');
+  window.filtrarTabelaCrfInline();
 };
 
 window.atualizarPainelGestaoDel = function() {
-  renderGestaoDelegaciasModule('gestao-delegacias-container');
+  window.filtrarTabelaDelInline();
 };
 
 window.mudarDelegaciaAtivaGestao = function(idDel) {
   appState.selectedDelegaciaId = idDel;
-  window.atualizarPainelGestaoDel();
+  renderGestaoDelegaciasModule('gestao-delegacias-container');
 };
 
 window.salvarHorarioCustomizadoDelegacia = async function(idDel) {
@@ -318,8 +346,8 @@ window.excluirEscalaGestao = async function(escalaId, scope) {
   appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
   await syncDocToFirestore('escalas', escalaId, null, true);
 
-  if (scope === 'CRF') window.atualizarPainelGestaoCrf();
-  else window.atualizarPainelGestaoDel();
+  if (scope === 'CRF') window.filtrarTabelaCrfInline();
+  else window.filtrarTabelaDelInline();
 };
 
 window.limparEscalasDoMes = async function(scope) {
@@ -338,6 +366,6 @@ window.limparEscalasDoMes = async function(scope) {
   }
 
   alert("Lançamentos do mês limpos com sucesso!");
-  if (scope === 'CRF') window.atualizarPainelGestaoCrf();
-  else window.atualizarPainelGestaoDel();
+  if (scope === 'CRF') window.filtrarTabelaCrfInline();
+  else window.filtrarTabelaDelInline();
 };
