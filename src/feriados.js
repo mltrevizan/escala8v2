@@ -12,21 +12,27 @@ export function renderFeriadosModule(containerId) {
   const feriadosOrdenados = [...(feriados || [])].sort((a, b) => a.data.localeCompare(b.data));
 
   let html = `
-    <div class="p-4 bg-slate-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
+    <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 font-sans">
       <div>
         <h2 class="font-bold text-sm text-slate-800">Cadastro e Gestão de Feriados</h2>
         <p class="text-[11px] text-slate-500">Feriados cadastrados destacam os dias automaticamente no calendário e na gestão</p>
       </div>
-      <button onclick="window.abrirModalFeriado()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1">
-        ➕ Novo Feriado
-      </button>
+      
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="window.carregarFeriadosOficiaisBrasil()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1">
+          ⚡ Carregar Feriados Nacionais (${currentYear})
+        </button>
+        <button onclick="window.abrirModalFeriado()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1">
+          ➕ Novo Feriado Manual
+        </button>
+      </div>
     </div>
 
     <!-- Tabela de Feriados -->
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs border-collapse font-sans">
         <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b font-bold uppercase tracking-wider">
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
             <th class="p-3">Data</th>
             <th class="p-3">Descrição / Nome do Feriado</th>
             <th class="p-3">Tipo / Abrangência</th>
@@ -40,7 +46,7 @@ export function renderFeriadosModule(containerId) {
     html += `
       <tr>
         <td colspan="4" class="p-6 text-center text-slate-500 italic">
-          Nenhum feriado cadastrado até o momento.
+          Nenhum feriado cadastrado. Clique no botão acima para puxar os feriados nacionais automaticamente.
         </td>
       </tr>
     `;
@@ -59,10 +65,10 @@ export function renderFeriadosModule(containerId) {
             </span>
           </td>
           <td class="p-3 text-right space-x-1">
-            <button onclick="window.abrirModalFeriado('${f.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow">
+            <button onclick="window.abrirModalFeriado('${f.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-sm">
               Editar
             </button>
-            <button onclick="window.excluirFeriado('${f.id}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow">
+            <button onclick="window.excluirFeriado('${f.id}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-sm">
               Excluir
             </button>
           </td>
@@ -93,7 +99,47 @@ function formatarDataBr(dataIso) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-// Janela Modal para Cadastro de Feriado
+// INTEGRAÇÃO COM BRASILAPI (Importação Automática)
+window.carregarFeriadosOficiaisBrasil = async function() {
+  const ano = appState.currentYear;
+  
+  if (!confirm(`Deseja consultar e carregar os feriados nacionais oficiais do Brasil para o ano de ${ano}?`)) return;
+
+  try {
+    const response = await fetch(`https://brasilapi.com.br/api/feriados/v1/${ano}`);
+    if (!response.ok) throw new Error("Não foi possível obter a lista de feriados da API.");
+
+    const feriadosApi = await response.json();
+    let novosCount = 0;
+
+    if (!appState.feriados) appState.feriados = [];
+
+    for (const f of feriadosApi) {
+      // Evita duplicados para a mesma data
+      const jaExiste = appState.feriados.some(existente => existente.data === f.date);
+      if (!jaExiste) {
+        const newId = 'fer_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+        const novoFeriado = {
+          id: newId,
+          data: f.date,
+          descricao: f.name,
+          tipo: 'Nacional'
+        };
+
+        appState.feriados.push(novoFeriado);
+        await syncDocToFirestore('feriados', novoFeriado.id, novoFeriado);
+        novosCount++;
+      }
+    }
+
+    alert(`Concluído! ${novosCount} novos feriados nacionais foram importados para ${ano}.`);
+    renderFeriadosModule('feriados-container');
+  } catch (err) {
+    alert("Erro ao buscar feriados oficiais: " + err.message);
+  }
+};
+
+// Janela Modal para Cadastro de Feriado Manual
 window.abrirModalFeriado = function(feriadoId = null) {
   let modal = document.getElementById('modal-feriado');
   if (!modal) {
@@ -116,7 +162,7 @@ window.abrirModalFeriado = function(feriadoId = null) {
     }
   } else {
     inputId.value = '';
-    inputData.value = new Date().toISOString().split('T')[0];
+    inputData.value = `${appState.currentYear}-${String(appState.currentMonth + 1).padStart(2, '0')}-01`;
     inputDesc.value = '';
     selectTipo.value = 'Nacional';
   }
@@ -189,7 +235,7 @@ function criarModalFeriadoDOM() {
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Descrição / Nome:</label>
-            <input type="text" id="modal-feriado-desc" placeholder="Ex: Independência do Brasil" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
+            <input type="text" id="modal-feriado-desc" placeholder="Ex: Tiradentes" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
           </div>
 
           <div>
@@ -203,7 +249,7 @@ function criarModalFeriadoDOM() {
 
           <div class="pt-3 border-t flex justify-end gap-2">
             <button type="button" onclick="window.fecharModalFeriado()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Feriado</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-sm">Salvar Feriado</button>
           </div>
         </form>
       </div>
