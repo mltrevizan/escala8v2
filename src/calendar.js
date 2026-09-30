@@ -26,7 +26,8 @@ export function renderCalendarGrid(containerId) {
   let delegaciasOptions = appState.delegacias.map(d => 
     `<option value="${d.id}" ${selectedDelegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
-
+  
+   // src/calendar.js (Início do renderCalendarGrid)
   let html = `
     <!-- Alternância Principal de Escala -->
     <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
@@ -35,7 +36,7 @@ export function renderCalendarGrid(containerId) {
           🏛️ Plantão CRF (Geral & SDP)
         </button>
         <button id="btn-scope-delegacia" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${calendarScope === 'DELEGACIA' ? 'bg-indigo-700 text-white shadow' : 'text-slate-700 hover:text-slate-900'}">
-          🏢 Plantão por Delegacia / Consórcio
+          🏢 Plantão por Delegacia
         </button>
       </div>
 
@@ -48,6 +49,7 @@ export function renderCalendarGrid(containerId) {
         </div>
       ` : ''}
     </div>
+
 
     <!-- Navegação do Mês -->
     <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
