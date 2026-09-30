@@ -1,6 +1,5 @@
 // src/calendar.js
 import { appState } from './state.js';
-import { syncDocToFirestore } from './db.js';
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -30,9 +29,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   let html = `
     <!-- Barra Superior -->
-    <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3">
+    <div class="p-4 bg-slate-100 border-b flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-slate-800 font-sans tracking-wide">
+        <span class="text-xs font-bold text-slate-800 tracking-wide">
           ${scope === 'CRF' ? '🏛️ ESCALA GERAL CRF & EXTRAJORNADA' : '🏢 ESCALA POR DELEGACIA / PLANTÃO UNIFICADO'}
         </span>
       </div>
@@ -47,15 +46,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês -->
-    <div class="p-4 bg-slate-50 border-b flex items-center justify-between">
+    <!-- Navegação do Mês -->
+    <div class="p-4 bg-slate-50 border-b flex items-center justify-between font-sans">
       <button id="btn-prev-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">◀ Anterior</button>
       <span class="font-bold text-sm text-slate-800 tracking-tight">${monthNames[currentMonth]} ${currentYear}</span>
       <button id="btn-next-month" class="p-1.5 bg-white border hover:bg-slate-100 rounded-lg text-xs font-bold shadow-sm">Próximo ▶</button>
     </div>
 
-    <!-- Cabeçalho dos Dias da Semana -->
-    <div class="grid grid-cols-7 text-center bg-slate-200 text-[11px] font-bold text-slate-700 border-b py-2">
+    <!-- Cabeçalho dos Dias -->
+    <div class="grid grid-cols-7 text-center bg-slate-200 text-[11px] font-bold text-slate-700 border-b py-2 font-sans">
       <div class="text-red-700">Dom</div>
       <div>Seg</div>
       <div>Ter</div>
@@ -65,8 +64,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-700">Sáb</div>
     </div>
 
-    <!-- Grade do Mês Dinâmica -->
-    <div class="grid grid-cols-7 auto-rows-fr bg-slate-300 gap-px border-b border-r">
+    <!-- Grade do Mês -->
+    <div class="grid grid-cols-7 auto-rows-fr bg-slate-300 gap-px border-b border-r font-sans">
   `;
 
   for (let i = 0; i < firstDay; i++) {
@@ -92,76 +91,42 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // Fundo diferenciado para Fins de Semana e Feriados
     const bgDayClass = isWeekend ? 'bg-amber-50/40' : 'bg-white';
 
     html += `
-      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative group border-t border-l h-auto min-h-[110px]">
-        <div class="flex items-center justify-between mb-1.5">
-          <span class="text-xs font-bold font-sans ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
-          <button onclick="window.abrirModalEscala('${dateStr}')" class="opacity-0 group-hover:opacity-100 text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white px-1.5 py-0.5 rounded font-bold transition shadow">
-            + Plantão
-          </button>
+      <div class="${bgDayClass} p-1.5 flex flex-col justify-between transition relative border-t border-l min-h-[120px] h-auto">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-bold ${isWeekend ? 'text-amber-800' : 'text-slate-800'}">${day}</span>
         </div>
 
-        <div class="space-y-1.5 flex-1">
+        <div class="space-y-1.5 flex-1 flex flex-col justify-start">
     `;
 
-    if (escalasDoDia.length === 0) {
-      html += `<span class="text-[9px] text-slate-300 italic block font-light">Livre</span>`;
+    if (scope === 'CRF') {
+      // Separação em 2 Períodos Fixos: Diurno (07h30-19h30) e Noturno (19h30-07h30)
+      const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
+      const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
+
+      html += renderBalaoPeriodo('DIURNO', '07h30 às 19h30', diurnoEscalas, 'bg-amber-50 border-amber-200 text-amber-950');
+      html += renderBalaoPeriodo('NOTURNO', '19h30 às 07h30', noturnoEscalas, 'bg-slate-100 border-slate-300 text-slate-900');
     } else {
-      escalasDoDia.forEach(esc => {
-        const servidor = appState.servidores.find(s => s.id === esc.servidorId);
-        const delegacia = appState.delegacias.find(d => d.id === esc.delegaciaId);
-        
-        const isDelegado = servidor?.cargo?.toUpperCase().includes('DELEGADO');
-        const prefixoCargo = isDelegado ? 'DEL.' : 'AG.';
-        const nomeFormatado = servidor ? `${prefixoCargo} ${servidor.nome.split(' ')[0]}` : 'Policial';
+      // Visão Delegacias (Pode conter 24h ou períodos customizados)
+      if (escalasDoDia.length === 0) {
+        html += `<span class="text-[9px] text-slate-300 italic block font-light">Sem plantão</span>`;
+      } else {
+        escalasDoDia.forEach(esc => {
+          const srv = appState.servidores.find(s => s.id === esc.servidorId);
+          const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+          const prefixo = isDel ? 'DEL.' : 'AG.';
+          const nome = srv ? `${prefixo} ${srv.nome.split(' ')[0]}` : 'Policial';
 
-        const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-        const isSobreaviso = esc.tipo === 'SOBREAVISO';
-
-        // Padrão Visual v1: A cor do card indica o PERÍODO
-        let cardBgClass = 'bg-blue-50 border-blue-200 text-blue-950 hover:bg-blue-100'; // Turno Regular (Ex: Diurno / 24h)
-        if (esc.turno === '12h (N)') {
-          cardBgClass = 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'; // Turno Noturno
-        } else if (isSobreaviso) {
-          cardBgClass = 'bg-purple-50 border-purple-200 text-purple-950 hover:bg-purple-100';
-        }
-
-        // Nome do Policial em ROXO se for Extrajornada
-        const nomeColorClass = isExtra ? 'text-purple-700 font-extrabold' : 'text-slate-900 font-bold';
-        const tagExtra = isExtra ? `<span class="text-[8px] bg-purple-600 text-white font-extrabold px-1 rounded mr-1">EXTRA</span>` : '';
-
-        // Descrição textual interna do turno
-        const turnoDesc = getTurnoTexto(esc.turno);
-
-        // Tooltip Rico no Hover
-        const tooltipText = `
-          <div class='p-2 space-y-1 text-left min-w-[190px] font-sans'>
-            <div class='font-bold text-slate-900 border-b pb-1'>${servidor?.nome || 'Não informado'}</div>
-            <div class='text-[10px] text-slate-600'><b>Cargo:</b> ${servidor?.cargo || 'Agente'}</div>
-            <div class='text-[10px] text-slate-600'><b>Lotação:</b> ${delegacia?.nome || 'CRF'}</div>
-            <div class='text-[10px] text-slate-600'><b>Modalidade:</b> ${isExtra ? 'Extrajornada' : esc.tipo}</div>
-            <div class='text-[10px] text-slate-600'><b>Horário:</b> ${getHorarioExtenso(esc.turno)}</div>
-            <div class='text-[10px] text-slate-600'><b>Contato:</b> ${servidor?.telefone || '-'}</div>
-          </div>
-        `.replace(/'/g, "&apos;");
-
-        html += `
-          <div onclick="window.abrirModalEscala(null, '${esc.id}')" 
-               onmouseenter="window.mostrarTooltip(event, '${tooltipText}')"
-               onmouseleave="window.ocultarTooltip()"
-               class="text-[10px] p-1.5 rounded-lg border ${cardBgClass} flex flex-col justify-between cursor-pointer shadow-sm hover:shadow transition">
-            <div class="flex items-center justify-between leading-tight mb-0.5">
-              <span class="${nomeColorClass} truncate">${tagExtra}${nomeFormatado}</span>
+          html += `
+            <div class="text-[10px] p-1.5 rounded-lg border bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm">
+              ${nome} (${esc.turno || '24h'})
             </div>
-            <div class="text-[8px] text-slate-500 font-medium leading-none">
-              ${turnoDesc}
-            </div>
-          </div>
-        `;
-      });
+          `;
+        });
+      }
     }
 
     html += `
@@ -176,16 +141,90 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   setupCalendarEvents(containerId, scope);
 }
 
-function getTurnoTexto(turno) {
-  if (turno === '12h (D)') return 'Diurno • 07h30 às 19h30';
-  if (turno === '12h (N)') return 'Noturno • 19h30 às 07h30';
-  return 'Integral • 24 Horas';
-}
+// Renderiza o Balão Unificado do Período
+function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
+  if (escalasArray.length === 0) {
+    return `
+      <div class="text-[9px] p-1 rounded-md border ${bgStyle} opacity-60 flex items-center justify-between">
+        <span class="font-bold">${titulo}</span>
+        <span class="text-[8px] text-slate-400 italic">Livre</span>
+      </div>
+    `;
+  }
 
-function getHorarioExtenso(turno) {
-  if (turno === '12h (D)') return '12h Diurno (07:30 às 19:30)';
-  if (turno === '12h (N)') return '12h Noturno (19:30 às 07:30)';
-  return '24h Integral (07:30 às 07:30)';
+  // Função para ordenar: 1º Regular (Delegado depois Agente), 2º Extrajornada (Delegado depois Agente)
+  const ordenarEscalas = (lista) => {
+    return lista.sort((a, b) => {
+      const srvA = appState.servidores.find(s => s.id === a.servidorId);
+      const srvB = appState.servidores.find(s => s.id === b.servidorId);
+
+      const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
+      const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
+
+      if (isExtraA !== isExtraB) return isExtraA - isExtraB; // Regular primeiro (0), Extra depois (1)
+
+      const isDelA = srvA?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
+      const isDelB = srvB?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
+
+      return isDelA - isDelB; // Delegado (0) antes de Agente (1)
+    });
+  };
+
+  const ordenadas = ordenarEscalas([...escalasArray]);
+
+  // Montagem do conteúdo simplificado no calendário
+  let listaHtml = ordenadas.map(esc => {
+    const srv = appState.servidores.find(s => s.id === esc.servidorId);
+    const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+    const prefixo = isDel ? 'DEL.' : 'AG.';
+    const nome = srv ? `${prefixo} ${srv.nome.split(' ')[0]}` : 'Policial';
+
+    if (isExtra) {
+      return `<div class="font-extrabold text-purple-700 leading-tight"><span class="bg-purple-600 text-white text-[7px] px-0.5 rounded mr-1">EXTRA</span>${nome}</div>`;
+    }
+    return `<div class="font-bold text-slate-900 leading-tight">${nome}</div>`;
+  }).join('');
+
+  // Montagem do Tooltip Rico
+  let tooltipHtml = `
+    <div class='p-2 space-y-1 text-left min-w-[210px] font-sans'>
+      <div class='font-bold text-slate-900 border-b pb-1 text-xs'>${titulo} (${horario})</div>
+  `;
+
+  ordenadas.forEach(esc => {
+    const srv = appState.servidores.find(s => s.id === esc.servidorId);
+    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+    tooltipHtml += `
+      <div class='pt-1 border-t border-slate-100'>
+        <div class='font-bold ${isExtra ? 'text-purple-700' : 'text-slate-800'} text-[11px]'>
+          ${isExtra ? '[EXTRA] ' : ''}${srv?.nome || 'Não informado'}
+        </div>
+        <div class='text-[10px] text-slate-500'>${srv?.cargo || 'Agente'} • ${del?.nome || 'CRF'}</div>
+        <div class='text-[10px] text-slate-500'><b>Tel:</b> ${srv?.telefone || '-'}</div>
+      </div>
+    `;
+  });
+
+  tooltipHtml += `</div>`;
+  tooltipHtml = tooltipHtml.replace(/'/g, "&apos;");
+
+  return `
+    <div onmouseenter="window.mostrarTooltip(event, '${tooltipHtml}')"
+         onmouseleave="window.ocultarTooltip()"
+         class="p-1.5 rounded-lg border ${bgStyle} shadow-sm space-y-1">
+      <div class="flex items-center justify-between border-b border-black/10 pb-0.5">
+        <span class="text-[9px] font-black uppercase tracking-wider">${titulo}</span>
+        <span class="text-[7.5px] opacity-75 font-mono">${horario}</span>
+      </div>
+      <div class="space-y-0.5 text-[9.5px]">
+        ${listaHtml}
+      </div>
+    </div>
+  `;
 }
 
 function setupCalendarEvents(containerId, scope) {
@@ -215,7 +254,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Tooltip Flutuante Inteligente
+// Tooltip Flutuante
 window.mostrarTooltip = function(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
