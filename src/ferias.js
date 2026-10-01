@@ -6,7 +6,6 @@ export async function renderFeriasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // Busca do banco apenas se o appState de ferias ainda não tiver sido populado
   if (!appState.ferias || appState.ferias.length === 0) {
     try {
       const doBanco = await fetchCollection('ferias');
@@ -18,7 +17,6 @@ export async function renderFeriasModule(containerId) {
   }
 
   let html = `
-    <!-- Cabeçalho de Controle e Ações -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
@@ -28,7 +26,7 @@ export async function renderFeriasModule(containerId) {
 
         <div class="flex flex-wrap items-center gap-2">
           <button onclick="window.abrirModalFerias()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ➕ Novo Lançamento de Férias/Licença
+            ➕ Novo Lançamento de Férias
           </button>
           <button onclick="window.exportarFeriasCSV()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
             📊 Exportar CSV
@@ -36,7 +34,6 @@ export async function renderFeriasModule(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtros em Tempo Real -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Rápida (Nome / Cargo):</label>
@@ -44,7 +41,7 @@ export async function renderFeriasModule(containerId) {
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏷️️ Tipo de Afastamento:</label>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏷️ Tipo de Afastamento:</label>
           <select id="filtro-ferias-tipo" onchange="window.filtrarTabelaFeriasInline()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-bold text-slate-800">
             <option value="TODOS">Todos os Tipos</option>
             <option value="FERIAS">Férias Regulamentares</option>
@@ -62,7 +59,6 @@ export async function renderFeriasModule(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Gerencial de Férias -->
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs border-collapse font-sans">
         <thead>
