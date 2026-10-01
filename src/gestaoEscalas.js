@@ -2,6 +2,23 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
+// Estado local de filtros para não poluir ou depender do calendário global
+const gestaoState = {
+  crf: {
+    ano: new Date().getFullYear(),
+    mes: new Date().getMonth() + 1, // 1-12
+    busca: '',
+    ordenacao: 'DATA_ASC', // 'DATA_ASC', 'DATA_DESC', 'NOME_ASC', 'NOME_DESC'
+  },
+  delegacia: {
+    ano: new Date().getFullYear(),
+    mes: new Date().getMonth() + 1,
+    busca: '',
+    delegaciaId: 'TODAS',
+    ordenacao: 'DATA_ASC'
+  }
+};
+
 export function renderGestaoEscalasModule(containerId) {
   renderGestaoCrfModule(containerId);
 }
@@ -13,13 +30,16 @@ export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  const monthOptions = getMonthSelectOptions(gestaoState.crf.mes);
+  const yearOptions = getYearSelectOptions(gestaoState.crf.ano);
+
   let html = `
     <!-- Cabeçalho de Controle CRF -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas CRF</h2>
-          <p class="text-[11px] text-slate-500">Lançamentos em lote, importação de CSV da CRF e plantões da Central</p>
+          <p class="text-[11px] text-slate-500">Visão gerencial global com filtros e ordenação autônomos</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -30,7 +50,7 @@ export function renderGestaoCrfModule(containerId) {
             ⚡ Gerar em Lote
           </button>
           <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV CRF</span>
+            <span>📥 Importar CSV</span>
             <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'CRF')">
           </label>
           <button onclick="window.exportarEscalasCSV('CRF')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
@@ -39,39 +59,48 @@ export function renderGestaoCrfModule(containerId) {
         </div>
       </div>
 
-      <!-- Parametrização Fixa CRF -->
-      <div class="bg-amber-50/60 p-3 rounded-xl border border-amber-200/80 space-y-1.5">
-        <span class="text-xs font-bold text-amber-900 block">⏰ Parametrização Oficial de Horários de Trabalho (CRF - Padrão Único):</span>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div class="bg-white p-2 rounded-lg border border-amber-200 text-slate-700">
-            <span class="font-bold text-amber-800 block text-[10px] uppercase">Turno Diurno (12h D)</span>
-            <span class="font-mono font-bold text-xs">07:30 às 19:30</span>
-          </div>
-          <div class="bg-white p-2 rounded-lg border border-indigo-200 text-slate-700">
-            <span class="font-bold text-indigo-800 block text-[10px] uppercase">Turno Noturno (12h N)</span>
-            <span class="font-mono font-bold text-xs">19:30 às 07:30</span>
-          </div>
-          <div class="bg-white p-2 rounded-lg border border-slate-200 text-slate-700">
-            <span class="font-bold text-slate-800 block text-[10px] uppercase">Turno Integral (24h)</span>
-            <span class="font-mono font-bold text-xs">07:30 às 07:30 (Próx. Dia)</span>
-          </div>
+      <!-- Barra de Filtros Próprios CRF -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-200">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">📅 Mês:</label>
+          <select id="filtro-crf-mes" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${monthOptions}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">📆 Ano:</label>
+          <select id="filtro-crf-ano" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${yearOptions}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Policial/Lotação:</label>
+          <input type="text" id="filtro-crf-busca" oninput="window.atualizarFiltrosCrf()" placeholder="Digite nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔀 Ordenar Por:</label>
+          <select id="filtro-crf-ordem" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            <option value="DATA_ASC">Data (Mais antiga ➔ Recente)</option>
+            <option value="DATA_DESC">Data (Mais recente ➔ Antiga)</option>
+            <option value="NOME_ASC">Nome Policial (A ➔ Z)</option>
+            <option value="NOME_DESC">Nome Policial (Z ➔ A)</option>
+          </select>
+        </div>
+
+        <div class="flex items-end justify-between sm:justify-end gap-2">
+          <button onclick="window.excluirLançamentosFiltrados('CRF')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer w-full sm:w-auto">
+            🗑️ Excluir Filtrados
+          </button>
         </div>
       </div>
 
-      <!-- Barra de Filtro -->
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-200">
-        <div class="w-full sm:w-72">
-          <input type="text" id="filtro-gestao-crf-busca" oninput="window.filtrarTabelaCrfInline()" placeholder="Buscar policial na CRF..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <button onclick="window.limparEscalasDoMes('CRF')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition cursor-pointer">
-            🗑️ Limpar Mês CRF
-          </button>
-          <span id="total-crf-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
-            Total CRF: 0 Plantões
-          </span>
-        </div>
+      <div class="flex items-center justify-between text-xs text-slate-500 font-mono pt-1">
+        <span id="total-crf-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-1 rounded-md">
+          Total CRF: 0 Lançamentos
+        </span>
       </div>
     </div>
 
@@ -97,29 +126,45 @@ export function renderGestaoCrfModule(containerId) {
   window.filtrarTabelaCrfInline();
 }
 
+window.atualizarFiltrosCrf = function() {
+  gestaoState.crf.mes = Number(document.getElementById('filtro-crf-mes')?.value || gestaoState.crf.mes);
+  gestaoState.crf.ano = Number(document.getElementById('filtro-crf-ano')?.value || gestaoState.crf.ano);
+  gestaoState.crf.busca = document.getElementById('filtro-crf-busca')?.value?.toLowerCase() || '';
+  gestaoState.crf.ordenacao = document.getElementById('filtro-crf-ordem')?.value || 'DATA_ASC';
+
+  window.filtrarTabelaCrfInline();
+};
+
 window.filtrarTabelaCrfInline = function() {
   const tbody = document.getElementById('tabela-crf-corpo');
   if (!tbody) return;
 
-  const { currentYear, currentMonth } = appState;
-  const busca = document.getElementById('filtro-gestao-crf-busca')?.value?.toLowerCase() || '';
+  const { mes, ano, busca, ordenacao } = gestaoState.crf;
 
-  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+  let escalasFiltradas = (appState.escalas || []).filter(esc => {
     if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    if (ano !== currentYear || mes !== currentMonth + 1) return false;
     if (esc.scope !== 'CRF') return false;
+
+    const [a, m] = esc.data.split('-').map(Number);
+    if (a !== ano || m !== mes) return false;
 
     if (busca) {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
-      if (!nomeSrv.includes(busca)) return false;
+      const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+      const nomeSrv = (srv?.nome || '').toLowerCase();
+      const cargoSrv = (srv?.cargo || '').toLowerCase();
+      const nomeDel = (del?.nome || srv?.delegaciaNome || '').toLowerCase();
+
+      if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca) && !nomeDel.includes(busca)) return false;
     }
     return true;
   });
 
+  // Ordenação
+  escalasFiltradas = aplicarOrdenacao(escalasFiltradas, ordenacao);
+
   const totalEl = document.getElementById('total-crf-count');
-  if (totalEl) totalEl.innerText = `Total CRF: ${escalasFiltradas.length} Plantões`;
+  if (totalEl) totalEl.innerText = `Exibindo ${escalasFiltradas.length} Lançamentos na CRF`;
 
   tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
 };
@@ -131,12 +176,13 @@ export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { selectedDelegaciaId } = appState;
-  const delSelecionada = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId) || (appState.delegacias || [])[0];
+  const monthOptions = getMonthSelectOptions(gestaoState.delegacia.mes);
+  const yearOptions = getYearSelectOptions(gestaoState.delegacia.ano);
 
-  let delegaciasOptions = (appState.delegacias || []).map(d => 
-    `<option value="${d.id}" ${delSelecionada?.id === d.id ? 'selected' : ''}>${d.nome}</option>`
-  ).join('');
+  let delegaciasOptions = `<option value="TODAS">Todas as Delegacias</option>`;
+  (appState.delegacias || []).forEach(d => {
+    delegaciasOptions += `<option value="${d.id}" ${gestaoState.delegacia.delegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`;
+  });
 
   let html = `
     <!-- Cabeçalho de Controle Delegacias -->
@@ -144,7 +190,7 @@ export function renderGestaoDelegaciasModule(containerId) {
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
-          <p class="text-[11px] text-slate-500">Configuração de horários customizados, plantões locais e sobreavisos</p>
+          <p class="text-[11px] text-slate-500">Auditoria e controle unificado de plantões locais e sobreavisos</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -155,7 +201,7 @@ export function renderGestaoDelegaciasModule(containerId) {
             ⚡ Gerar em Lote
           </button>
           <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV Local</span>
+            <span>📥 Importar CSV</span>
             <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'DELEGACIA')">
           </label>
           <button onclick="window.exportarEscalasCSV('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
@@ -164,34 +210,52 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Seleção de Delegacia e Botão de Horário Padrão -->
-      <div class="bg-sky-50/70 p-3.5 rounded-xl border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-bold text-sky-950">🏢 Unidade Selecionada:</span>
-          <select id="select-gestao-delegacia-ativa" onchange="window.mudarDelegaciaAtivaGestao(this.value)" class="text-xs font-bold bg-white border border-sky-300 rounded-lg p-2 text-slate-800 focus:ring-2 focus:ring-sky-500">
+      <!-- Barra de Filtros Próprios Delegacia -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-200">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏢 Delegacia / Unidade:</label>
+          <select id="filtro-del-unidade" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
             ${delegaciasOptions}
           </select>
         </div>
 
-        <button onclick="window.abrirModalDelegacia('${delSelecionada?.id}')" class="px-3.5 py-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-          <span>⏰</span> Horário Padrão da Unidade
-        </button>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">📅 Mês:</label>
+          <select id="filtro-del-mes" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${monthOptions}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">📆 Ano:</label>
+          <select id="filtro-del-ano" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${yearOptions}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Policial:</label>
+          <input type="text" id="filtro-del-busca" oninput="window.atualizarFiltrosDel()" placeholder="Digite nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔀 Ordenação:</label>
+          <select id="filtro-del-ordem" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            <option value="DATA_ASC">Data (Mais antiga ➔ Recente)</option>
+            <option value="DATA_DESC">Data (Mais recente ➔ Antiga)</option>
+            <option value="NOME_ASC">Nome Policial (A ➔ Z)</option>
+            <option value="NOME_DESC">Nome Policial (Z ➔ A)</option>
+          </select>
+        </div>
       </div>
 
-      <!-- Barra de Filtros -->
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-200">
-        <div class="w-full sm:w-72">
-          <input type="text" id="filtro-gestao-del-busca" oninput="window.filtrarTabelaDelInline()" placeholder="Buscar policial na unidade..." class="w-full text-xs border rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition cursor-pointer">
-            🗑️ Limpar Mês Local
-          </button>
-          <span id="total-del-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
-            Total Unidade: 0 Plantões
-          </span>
-        </div>
+      <div class="flex items-center justify-between text-xs text-slate-500 font-mono pt-1">
+        <span id="total-del-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-1 rounded-md">
+          Exibindo 0 Lançamentos
+        </span>
+        <button onclick="window.excluirLançamentosFiltrados('DELEGACIA')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer">
+          🗑️ Excluir Filtrados
+        </button>
       </div>
     </div>
 
@@ -217,321 +281,167 @@ export function renderGestaoDelegaciasModule(containerId) {
   window.filtrarTabelaDelInline();
 }
 
+window.atualizarFiltrosDel = function() {
+  gestaoState.delegacia.delegaciaId = document.getElementById('filtro-del-unidade')?.value || 'TODAS';
+  gestaoState.delegacia.mes = Number(document.getElementById('filtro-del-mes')?.value || gestaoState.delegacia.mes);
+  gestaoState.delegacia.ano = Number(document.getElementById('filtro-del-ano')?.value || gestaoState.delegacia.ano);
+  gestaoState.delegacia.busca = document.getElementById('filtro-del-busca')?.value?.toLowerCase() || '';
+  gestaoState.delegacia.ordenacao = document.getElementById('filtro-del-ordem')?.value || 'DATA_ASC';
+
+  window.filtrarTabelaDelInline();
+};
+
 window.filtrarTabelaDelInline = function() {
   const tbody = document.getElementById('tabela-del-corpo');
   if (!tbody) return;
 
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
-  const busca = document.getElementById('filtro-gestao-del-busca')?.value?.toLowerCase() || '';
+  const { mes, ano, busca, delegaciaId, ordenacao } = gestaoState.delegacia;
 
-  const delSelecionada = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId) || (appState.delegacias || [])[0];
-
-  const escalasFiltradas = (appState.escalas || []).filter(esc => {
+  let escalasFiltradas = (appState.escalas || []).filter(esc => {
     if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    if (ano !== currentYear || mes !== currentMonth + 1) return false;
     if (esc.scope !== 'DELEGACIA') return false;
 
-    if (delSelecionada) {
-      const escDelObj = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-      const bateuId = esc.delegaciaId === delSelecionada.id;
-      const bateuUnificado = delSelecionada.delegaciasIds && delSelecionada.delegaciasIds.includes(esc.delegaciaId);
-      const bateuNome = escDelObj && normalizeText(escDelObj.nome) === normalizeText(delSelecionada.nome);
+    const [a, m] = esc.data.split('-').map(Number);
+    if (a !== ano || m !== mes) return false;
 
-      if (!bateuId && !bateuUnificado && !bateuNome) return false;
+    if (delegaciaId !== 'TODAS') {
+      const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+      const bateuId = esc.delegaciaId === delegaciaId;
+      const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(esc.delegaciaId);
+      if (!bateuId && !bateuUnificado) return false;
     }
 
     if (busca) {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const nomeSrv = srv ? srv.nome.toLowerCase() : '';
-      if (!nomeSrv.includes(busca)) return false;
+      const nomeSrv = (srv?.nome || '').toLowerCase();
+      const cargoSrv = (srv?.cargo || '').toLowerCase();
+      if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca)) return false;
     }
     return true;
   });
 
+  escalasFiltradas = aplicarOrdenacao(escalasFiltradas, ordenacao);
+
   const totalEl = document.getElementById('total-del-count');
-  if (totalEl) totalEl.innerText = `Total Unidade: ${escalasFiltradas.length} Plantões`;
+  if (totalEl) totalEl.innerText = `Exibindo ${escalasFiltradas.length} Lançamentos na Unidade`;
 
   tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
 };
 
 // =========================================================================
-// 3. LEITOR INTELIGENTE DE CSV
+// 3. AÇÃO DE EXCLUSÃO DINÂMICA BASEADA NOS REGISTROS EXIBIDOS
 // =========================================================================
-window.importarEscalasCSV = function(event, targetScope) {
-  const file = event.target.files[0];
-  if (!file) return;
+window.excluirLançamentosFiltrados = async function(scope) {
+  let listaParaExcluir = [];
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const text = e.target.result;
-      const { importados, atualizados } = await processarCSVImportEscalas(text, targetScope);
-      alert(`Sucesso no processamento (${targetScope})!\n- ${importados} novos registros salvos.\n- ${atualizados} registros existentes atualizados.`);
-      
-      if (targetScope === 'CRF') window.filtrarTabelaCrfInline();
-      else window.filtrarTabelaDelInline();
-    } catch (err) {
-      alert("Erro ao importar CSV: " + err.message);
-    }
-  };
-  reader.readAsText(file);
-};
+  if (scope === 'CRF') {
+    const { mes, ano, busca } = gestaoState.crf;
+    listaParaExcluir = (appState.escalas || []).filter(esc => {
+      if (!esc.data || esc.scope !== 'CRF') return false;
+      const [a, m] = esc.data.split('-').map(Number);
+      if (a !== ano || m !== mes) return false;
 
-export async function processarCSVImportEscalas(csvText, targetScope) {
-  const lines = csvText.split(/\r?\n/);
-  let importados = 0;
-  let atualizados = 0;
+      if (busca) {
+        const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+        const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+        const nomeSrv = (srv?.nome || '').toLowerCase();
+        const cargoSrv = (srv?.cargo || '').toLowerCase();
+        const nomeDel = (del?.nome || srv?.delegaciaNome || '').toLowerCase();
+        if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca) && !nomeDel.includes(busca)) return false;
+      }
+      return true;
+    });
+  } else {
+    const { mes, ano, busca, delegaciaId } = gestaoState.delegacia;
+    listaParaExcluir = (appState.escalas || []).filter(esc => {
+      if (!esc.data || esc.scope !== 'DELEGACIA') return false;
+      const [a, m] = esc.data.split('-').map(Number);
+      if (a !== ano || m !== mes) return false;
 
-  if (lines.length === 0) return { importados: 0, atualizados: 0 };
-
-  const firstLine = lines[0].trim();
-  const sep = firstLine.includes(';') ? ';' : ',';
-  const headerParts = firstLine.split(sep).map(p => p.trim().toUpperCase().replace(/^"|"$/g, ''));
-
-  const isFormatoGestao = headerParts.includes('DATA') && headerParts.includes('PERIODO');
-  const isFormatoSobreaviso = headerParts.includes('MODALIDADE') && headerParts.includes('INICIO');
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
-    if (parts.length < 3) continue;
-
-    let datasParaSalvar = [];
-    let dataInicioReal = '';
-    let dataFimReal = '';
-    let nomePolicial = '';
-    let delegaciaNome = '';
-    let tipoRotulo = 'PLANTÃO';
-    let turnoRotulo = '24h';
-    let sdpNome = '';
-
-    if (isFormatoGestao) {
-      const idxData = headerParts.indexOf('DATA');
-      const idxPeriodo = headerParts.indexOf('PERIODO');
-      const idxExtra = headerParts.indexOf('EXTRAJORNADA');
-      const idxNome = headerParts.indexOf('NOME');
-      const idxDel = headerParts.indexOf('DELEGACIA');
-      const idxSdp = headerParts.indexOf('SDP');
-
-      const dataIso = parts[idxData] || '';
-      if (dataIso) {
-        datasParaSalvar.push(dataIso);
-        dataInicioReal = dataIso;
-        dataFimReal = dataIso;
+      if (delegaciaId !== 'TODAS') {
+        const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+        const bateuId = esc.delegaciaId === delegaciaId;
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(esc.delegaciaId);
+        if (!bateuId && !bateuUnificado) return false;
       }
 
-      const periodo = (parts[idxPeriodo] || 'DIURNO').toUpperCase();
-      const isExtra = (parts[idxExtra] || 'NAO').toUpperCase() === 'SIM';
-      
-      nomePolicial = parts[idxNome] || '';
-      delegaciaNome = parts[idxDel] || '';
-      sdpNome = parts[idxSdp] || '';
-
-      tipoRotulo = isExtra ? 'EXTRAJORNADA' : 'REGULAR';
-      turnoRotulo = periodo.includes('NOTURNO') ? '12h (N)' : '12h (D)';
-
-    } else if (isFormatoSobreaviso) {
-      const idxMod = headerParts.indexOf('MODALIDADE');
-      const idxDel = headerParts.indexOf('DELEGACIA');
-      const idxInicio = headerParts.indexOf('INICIO');
-      const idxFim = headerParts.indexOf('FIM');
-      const idxSrv = headerParts.indexOf('SERVIDORES');
-
-      const modalidade = parts[idxMod] || 'PLANTONISTA';
-      delegaciaNome = parts[idxDel] || '';
-      const inicioRaw = parts[idxInicio] || '';
-      const fimRaw = parts[idxFim] || '';
-      nomePolicial = parts[idxSrv] || '';
-
-      datasParaSalvar = calcularIntervaloDiasISO(inicioRaw, fimRaw);
-
-      dataInicioReal = inicioRaw.split('T')[0] || inicioRaw.split(' ')[0] || '';
-      dataFimReal = fimRaw.split('T')[0] || fimRaw.split(' ')[0] || dataInicioReal;
-
-      tipoRotulo = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'PLANTÃO';
-      turnoRotulo = datasParaSalvar.length > 1 ? `${datasParaSalvar.length} dias` : '24h';
-    } else {
-      const dIso = parts[0];
-      if (dIso) {
-        datasParaSalvar.push(dIso);
-        dataInicioReal = dIso;
-        dataFimReal = dIso;
+      if (busca) {
+        const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+        const nomeSrv = (srv?.nome || '').toLowerCase();
+        const cargoSrv = (srv?.cargo || '').toLowerCase();
+        if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca)) return false;
       }
-      nomePolicial = parts[1];
-      delegaciaNome = parts[2] || '';
-    }
-
-    if (datasParaSalvar.length === 0 || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
-
-    const nomeNormalizado = normalizeText(nomePolicial);
-    if (nomeNormalizado === 'administrador do sistema' || nomeNormalizado === 'admin') continue;
-
-    // Busca/Cria Servidor
-    let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === nomeNormalizado);
-    if (!srvObj) {
-      const newSrvId = 'srv_' + Date.now() + '_' + i;
-      srvObj = {
-        id: newSrvId,
-        nome: nomePolicial,
-        cargo: 'APJ',
-        delegaciaNome: delegaciaNome,
-        subdivisao: sdpNome || '8ª SDP',
-        telefone: ''
-      };
-      if (!appState.servidores) appState.servidores = [];
-      appState.servidores.push(srvObj);
-      await syncDocToFirestore('servidores', newSrvId, srvObj);
-    }
-
-    // Busca/Cria Delegacia
-    let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
-    if (!delObj && delegaciaNome) {
-      const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-      delObj = {
-        id: newDelId,
-        nome: delegaciaNome,
-        subdivisao: sdpNome || '8ª SDP',
-        plantaoConfig: { regime: 'ININTERRUPTA', intervalo: '24h', uteis: '08:00 às 08:00', naoUteis: '08:00 às 08:00' },
-        sobreavisoConfig: { regime: 'INTERMITENTE', intervalo: '24h', uteis: '18:00 às 08:00', naoUteis: '08:00 às 08:00' },
-        tipo: 'UNIDADE'
-      };
-      if (!appState.delegacias) appState.delegacias = [];
-      appState.delegacias.push(delObj);
-      await syncDocToFirestore('delegacias', newDelId, delObj);
-    }
-
-    for (const dtIso of datasParaSalvar) {
-      const escExistente = (appState.escalas || []).find(e => 
-        e.data === dtIso &&
-        e.servidorId === srvObj.id &&
-        e.scope === targetScope &&
-        e.tipo === tipoRotulo
-      );
-
-      if (escExistente) {
-        escExistente.delegaciaId = delObj ? delObj.id : (srvObj.delegaciaId || '');
-        escExistente.tipo = tipoRotulo;
-        escExistente.turno = turnoRotulo;
-        escExistente.sdpId = sdpNome;
-        escExistente.dataInicio = dataInicioReal;
-        escExistente.dataFim = dataFimReal;
-
-        await syncDocToFirestore('escalas', escExistente.id, escExistente);
-        atualizados++;
-      } else {
-        const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        const novaEscala = {
-          id: newEscId,
-          data: dtIso,
-          servidorId: srvObj.id,
-          delegaciaId: delObj ? delObj.id : (srvObj.delegaciaId || ''),
-          scope: targetScope,
-          tipo: tipoRotulo,
-          turno: turnoRotulo,
-          sdpId: sdpNome,
-          dataInicio: dataInicioReal,
-          dataFim: dataFimReal
-        };
-
-        if (!appState.escalas) appState.escalas = [];
-        appState.escalas.push(novaEscala);
-        await syncDocToFirestore('escalas', newEscId, novaEscala);
-        importados++;
-      }
-    }
+      return true;
+    });
   }
 
-  return { importados, atualizados };
-}
-
-function calcularIntervaloDiasISO(inicioStr, fimStr) {
-  if (!inicioStr) return [];
-  const dtInicioRaw = inicioStr.split('T')[0] || inicioStr.split(' ')[0];
-  if (!fimStr) return [dtInicioRaw];
-
-  const dtFimRaw = fimStr.split('T')[0] || fimStr.split(' ')[0];
-
-  const dInicio = new Date(dtInicioRaw + 'T00:00:00');
-  const dFim = new Date(dtFimRaw + 'T00:00:00');
-
-  if (isNaN(dInicio.getTime())) return [dtInicioRaw];
-  if (isNaN(dFim.getTime()) || dFim <= dInicio) return [dtInicioRaw];
-
-  const datas = [];
-  const curr = new Date(dInicio);
-
-  while (curr < dFim) {
-    const yyyy = curr.getFullYear();
-    const mm = String(curr.getMonth() + 1).padStart(2, '0');
-    const dd = String(curr.getDate()).padStart(2, '0');
-    datas.push(`${yyyy}-${mm}-${dd}`);
-    curr.setDate(curr.getDate() + 1);
-  }
-
-  return datas.length > 0 ? datas : [dtInicioRaw];
-}
-
-window.exportarEscalasCSV = function(scope) {
-  const { currentYear, currentMonth } = appState;
-  const lista = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    return ano === currentYear && mes === currentMonth + 1 && esc.scope === scope;
-  });
-
-  if (lista.length === 0) {
-    alert(`Nenhum lançamento encontrado para exportar no escopo ${scope} neste mês.`);
+  if (listaParaExcluir.length === 0) {
+    alert("Nenhum lançamento está visível no momento para ser excluído.");
     return;
   }
 
-  let csvContent = "DATA;PERIODO;EXTRAJORNADA;CARGO;NOME;DELEGACIA;SDP;TELEFONE\n";
+  const confirmacao = confirm(`ATENÇÃO!\n\nVocê está prestes a EXCLUIR OS ${listaParaExcluir.length} LANÇAMENTOS atualmente visíveis na tela.\n\nEsta ação é irreversível. Deseja continuar?`);
+  if (!confirmacao) return;
 
-  lista.forEach(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+  for (const esc of listaParaExcluir) {
+    appState.escalas = appState.escalas.filter(e => e.id !== esc.id);
+    await syncDocToFirestore('escalas', esc.id, null, true);
+  }
 
-    const data = esc.data;
-    const periodo = esc.turno.includes('(N)') ? 'NOTURNO' : 'DIURNO';
-    const extra = (esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP') ? 'SIM' : 'NAO';
-    const cargo = srv?.cargo || 'APJ';
-    const nome = srv?.nome || 'NÃO LOCALIZADO';
-    const delegacia = del?.nome || srv?.delegaciaNome || '';
-    const sdp = del?.subdivisao || srv?.subdivisao || '8ª SDP';
-    const telefone = srv?.telefone || '';
+  alert(`Sucesso! ${listaParaExcluir.length} registros foram excluídos do sistema.`);
 
-    csvContent += `${data};${periodo};${extra};${cargo};${nome};${delegacia};${sdp};${telefone}\n`;
-  });
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", `escalas_${scope.toLowerCase()}_${currentYear}_${currentMonth + 1}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  if (scope === 'CRF') window.filtrarTabelaCrfInline();
+  else window.filtrarTabelaDelInline();
 };
+
+// =========================================================================
+// AUXILIARES DE FORMATAÇÃO E ORDENAÇÃO
+// =========================================================================
+function aplicarOrdenacao(lista, criterio) {
+  return [...lista].sort((a, b) => {
+    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
+    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
+
+    if (criterio === 'DATA_ASC') return (a.data || '').localeCompare(b.data || '');
+    if (criterio === 'DATA_DESC') return (b.data || '').localeCompare(a.data || '');
+    if (criterio === 'NOME_ASC') return (srvA?.nome || '').localeCompare(srvB?.nome || '');
+    if (criterio === 'NOME_DESC') return (srvB?.nome || '').localeCompare(srvA?.nome || '');
+
+    return 0;
+  });
+}
+
+function getMonthSelectOptions(selectedMonth) {
+  const meses = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+  return meses.map((nome, idx) => 
+    `<option value="${idx + 1}" ${selectedMonth === (idx + 1) ? 'selected' : ''}>${nome}</option>`
+  ).join('');
+}
+
+function getYearSelectOptions(selectedYear) {
+  const anoAtual = new Date().getFullYear();
+  const anos = [anoAtual - 1, anoAtual, anoAtual + 1, anoAtual + 2];
+  return anos.map(ano => 
+    `<option value="${ano}" ${selectedYear === ano ? 'selected' : ''}>${ano}</option>`
+  ).join('');
+}
 
 function renderLinhasTabela(listaEscalas) {
   if (listaEscalas.length === 0) {
     return `
       <tr>
         <td colspan="6" class="p-6 text-center text-slate-500 italic">
-          Nenhum plantão localizado para este filtro neste mês.
+          Nenhum plantão localizado para os filtros selecionados.
         </td>
       </tr>
     `;
   }
 
-  listaEscalas.sort((a, b) => a.data.localeCompare(b.data));
-
   return listaEscalas.map(esc => {
     const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    
-    // Resolve dinamicamente a lotação do servidor e do plantão
     const delegaciaServidor = (appState.delegacias || []).find(d => d.id === servidor?.delegaciaId);
     const delegaciaEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
 
@@ -568,7 +478,7 @@ function renderLinhasTabela(listaEscalas) {
           <button onclick="window.abrirModalEscala(null, '${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer">
             Editar
           </button>
-          <button onclick="window.excluirEscalaGestao('${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer">
+          <button onclick="window.excluirEscalaIndividual('${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer">
             Excluir
           </button>
         </td>
@@ -584,20 +494,7 @@ function formatarDataBr(dataIso) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-window.atualizarPainelGestaoCrf = function() {
-  window.filtrarTabelaCrfInline();
-};
-
-window.atualizarPainelGestaoDel = function() {
-  window.filtrarTabelaDelInline();
-};
-
-window.mudarDelegaciaAtivaGestao = function(idDel) {
-  appState.selectedDelegaciaId = idDel;
-  renderGestaoDelegaciasModule('gestao-delegacias-container');
-};
-
-window.excluirEscalaGestao = async function(escalaId, scope) {
+window.excluirEscalaIndividual = async function(escalaId, scope) {
   if (!confirm("Deseja realmente remover este lançamento de escala?")) return;
 
   appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
@@ -607,22 +504,52 @@ window.excluirEscalaGestao = async function(escalaId, scope) {
   else window.filtrarTabelaDelInline();
 };
 
-window.limparEscalasDoMes = async function(scope) {
-  const { currentYear, currentMonth } = appState;
-  if (!confirm(`TEM CERTEZA? Isso excluirá TODOS os plantões do escopo ${scope} do mês ${currentMonth + 1}/${currentYear}!`)) return;
-
-  const aRemover = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    const [ano, mes] = esc.data.split('-').map(Number);
-    return ano === currentYear && mes === currentMonth + 1 && esc.scope === scope;
-  });
-
-  for (const esc of aRemover) {
-    appState.escalas = appState.escalas.filter(e => e.id !== esc.id);
-    await syncDocToFirestore('escalas', esc.id, null, true);
+window.exportarEscalasCSV = function(scope) {
+  let lista = [];
+  if (scope === 'CRF') {
+    const { mes, ano } = gestaoState.crf;
+    lista = (appState.escalas || []).filter(e => {
+      const [a, m] = e.data.split('-').map(Number);
+      return a === ano && m === mes && e.scope === 'CRF';
+    });
+  } else {
+    const { mes, ano, delegaciaId } = gestaoState.delegacia;
+    lista = (appState.escalas || []).filter(e => {
+      const [a, m] = e.data.split('-').map(Number);
+      const bateuDel = delegaciaId === 'TODAS' || e.delegaciaId === delegaciaId;
+      return a === ano && m === mes && e.scope === 'DELEGACIA' && bateuDel;
+    });
   }
 
-  alert("Lançamentos do mês limpos com sucesso!");
-  if (scope === 'CRF') window.filtrarTabelaCrfInline();
-  else window.filtrarTabelaDelInline();
+  if (lista.length === 0) {
+    alert(`Nenhum lançamento encontrado para exportar nos filtros selecionados.`);
+    return;
+  }
+
+  let csvContent = "DATA;PERIODO;EXTRAJORNADA;CARGO;NOME;DELEGACIA;SDP;TELEFONE\n";
+
+  lista.forEach(esc => {
+    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+
+    const data = esc.data;
+    const periodo = esc.turno?.includes('(N)') ? 'NOTURNO' : 'DIURNO';
+    const extra = (esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP') ? 'SIM' : 'NAO';
+    const cargo = srv?.cargo || 'APJ';
+    const nome = srv?.nome || 'NÃO LOCALIZADO';
+    const delegacia = del?.nome || srv?.delegaciaNome || '';
+    const sdp = del?.subdivisao || srv?.subdivisao || '8ª SDP';
+    const telefone = srv?.telefone || '';
+
+    csvContent += `${data};${periodo};${extra};${cargo};${nome};${delegacia};${sdp};${telefone}\n`;
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `escalas_${scope.toLowerCase()}_gerencial.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
