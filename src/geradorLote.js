@@ -5,8 +5,11 @@ import { renderCalendarGrid } from './calendar.js';
 
 let geradorState = {
   modo: 'INDIVIDUAL', // 'INDIVIDUAL' ou 'EQUIPE'
-  policiaisSelecionados: [], // Lista ordenada de IDs
-  grupos: [] // Para modo equipe: [{ id: 1, membros: [id1, id2] }]
+  policiaisSelecionados: [], // Lista ordenada de IDs no modo individual
+  grupos: [], // Para modo equipe: [{ id: 1, nome: 'Equipe 1', membros: [id1, id2] }]
+  filtroTexto: '',
+  filtroDelegacia: 'TODAS',
+  filtroCargo: 'TODOS'
 };
 
 export function initGeradorLoteModule() {
@@ -22,19 +25,47 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   document.getElementById('ger-scope').value = scopeTarget;
   
-  // Popula o select de Delegacias
+  // Popula o select de Delegacias do Lote
   const selectDel = document.getElementById('ger-delegacia');
   let delOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${d.id === appState.selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
   if (selectDel) selectDel.innerHTML = delOptions;
 
-  // Reset do Estado do Gerador
+  // Popula filtro de Lotação na lista de busca
+  const selectFiltroDel = document.getElementById('ger-filtro-del');
+  let filtroDelOpts = `<option value="TODAS">Todas as Unidades</option>`;
+  (appState.delegacias || []).forEach(d => {
+    filtroDelOpts += `<option value="${d.id}">${d.nome}</option>`;
+  });
+  if (selectFiltroDel) selectFiltroDel.innerHTML = filtroDelOpts;
+
+  // Popula filtro de Cargos dinamicamente
+  const selectFiltroCargo = document.getElementById('ger-filtro-cargo');
+  const cargosSet = new Set(['APJ', 'DELEGADO']);
+  (appState.servidores || []).forEach(s => {
+    if (s.cargo) cargosSet.add(s.cargo.toUpperCase());
+  });
+  let filtroCargoOpts = `<option value="TODOS">Todos os Cargos</option>`;
+  cargosSet.forEach(c => {
+    filtroCargoOpts += `<option value="${c}">${c}</option>`;
+  });
+  if (selectFiltroCargo) selectFiltroCargo.innerHTML = filtroCargoOpts;
+
+  // Reset de Filtros e Estado do Gerador
   geradorState = {
     modo: 'INDIVIDUAL',
     policiaisSelecionados: [],
-    grupos: []
+    grupos: [],
+    filtroTexto: '',
+    filtroDelegacia: scopeTarget === 'DELEGACIA' ? (appState.selectedDelegaciaId || 'TODAS') : 'TODAS',
+    filtroCargo: 'TODOS'
   };
+
+  const inputBusca = document.getElementById('ger-busca-srv');
+  if (inputBusca) inputBusca.value = '';
+  if (selectFiltroDel) selectFiltroDel.value = geradorState.filtroDelegacia;
+  if (selectFiltroCargo) selectFiltroCargo.value = 'TODOS';
 
   // Preenche datas padrão (primeiro e último dia do mês atual)
   const { currentYear, currentMonth } = appState;
@@ -50,17 +81,25 @@ window.fecharModalGeradorLote = function() {
   document.getElementById('modal-gerador-lote')?.classList.add('hidden');
 };
 
+window.atualizarFiltrosListaServidoresGerador = function() {
+  geradorState.filtroTexto = document.getElementById('ger-busca-srv')?.value?.toLowerCase() || '';
+  geradorState.filtroDelegacia = document.getElementById('ger-filtro-del')?.value || 'TODAS';
+  geradorState.filtroCargo = document.getElementById('ger-filtro-cargo')?.value || 'TODOS';
+
+  renderizarSelecaoEOrdenacao();
+};
+
 window.alternarModoGerador = function(novoModo) {
   geradorState.modo = novoModo;
   const btnInd = document.getElementById('btn-modo-individual');
   const btnEqp = document.getElementById('btn-modo-equipe');
 
   if (novoModo === 'INDIVIDUAL') {
-    btnInd.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer";
-    btnEqp.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer";
+    btnInd.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer transition";
+    btnEqp.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer transition";
   } else {
-    btnEqp.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer";
-    btnInd.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer";
+    btnEqp.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs cursor-pointer transition";
+    btnInd.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer transition";
   }
 
   renderizarSelecaoEOrdenacao();
@@ -70,38 +109,70 @@ function renderizarSelecaoEOrdenacao() {
   const container = document.getElementById('ger-painel-policiais');
   if (!container) return;
 
-  const idDelegaciaSel = document.getElementById('ger-delegacia')?.value || appState.selectedDelegaciaId;
+  const { filtroTexto, filtroDelegacia, filtroCargo } = geradorState;
 
-  // Filtra policiais da unidade atenta
-  const servidoresDisponiveis = [...(appState.servidores || [])]
+  // Filtra lista de servidores com base nos 3 seletores (Texto, Delegacia e Cargo)
+  const servidoresFiltrados = [...(appState.servidores || [])]
     .filter(s => {
       const n = normalizeText(s.nome || '');
-      return n !== 'administrador do sistema' && n !== 'admin';
+      if (n === 'administrador do sistema' || n === 'admin') return false;
+
+      // Filtro de Texto (Nome ou Cargo)
+      if (filtroTexto) {
+        const bateuNome = (s.nome || '').toLowerCase().includes(filtroTexto);
+        const bateuCargo = (s.cargo || '').toLowerCase().includes(filtroTexto);
+        if (!bateuNome && !bateuCargo) return false;
+      }
+
+      // Filtro de Delegacia / Lotação
+      if (filtroDelegacia !== 'TODAS') {
+        const delObj = (appState.delegacias || []).find(d => d.id === filtroDelegacia);
+        const bateuId = s.delegaciaId === filtroDelegacia;
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(s.delegaciaId);
+        if (!bateuId && !bateuUnificado) return false;
+      }
+
+      // Filtro de Cargo
+      if (filtroCargo !== 'TODOS') {
+        if ((s.cargo || '').toUpperCase() !== filtroCargo) return false;
+      }
+
+      return true;
     })
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   if (geradorState.modo === 'INDIVIDUAL') {
-    let htmlServidores = servidoresDisponiveis.map(srv => {
+    let htmlServidores = servidoresFiltrados.map(srv => {
       const isChecked = geradorState.policiaisSelecionados.includes(srv.id);
+      const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+      const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
+
       return `
-        <label class="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer text-xs">
+        <label class="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer text-xs select-none">
           <div class="flex items-center gap-2">
-            <input type="checkbox" value="${srv.id}" ${isChecked ? 'checked' : ''} onchange="window.togglePolicialGerador('${srv.id}', this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500">
-            <span class="font-bold text-slate-800">${srv.nome}</span>
+            <input type="checkbox" value="${srv.id}" ${isChecked ? 'checked' : ''} onchange="window.togglePolicialGerador('${srv.id}', this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
+            <div>
+              <span class="font-bold text-slate-800">${srv.nome}</span>
+              <span class="text-[10px] text-slate-500 block">Lotação: ${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</span>
+            </div>
           </div>
-          <span class="text-[10px] text-slate-500">${srv.cargo || 'APJ'}</span>
+          <span class="text-[10px] ${isDel ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700'} font-bold px-1.5 py-0.5 rounded">${srv.cargo || 'APJ'}</span>
         </label>
       `;
     }).join('');
+
+    if (servidoresFiltrados.length === 0) {
+      htmlServidores = `<p class="text-[11px] text-slate-400 italic p-3 text-center">Nenhum policial localizado para os filtros informados.</p>`;
+    }
 
     let htmlFilaOrdenada = geradorState.policiaisSelecionados.map((id, index) => {
       const srv = (appState.servidores || []).find(s => s.id === id);
       return `
         <div class="flex items-center justify-between p-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-bold text-indigo-950">
-          <span>${index + 1}º - ${srv?.nome || 'Servidor'}</span>
-          <div class="space-x-1">
+          <span class="truncate">${index + 1}º - ${srv?.nome || 'Servidor'}</span>
+          <div class="space-x-1 shrink-0">
             <button type="button" onclick="window.moverPolicialFila(${index}, -1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬆️</button>
-            <button type="button" onclick="window.moverPolicialFila(${index}, 1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬇️️</button>
+            <button type="button" onclick="window.moverPolicialFila(${index}, 1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬇️</button>
           </div>
         </div>
       `;
@@ -110,15 +181,15 @@ function renderizarSelecaoEOrdenacao() {
     container.innerHTML = `
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block font-bold text-slate-700 mb-1 text-xs">1. Selecione os Policiais:</label>
-          <div class="space-y-1.5 max-h-48 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
+          <label class="block font-bold text-slate-700 mb-1 text-xs">1. Selecione os Policiais (${servidoresFiltrados.length}):</label>
+          <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
             ${htmlServidores}
           </div>
         </div>
         <div>
-          <label class="block font-bold text-slate-700 mb-1 text-xs">2. Ordem de Rotação (Fila):</label>
-          <div class="space-y-1.5 max-h-48 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
-            ${htmlFilaOrdenada.length > 0 ? htmlFilaOrdenada : '<p class="text-[11px] text-slate-400 italic p-2">Marque os policiais ao lado para ordenar a rotação.</p>'}
+          <label class="block font-bold text-slate-700 mb-1 text-xs">2. Ordem de Rotação (Fila do Ciclo):</label>
+          <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
+            ${htmlFilaOrdenada.length > 0 ? htmlFilaOrdenada : '<p class="text-[11px] text-slate-400 italic p-3 text-center">Marque os policiais ao lado para montar a ordem da rotação.</p>'}
           </div>
         </div>
       </div>
@@ -134,7 +205,7 @@ function renderizarSelecaoEOrdenacao() {
         <div id="ger-lista-grupos" class="space-y-2 max-h-56 overflow-y-auto pr-1"></div>
       </div>
     `;
-    renderizarGruposDOM(servidoresDisponiveis);
+    renderizarGruposDOM(servidoresFiltrados);
   }
 }
 
@@ -170,20 +241,20 @@ window.adicionarGrupoGerador = function() {
   renderizarSelecaoEOrdenacao();
 };
 
-function renderizarGruposDOM(servidoresDisponiveis) {
+function renderizarGruposDOM(servidoresFiltrados) {
   const container = document.getElementById('ger-lista-grupos');
   if (!container) return;
 
   if (geradorState.grupos.length === 0) {
-    container.innerHTML = `<p class="text-[11px] text-slate-400 italic p-2">Nenhum grupo criado. Clique em "Adicionar Grupo/Equipe".</p>`;
+    container.innerHTML = `<p class="text-[11px] text-slate-400 italic p-3 text-center">Nenhum grupo criado. Clique no botão acima para "Adicionar Grupo/Equipe".</p>`;
     return;
   }
 
   container.innerHTML = geradorState.grupos.map((grp, gIndex) => {
-    let srvOpts = servidoresDisponiveis.map(s => {
+    let srvOpts = servidoresFiltrados.map(s => {
       const isChecked = grp.membros.includes(s.id);
       return `
-        <label class="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200 text-[11px] font-medium">
+        <label class="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-slate-200 text-[11px] font-medium cursor-pointer">
           <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleMembroGrupo(${gIndex}, '${s.id}', this.checked)" class="rounded text-indigo-600">
           <span>${s.nome}</span>
         </label>
@@ -194,10 +265,10 @@ function renderizarGruposDOM(servidoresDisponiveis) {
       <div class="p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
         <div class="flex items-center justify-between font-bold text-slate-800">
           <span>👥 ${grp.nome}</span>
-          <button type="button" onclick="window.removerGrupoGerador(${gIndex})" class="text-red-600 hover:text-red-800 font-bold text-[10px]">Excluir Equipe</button>
+          <button type="button" onclick="window.removerGrupoGerador(${gIndex})" class="text-red-600 hover:text-red-800 font-bold text-[10px] cursor-pointer">Excluir Equipe</button>
         </div>
         <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-white/50 rounded-lg">
-          ${srvOpts}
+          ${srvOpts.length > 0 ? srvOpts : '<span class="text-[10px] text-slate-400 italic">Nenhum policial atende aos filtros de busca ativas.</span>'}
         </div>
       </div>
     `;
@@ -226,15 +297,14 @@ window.executarGeradorLote = async function(e) {
   const delegaciaId = document.getElementById('ger-delegacia').value;
   const dataInicio = document.getElementById('ger-data-inicio').value;
   const dataFim = document.getElementById('ger-data-fim').value;
-  const tipoModalidade = document.getElementById('ger-modalidade').value; // 'PLANTÃO' ou 'SOBREAVISO'
-  const regraDias = document.getElementById('ger-regra-dias').value; // 'TODOS', 'FDS_FERIADOS', 'DIAS_UTEIS'
+  const tipoModalidade = document.getElementById('ger-modalidade').value;
+  const regraDias = document.getElementById('ger-regra-dias').value;
 
   if (!dataInicio || !dataFim || dataFim < dataInicio) {
     alert("Selecione um intervalo de datas válido.");
     return;
   }
 
-  // Validação de alocação
   if (geradorState.modo === 'INDIVIDUAL' && geradorState.policiaisSelecionados.length === 0) {
     alert("Selecione pelo menos um policial para a fila de rotação.");
     return;
@@ -245,7 +315,6 @@ window.executarGeradorLote = async function(e) {
     return;
   }
 
-  // Calcula lista de dias válidos no intervalo
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
@@ -255,11 +324,11 @@ window.executarGeradorLote = async function(e) {
 
     if (regraDias === 'FDS_FERIADOS') return isWeekend || isFeriado;
     if (regraDias === 'DIAS_UTEIS') return !isWeekend && !isFeriado;
-    return true; // 'TODOS'
+    return true;
   });
 
   if (diasValidos.length === 0) {
-    alert("Nenhum dia no intervalo atende ao filtro de dias selecionado.");
+    alert("Nenhum dia no intervalo atende à regra de dias selecionada.");
     return;
   }
 
@@ -340,8 +409,8 @@ function criarModalGeradorLoteDOM() {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Unidade / Delegacia:</label>
-              <select id="ger-delegacia" onchange="renderizarSelecaoEOrdenacao()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <label class="block font-bold text-slate-700 mb-1">Unidade / Delegacia de Destino:</label>
+              <select id="ger-delegacia" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
@@ -372,13 +441,26 @@ function criarModalGeradorLoteDOM() {
             </div>
           </div>
 
-          <!-- SELEÇÃO DE MODO DE ALOCAÇÃO -->
+          <!-- BARRA DE FILTROS DE POLICIAIS -->
           <div class="pt-2 border-t space-y-2">
             <div class="flex items-center justify-between">
               <label class="block font-bold text-slate-800">Modo de Distribuição:</label>
               <div class="flex gap-1">
                 <button type="button" id="btn-modo-individual" onclick="window.alternarModoGerador('INDIVIDUAL')">🔄 Rotação Individual</button>
                 <button type="button" id="btn-modo-equipe" onclick="window.alternarModoGerador('EQUIPE')">👥 Equipes Fixas</button>
+              </div>
+            </div>
+
+            <!-- FILTROS DE BUSCA DENTRO DO MODAL -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200">
+              <div>
+                <input type="text" id="ger-busca-srv" oninput="window.atualizarFiltrosListaServidoresGerador()" placeholder="🔍 Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              </div>
+              <div>
+                <select id="ger-filtro-del" onchange="window.atualizarFiltrosListaServidoresGerador()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-800"></select>
+              </div>
+              <div>
+                <select id="ger-filtro-cargo" onchange="window.atualizarFiltrosListaServidoresGerador()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-800"></select>
               </div>
             </div>
 
