@@ -355,36 +355,47 @@ window.mudarFiltroDelCrf = function(valor) {
 };
 
 function setupCalendarEvents(containerId, scope) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
   // Troca de Delegacia Selecionada no topo
-  document.getElementById('select-calendar-delegacia')?.addEventListener('change', (e) => {
-    appState.selectedDelegaciaId = e.target.value;
-    renderCalendarGrid(containerId, scope);
-  });
+  const selectDel = container.querySelector('#select-calendar-delegacia');
+  if (selectDel) {
+    selectDel.addEventListener('change', (e) => {
+      appState.selectedDelegaciaId = e.target.value;
+      renderCalendarGrid(containerId, scope);
+    });
+  }
 
   // Botão Mês Anterior
-  document.getElementById('btn-prev-month')?.addEventListener('click', () => {
-    if (appState.currentMonth === 0) {
-      appState.currentMonth = 11;
-      appState.currentYear--;
-    } else {
-      appState.currentMonth--;
-    }
-    // Garante a re-renderização mantendo o escopo ativo (CRF ou DELEGACIA)
-    renderCalendarGrid(containerId, scope);
-  });
+  const btnPrev = container.querySelector('#btn-prev-month');
+  if (btnPrev) {
+    btnPrev.addEventListener('click', () => {
+      if (appState.currentMonth === 0) {
+        appState.currentMonth = 11;
+        appState.currentYear--;
+      } else {
+        appState.currentMonth--;
+      }
+      renderCalendarGrid(containerId, scope);
+    });
+  }
 
   // Botão Próximo Mês
-  document.getElementById('btn-next-month')?.addEventListener('click', () => {
-    if (appState.currentMonth === 11) {
-      appState.currentMonth = 0;
-      appState.currentYear++;
-    } else {
-      appState.currentMonth++;
-    }
-    // Garante a re-renderização mantendo o escopo ativo (CRF ou DELEGACIA)
-    renderCalendarGrid(containerId, scope);
-  });
+  const btnNext = container.querySelector('#btn-next-month');
+  if (btnNext) {
+    btnNext.addEventListener('click', () => {
+      if (appState.currentMonth === 11) {
+        appState.currentMonth = 0;
+        appState.currentYear++;
+      } else {
+        appState.currentMonth++;
+      }
+      renderCalendarGrid(containerId, scope);
+    });
+  }
 }
+
 // TOOLTIP FLUTUANTE DE GRUPO (CRF)
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
@@ -404,7 +415,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
     escalas.forEach(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       
-      // Busca a Lotação REAL de Origem do Servidor
       const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
@@ -439,11 +449,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
     if (!esc) return;
 
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    
-    // Unidade onde o plantão está sendo executado
     const delEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-    
-    // Lotação REAL de origem do Policial
     const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
     const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
 
