@@ -25,7 +25,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
 
   if (selectScope) selectScope.value = scopeTarget;
 
-  // 1. Tipos e Turnos Ajustados por Escopo
+  // Configuração dos tipos e turnos por escopo
   if (scopeTarget === 'CRF') {
     selectTipo.innerHTML = `
       <option value="REGULAR">REGULAR</option>
@@ -57,7 +57,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
     window.atualizarTurnoPadraoDelegacia();
   }
 
-  // 2. Preenche o Filtro de Unidades para a lista de servidores
+  // Preenche filtro de unidades
   let delFilterOptions = `<option value="TODAS">Todas as Unidades</option>`;
   (appState.delegacias || []).forEach(d => {
     delFilterOptions += `<option value="${d.id}">${d.nome}</option>`;
@@ -70,12 +70,11 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
     if (filtroUnidadeSelect) filtroUnidadeSelect.value = 'TODAS';
   }
 
-  // 3. Data Sugerida
   const hojeIso = getHojeISO();
   if (inputData) inputData.value = dataSugerida || hojeIso;
   if (buscaSrvInput) buscaSrvInput.value = '';
 
-  // 4. Edição ou Inclusão
+  // Modo Edição x Modo Inclusão
   if (escalaId) {
     const esc = (appState.escalas || []).find(e => e.id === escalaId);
     if (esc) {
@@ -84,11 +83,11 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
       selectTipo.value = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || (scopeTarget === 'CRF' ? 'REGULAR' : 'PLANTÃO')));
       selectTurno.value = esc.turno || (scopeTarget === 'CRF' ? '12h (D)' : '24h');
 
-      renderListaServidoresCheckboxes([esc.servidorId]);
+      renderListaServidoresCheckboxes([esc.servidorId], true); // modoEdicao = true
     }
   } else {
     inputId.value = '';
-    renderListaServidoresCheckboxes([]);
+    renderListaServidoresCheckboxes([], false);
   }
 
   modal.classList.remove('hidden');
@@ -146,7 +145,7 @@ window.filtrarServidoresModalInline = function() {
   });
 };
 
-function renderListaServidoresCheckboxes(idsSelecionados = []) {
+function renderListaServidoresCheckboxes(idsSelecionados = [], modoEdicao = false) {
   const container = document.getElementById('modal-esc-servidores-lista');
   if (!container) return;
 
@@ -162,6 +161,8 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
     return;
   }
 
+  const inputType = modoEdicao ? 'radio' : 'checkbox';
+
   container.innerHTML = listaSrv.map(srv => {
     const isChecked = idsSelecionados.includes(srv.id);
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
@@ -171,7 +172,7 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
       <label class="srv-checkbox-item flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer select-none"
              data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}" data-del-id="${srv.delegaciaId || ''}">
         <div class="flex items-center gap-2.5">
-          <input type="checkbox" name="modal_srv_ids" value="${srv.id}" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
+          <input type="${inputType}" name="modal_srv_ids" value="${srv.id}" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
           <div>
             <div class="font-bold text-slate-900 text-xs">${srv.nome}</div>
             <div class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • Lotação: <b>${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</b></div>
@@ -194,8 +195,8 @@ window.salvarEscalaModal = async function(e) {
   const tipo = document.getElementById('modal-esc-tipo').value;
   const turno = document.getElementById('modal-esc-turno').value;
 
-  const checkboxes = document.querySelectorAll('input[name="modal_srv_ids"]:checked');
-  const servidoresIds = Array.from(checkboxes).map(cb => cb.value);
+  const selecionados = document.querySelectorAll('input[name="modal_srv_ids"]:checked');
+  const servidoresIds = Array.from(selecionados).map(cb => cb.value);
 
   if (!dataIso) {
     alert("Selecione a data do plantão.");
@@ -203,36 +204,39 @@ window.salvarEscalaModal = async function(e) {
   }
 
   if (servidoresIds.length === 0) {
-    alert("Selecione pelo menos um policial para o plantão.");
+    alert("Selecione um policial para o plantão.");
     return;
   }
 
   if (id) {
-    // Edição individual do Plantão
-    const esc = (appState.escalas || []).find(e => e.id === id);
-    if (esc) {
-      const srv = (appState.servidores || []).find(s => s.id === servidoresIds[0]);
-      
-      // Busca fallback de delegacia para garantir que delegaciaId nunca fique em branco
-      let idDelegaciaResolvido = srv?.delegaciaId;
-      if (!idDelegaciaResolvido && srv?.delegaciaNome) {
-        const delPorNome = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(srv.delegaciaNome));
+    // Edição individual do plantão existente
+    const idx = (appState.escalas || []).findIndex(e => e.id === id);
+    if (idx !== -1) {
+      const esc = appState.escalas[idx];
+      const novoSrvId = servidoresIds[0];
+      const srvObj = (appState.servidores || []).find(s => s.id === novoSrvId);
+
+      let idDelegaciaResolvido = srvObj?.delegaciaId;
+      if (!idDelegaciaResolvido && srvObj?.delegaciaNome) {
+        const delPorNome = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(srvObj.delegaciaNome));
         if (delPorNome) idDelegaciaResolvido = delPorNome.id;
       }
 
+      // Atualiza o objeto no estado local (appState)
       esc.data = dataIso;
       esc.tipo = tipo;
       esc.turno = turno;
-      esc.servidorId = servidoresIds[0];
+      esc.servidorId = novoSrvId;
       esc.delegaciaId = scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId;
-      
+
+      // Sincroniza com o banco Firestore
       await syncDocToFirestore('escalas', esc.id, esc);
     }
   } else {
-    // Inclusão múltipla
+    // Inclusão de novo(s) plantão(ões)
     for (const sId of servidoresIds) {
       const srv = (appState.servidores || []).find(s => s.id === sId);
-      
+
       let idDelegaciaResolvido = srv?.delegaciaId;
       if (!idDelegaciaResolvido && srv?.delegaciaNome) {
         const delPorNome = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(srv.delegaciaNome));
@@ -240,7 +244,7 @@ window.salvarEscalaModal = async function(e) {
       }
 
       const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-      
+
       const novaEscala = {
         id: newEscId,
         data: dataIso,
@@ -259,7 +263,7 @@ window.salvarEscalaModal = async function(e) {
 
   window.fecharModalEscala();
 
-  // ATUALIZAÇÃO COMPLETA DE TODAS AS TELAS E CALENDÁRIOS DA APLICAÇÃO
+  // Redesenha a tabela e o calendário na tela
   if (scope === 'CRF') {
     if (typeof window.filtrarTabelaCrfInline === 'function') window.filtrarTabelaCrfInline();
     renderCalendarGrid('calendar-crf-container', 'CRF');
@@ -307,10 +311,9 @@ function criarModalEscalaDOM() {
             </div>
           </div>
 
-          <!-- FILTRO OPCIONAL E LISTA DE POLICIAIS -->
           <div class="space-y-2 pt-2 border-t">
             <div class="flex items-center justify-between">
-              <label class="block font-bold text-slate-800">Selecione o(s) Policial(is):</label>
+              <label class="block font-bold text-slate-800">Selecione o Policial:</label>
               <span class="text-[10px] text-slate-500">Unidade de lotação atribuída automaticamente</span>
             </div>
 
@@ -338,5 +341,5 @@ function criarModalEscalaDOM() {
 }
 
 function criarModalGeradorLoteDOM() {
-  // Estrutura do gerador em lote
+  // Gerador em lote
 }
