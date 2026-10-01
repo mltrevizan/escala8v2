@@ -1,6 +1,7 @@
 // src/modals.js
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
+import { renderCalendarGrid } from './calendar.js';
 
 export function initModalsModule() {
   criarModalEscalaDOM();
@@ -53,7 +54,6 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
       <option value="7 dias">7 Dias (1 Semana)</option>
     `;
     
-    // Atualiza o turno padrão com base na delegacia ativa e tipo
     window.atualizarTurnoPadraoDelegacia();
   }
 
@@ -64,7 +64,6 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   });
   if (filtroUnidadeSelect) filtroUnidadeSelect.innerHTML = delFilterOptions;
 
-  // No escopo Delegacia, pré-seleciona a delegacia/plantão unificado atual como filtro padrão
   if (scopeTarget === 'DELEGACIA' && appState.selectedDelegaciaId) {
     if (filtroUnidadeSelect) filtroUnidadeSelect.value = appState.selectedDelegaciaId;
   } else {
@@ -151,7 +150,6 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
   const container = document.getElementById('modal-esc-servidores-lista');
   if (!container) return;
 
-  // FILTRO SEGURANÇA: Oculta "ADMINISTRADOR DO SISTEMA" e "admin"
   const listaSrv = [...(appState.servidores || [])]
     .filter(srv => {
       const n = normalizeText(srv.nome || '');
@@ -210,30 +208,44 @@ window.salvarEscalaModal = async function(e) {
   }
 
   if (id) {
-    // Edição individual
+    // Edição individual do Plantão
     const esc = (appState.escalas || []).find(e => e.id === id);
     if (esc) {
       const srv = (appState.servidores || []).find(s => s.id === servidoresIds[0]);
+      
+      // Busca fallback de delegacia para garantir que delegaciaId nunca fique em branco
+      let idDelegaciaResolvido = srv?.delegaciaId;
+      if (!idDelegaciaResolvido && srv?.delegaciaNome) {
+        const delPorNome = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(srv.delegaciaNome));
+        if (delPorNome) idDelegaciaResolvido = delPorNome.id;
+      }
+
       esc.data = dataIso;
       esc.tipo = tipo;
       esc.turno = turno;
-      // Atribuição automática da delegacia
-      esc.delegaciaId = scope === 'CRF' ? (srv?.delegaciaId || '') : appState.selectedDelegaciaId;
       esc.servidorId = servidoresIds[0];
+      esc.delegaciaId = scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId;
+      
       await syncDocToFirestore('escalas', esc.id, esc);
     }
   } else {
     // Inclusão múltipla
     for (const sId of servidoresIds) {
       const srv = (appState.servidores || []).find(s => s.id === sId);
+      
+      let idDelegaciaResolvido = srv?.delegaciaId;
+      if (!idDelegaciaResolvido && srv?.delegaciaNome) {
+        const delPorNome = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(srv.delegaciaNome));
+        if (delPorNome) idDelegaciaResolvido = delPorNome.id;
+      }
+
       const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       
       const novaEscala = {
         id: newEscId,
         data: dataIso,
         servidorId: sId,
-        // Atribuição automática da delegacia do servidor (CRF) ou da unidade ativa (Delegacia)
-        delegaciaId: scope === 'CRF' ? (srv?.delegaciaId || '') : appState.selectedDelegaciaId,
+        delegaciaId: scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId,
         scope: scope,
         tipo: tipo,
         turno: turno
@@ -247,8 +259,14 @@ window.salvarEscalaModal = async function(e) {
 
   window.fecharModalEscala();
 
-  if (scope === 'CRF') window.filtrarTabelaCrfInline();
-  else window.filtrarTabelaDelInline();
+  // ATUALIZAÇÃO COMPLETA DE TODAS AS TELAS E CALENDÁRIOS DA APLICAÇÃO
+  if (scope === 'CRF') {
+    if (typeof window.filtrarTabelaCrfInline === 'function') window.filtrarTabelaCrfInline();
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+  } else {
+    if (typeof window.filtrarTabelaDelInline === 'function') window.filtrarTabelaDelInline();
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
 };
 
 function getHojeISO() {
