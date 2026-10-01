@@ -2,7 +2,7 @@
 import { appState } from './state.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
-import { initFeriadosModule, renderFeriadosModule } from './feriados.js';
+import { renderFeriadosModule } from './feriados.js';
 import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { initServidoresModule, renderServidoresTable } from './servidores.js';
 import { initFeriasModule, renderFeriasModule } from './ferias.js';
@@ -15,11 +15,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // 1. Carrega as coleções do banco em paralelo
+    // 1. Carrega as coleções do banco em paralelo que possuem init inicial
     await Promise.all([
       initDelegaciasModule(),
       initServidoresModule(),
-      initFeriadosModule(),
       initFeriasModule()
     ]);
 
