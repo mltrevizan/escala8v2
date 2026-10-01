@@ -1,100 +1,99 @@
 // src/app.js
-import { initFirebase, fetchCollection } from './db.js';
+import { initDatabase } from './db.js';
 import { appState } from './state.js';
-import { renderServidoresTable, processCSVImportComUpsert } from './servidores.js';
-import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
 import { renderCalendarGrid } from './calendar.js';
-import { initModalsModule } from './modals.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
-import { renderFeriadosModule } from './feriados.js';
+import { initFeriadosModule, renderFeriadosModule } from './feriados.js';
+import { initDelegaciasModule, renderDelegaciasCards } from './delegacias.js';
+import { initServidoresModule, renderServidoresTable } from './servidores.js';
+import { initFeriasModule, renderFeriasModule } from './ferias.js';
+import { initModalsModule } from './modals.js';
 
-window.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Inicializando 8ª CRF - Escala v2.5.7...");
-  initFirebase();
+document.addEventListener('DOMContentLoaded', async () => {
+  const statusEl = document.getElementById('app-status');
+  if (statusEl) {
+    statusEl.innerHTML = `<span class="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold">Conectando ao banco...</span>`;
+  }
 
-  // Injeta estrutura de modais no DOM
-  initModalsModule();
+  try {
+    // 1. Inicializa o Firestore
+    await initDatabase();
 
-  // Carrega coleções do Firestore
-  appState.servidores = await fetchCollection('servidores');
-  appState.escalas = await fetchCollection('escalas');
-  appState.feriados = await fetchCollection('feriados');
-  await initDelegaciasModule();
+    // 2. Carrega as coleções em paralelo
+    await Promise.all([
+      initDelegaciasModule(),
+      initServidoresModule(),
+      initFeriadosModule(),
+      initFeriasModule()
+    ]);
 
-  updateUI();
-  setupEventListeners();
+    // 3. Inicializa os modais do sistema
+    initModalsModule();
+
+    if (statusEl) {
+      statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
+    }
+
+    // 4. Renderiza a aba inicial (Escala CRF)
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+
+  } catch (err) {
+    console.error("Erro na inicialização do aplicativo:", err);
+    if (statusEl) {
+      statusEl.innerHTML = `<span class="text-xs bg-rose-100 text-rose-800 px-3 py-1 rounded-full font-bold">⚠️ Erro de Conexão</span>`;
+    }
+  }
 });
 
-function updateUI() {
-  const statusElem = document.getElementById('app-status');
-  if (statusElem) {
-    statusElem.innerHTML = `
-      <span class="text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-1 rounded-full">
-        ✅ Conectado ao Firebase (${appState.servidores.length} Servidores | ${appState.delegacias.length} Unidades)
-      </span>
-    `;
-  }
+// Troca de Abas
+window.switchTab = function(tabId) {
+  // Esconde todos os contêineres de aba
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
 
-  renderCalendarGrid('calendar-crf-container', 'CRF');
-}
-
-window.switchTab = function(tabName) {
-  const tabs = ['crf', 'delegacia', 'gestao-crf', 'gestao-del', 'feriados', 'unidades', 'servidores'];
-
-  tabs.forEach(t => {
-    const btn = document.getElementById(`tab-btn-${t}`);
-    const content = document.getElementById(`tab-content-${t}`);
-
-    if (t === tabName) {
-      btn?.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
-      btn?.classList.remove('text-slate-600', 'hover:bg-slate-100');
-      content?.classList.remove('hidden');
-    } else {
-      btn?.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
-      btn?.classList.add('text-slate-600', 'hover:bg-slate-100');
-      content?.classList.add('hidden');
-    }
+  // Desativa estilo visual de todos os botões
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm', 'active');
+    btn.classList.add('text-slate-600', 'hover:bg-slate-100');
   });
 
-  if (tabName === 'crf') {
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-  } else if (tabName === 'delegacia') {
-    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
-      appState.selectedDelegaciaId = appState.delegacias[0].id;
-    }
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  } else if (tabName === 'gestao-crf') {
-    renderGestaoCrfModule('gestao-crf-container');
-  } else if (tabName === 'gestao-del') {
-    renderGestaoDelegaciasModule('gestao-delegacias-container');
-  } else if (tabName === 'feriados') {
-    renderFeriadosModule('feriados-container');
-  } else if (tabName === 'unidades') {
-    renderDelegaciasCards('delegacias-container');
-  } else if (tabName === 'servidores') {
-    renderServidoresTable('servidores-table-container');
+  // Exibe a aba selecionada
+  const targetContent = document.getElementById(`tab-content-${tabId}`);
+  if (targetContent) {
+    targetContent.classList.remove('hidden');
+  }
+
+  // Destaca o botão ativo
+  const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+  if (targetBtn) {
+    targetBtn.classList.remove('text-slate-600', 'hover:bg-slate-100');
+    targetBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm', 'active');
+  }
+
+  // Renderiza dinamicamente o módulo da aba selecionada
+  switch (tabId) {
+    case 'crf':
+      renderCalendarGrid('calendar-crf-container', 'CRF');
+      break;
+    case 'delegacia':
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+      break;
+    case 'gestao-crf':
+      renderGestaoCrfModule('gestao-crf-container');
+      break;
+    case 'gestao-del':
+      renderGestaoDelegaciasModule('gestao-delegacias-container');
+      break;
+    case 'feriados':
+      renderFeriadosModule('feriados-container');
+      break;
+    case 'unidades':
+      renderDelegaciasCards('delegacias-container');
+      break;
+    case 'servidores':
+      renderServidoresTable('servidores-table-container');
+      break;
+    case 'ferias':
+      renderFeriasModule('ferias-container');
+      break;
   }
 };
-
-function setupEventListeners() {
-  const csvInput = document.getElementById('csv-file-input');
-  if (csvInput) {
-    csvInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        try {
-          const result = await processCSVImportComUpsert(evt.target.result);
-          alert(`Sucesso!\n- ${result.atualizados} servidores foram atualizados.\n- ${result.criados} novos policiais foram adicionados.`);
-          await initDelegaciasModule();
-          renderServidoresTable('servidores-table-container');
-        } catch (err) {
-          alert("Erro ao processar CSV: " + err.message);
-        }
-      };
-      reader.readAsText(file);
-    });
-  }
-}
