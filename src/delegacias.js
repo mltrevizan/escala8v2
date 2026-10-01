@@ -29,13 +29,13 @@ export function renderDelegaciasCards(containerId) {
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="font-bold text-sm text-slate-800">Unidades Policiais, SDPs e Plantões Unificados</h2>
-          <p class="text-[11px] text-slate-500">Mapeamento de delegacias locais, regionais (SDP) e consórcios unificados</p>
+          <h2 class="font-bold text-sm text-slate-800">Unidades Policiais e Plantões Unificados</h2>
+          <p class="text-[11px] text-slate-500">Mapeamento de delegacias locais e agrupamentos de plantão unificado</p>
         </div>
 
         <div class="flex items-center gap-2">
           <button onclick="window.abrirModalDelegacia()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer">
-            ➕ Nova Unidade / SDP / Plantão
+            ➕ Nova Unidade / Plantão
           </button>
         </div>
       </div>
@@ -113,7 +113,7 @@ window.filtrarDelegaciasInline = function() {
     tbody.innerHTML = `
       <tr>
         <td colspan="6" class="p-6 text-center text-slate-500 italic">
-          Nenhuma unidade localizada. Clique em "Nova Unidade / SDP / Plantão" para cadastrar.
+          Nenhuma unidade localizada. Clique em "Nova Unidade / Plantão" para cadastrar.
         </td>
       </tr>
     `;
@@ -121,16 +121,15 @@ window.filtrarDelegaciasInline = function() {
   }
 
   tbody.innerHTML = delegaciasFiltradas.map(del => {
-    // CORREÇÃO: Plantão Unificado é APENAS quando possui mais de uma delegacia vinculada em delegaciasIds
     const isUnificado = Boolean(del.delegaciasIds && Array.isArray(del.delegaciasIds) && del.delegaciasIds.length > 0);
-    const isSede = del.tipo === 'SEDE' || del.tipo === 'SDP' || del.id === 'del_crf';
+    const isSede = del.tipo === 'SEDE' || del.id === 'del_crf';
 
     let badgeTipo = 'bg-sky-100 text-sky-900 border-sky-300 font-medium';
     let rotuloTipo = 'DELEGACIA LOCAL';
 
     if (isSede) {
       badgeTipo = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-      rotuloTipo = del.tipo === 'SDP' ? 'SUBDIVISÃO (SDP)' : 'SEDE / CRF';
+      rotuloTipo = 'SEDE / CRF';
     } else if (isUnificado) {
       badgeTipo = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
       rotuloTipo = 'PLANTÃO UNIFICADO';
@@ -154,7 +153,7 @@ window.filtrarDelegaciasInline = function() {
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 font-bold text-slate-900">
           ${del.nome}
-          ${isUnificado ? `<div class="text-[10px] font-normal text-purple-800">Unidades: ${del.delegaciasIds.map(id => appState.delegacias.find(d => d.id === id)?.nome).filter(Boolean).join(', ')}</div>` : ''}
+          ${isUnificado ? `<div class="text-[10px] font-normal text-purple-800">Participantes: ${del.delegaciasIds.map(id => appState.delegacias.find(d => d.id === id)?.nome).filter(Boolean).join(', ')}</div>` : ''}
         </td>
         <td class="p-3">
           <span class="px-2 py-0.5 rounded text-[10px] uppercase border ${badgeTipo}">
@@ -196,28 +195,25 @@ window.abrirModalDelegacia = function(delId = null) {
   const selectTipoCadastro = document.getElementById('modal-del-tipo-cadastro');
   const inputNome = document.getElementById('modal-del-nome');
   const selectSdp = document.getElementById('modal-del-sdp');
-  const inputSdpManual = document.getElementById('modal-del-sdp-manual');
 
-  // Plantão
   const pRegime = document.getElementById('modal-plantao-regime');
   const pIntervalo = document.getElementById('modal-plantao-intervalo');
   const pUteis = document.getElementById('modal-plantao-uteis');
   const pNaoUteis = document.getElementById('modal-plantao-nao-uteis');
 
-  // Sobreaviso
   const sRegime = document.getElementById('modal-sobreaviso-regime');
   const sIntervalo = document.getElementById('modal-sobreaviso-intervalo');
   const sUteis = document.getElementById('modal-sobreaviso-uteis');
   const sNaoUteis = document.getElementById('modal-sobreaviso-nao-uteis');
 
-  // Preenche seletor de SDPs pré-cadastradas
+  // Preenche seletor de SDPs
   const sdpsCadastradas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
   if (!sdpsCadastradas.includes('8ª SDP')) sdpsCadastradas.unshift('8ª SDP');
 
   let sdpOptions = sdpsCadastradas.map(s => `<option value="${s}">${s}</option>`).join('');
   if (selectSdp) selectSdp.innerHTML = sdpOptions;
 
-  // Preenche lista de delegacias para vínculo unificado
+  // Preenche checkboxes para Plantão Unificado
   const containerVinculacao = document.getElementById('container-vinculo-delegacias');
   let delegaciasCheckboxes = (appState.delegacias || [])
     .filter(d => !delId || d.id !== delId)
@@ -239,12 +235,10 @@ window.abrirModalDelegacia = function(delId = null) {
       inputNome.value = del.nome || '';
       
       const isUnif = Boolean(del.delegaciasIds && del.delegaciasIds.length > 0);
-      selectTipoCadastro.value = del.tipo === 'SDP' ? 'SDP' : (isUnif ? 'UNIFICADO' : 'DELEGACIA');
+      selectTipoCadastro.value = isUnif ? 'UNIFICADO' : 'DELEGACIA';
       
       if (selectSdp) selectSdp.value = del.subdivisao || '8ª SDP';
-      if (inputSdpManual) inputSdpManual.value = del.subdivisao || '8ª SDP';
 
-      // Marca checkboxes unificados
       if (del.delegaciasIds) {
         document.querySelectorAll('input[name="vinculo_del_ids"]').forEach(chk => {
           if (del.delegaciasIds.includes(chk.value)) chk.checked = true;
@@ -286,21 +280,11 @@ window.abrirModalDelegacia = function(delId = null) {
 
 window.mudarTipoCadastroModal = function() {
   const tipo = document.getElementById('modal-del-tipo-cadastro')?.value;
-  const boxSdpSelect = document.getElementById('box-sdp-seletor');
-  const boxSdpManual = document.getElementById('box-sdp-manual');
   const boxUnificacao = document.getElementById('box-unificacao-delegacias');
 
-  if (tipo === 'SDP') {
-    boxSdpSelect?.classList.add('hidden');
-    boxSdpManual?.classList.remove('hidden');
-    boxUnificacao?.classList.add('hidden');
-  } else if (tipo === 'UNIFICADO') {
-    boxSdpSelect?.classList.remove('hidden');
-    boxSdpManual?.classList.add('hidden');
+  if (tipo === 'UNIFICADO') {
     boxUnificacao?.classList.remove('hidden');
   } else {
-    boxSdpSelect?.classList.remove('hidden');
-    boxSdpManual?.classList.add('hidden');
     boxUnificacao?.classList.add('hidden');
   }
 };
@@ -315,13 +299,7 @@ window.salvarDelegaciaModal = async function(e) {
   const id = document.getElementById('modal-del-id').value;
   const tipoCadastro = document.getElementById('modal-del-tipo-cadastro').value;
   const nome = document.getElementById('modal-del-nome').value.trim();
-
-  let subdivisao = '';
-  if (tipoCadastro === 'SDP') {
-    subdivisao = document.getElementById('modal-del-sdp-manual').value.trim() || nome;
-  } else {
-    subdivisao = document.getElementById('modal-del-sdp').value;
-  }
+  const subdivisao = document.getElementById('modal-del-sdp').value;
 
   const vinculosIds = [];
   if (tipoCadastro === 'UNIFICADO') {
@@ -345,33 +323,34 @@ window.salvarDelegaciaModal = async function(e) {
   };
 
   if (!nome) {
-    alert("Informe o nome.");
+    alert("Informe o nome da unidade.");
     return;
   }
 
-  if (id) {
-    const del = appState.delegacias.find(d => d.id === id);
+  let delAlvoId = id;
+
+  if (delAlvoId) {
+    const del = appState.delegacias.find(d => d.id === delAlvoId);
     if (del) {
       del.nome = nome;
       del.subdivisao = subdivisao;
-      del.tipo = tipoCadastro === 'SDP' ? 'SDP' : 'UNIDADE';
-      del.delegaciasIds = vinculosIds;
+      del.tipo = 'UNIDADE';
+      del.delegaciasIds = tipoCadastro === 'UNIFICADO' ? vinculosIds : [];
       del.plantaoConfig = plantaoConfig;
       del.sobreavisoConfig = sobreavisoConfig;
-
       del.horarioUteis = plantaoConfig.uteis;
       del.horarioNaoUteis = plantaoConfig.naoUteis;
 
       await syncDocToFirestore('delegacias', del.id, del);
     }
   } else {
-    const newId = 'del_' + Date.now();
+    delAlvoId = 'del_' + Date.now();
     const novaDel = {
-      id: newId,
+      id: delAlvoId,
       nome,
       subdivisao,
-      tipo: tipoCadastro === 'SDP' ? 'SDP' : 'UNIDADE',
-      delegaciasIds: vinculosIds,
+      tipo: 'UNIDADE',
+      delegaciasIds: tipoCadastro === 'UNIFICADO' ? vinculosIds : [],
       plantaoConfig,
       sobreavisoConfig,
       horarioUteis: plantaoConfig.uteis,
@@ -381,7 +360,28 @@ window.salvarDelegaciaModal = async function(e) {
     if (!appState.delegacias) appState.delegacias = [];
     appState.delegacias.push(novaDel);
 
-    await syncDocToFirestore('delegacias', novaDel.id, novaDel);
+    await syncDocToFirestore('delegacias', delAlvoId, novaDel);
+  }
+
+  // SINCRONIZAÇÃO BIDIRECIONAL: Atualiza os vínculos em todas as delegacias selecionadas no Plantão Unificado
+  if (tipoCadastro === 'UNIFICADO') {
+    const todasParticipantes = [delAlvoId, ...vinculosIds];
+
+    for (const pId of todasParticipantes) {
+      const pDel = appState.delegacias.find(d => d.id === pId);
+      if (pDel) {
+        pDel.delegaciasIds = todasParticipantes.filter(xId => xId !== pId);
+        await syncDocToFirestore('delegacias', pDel.id, pDel);
+      }
+    }
+  } else {
+    // Se deixou de ser unificado, limpa as referências cruzadas
+    for (const pDel of appState.delegacias) {
+      if (pDel.delegaciasIds && pDel.delegaciasIds.includes(delAlvoId)) {
+        pDel.delegaciasIds = pDel.delegaciasIds.filter(xId => xId !== delAlvoId);
+        await syncDocToFirestore('delegacias', pDel.id, pDel);
+      }
+    }
   }
 
   window.fecharModalDelegacia();
@@ -405,7 +405,7 @@ function criarModalDelegaciaDOM() {
     <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">Cadastrar / Editar Unidade ou Regional</h3>
+          <h3 class="font-bold text-slate-900 text-sm">Cadastrar / Editar Delegacia ou Plantão Unificado</h3>
           <button type="button" onclick="window.fecharModalDelegacia()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
@@ -418,32 +418,25 @@ function criarModalDelegaciaDOM() {
               <label class="block font-bold text-slate-800 mb-1">Tipo de Registro:</label>
               <select id="modal-del-tipo-cadastro" onchange="window.mudarTipoCadastroModal()" class="w-full border rounded-lg p-2 bg-white font-bold text-indigo-950">
                 <option value="DELEGACIA">Delegacia Local</option>
-                <option value="UNIFICADO">Plantão Unificado (Consórcio)</option>
-                <option value="SDP">Regional / SDP</option>
+                <option value="UNIFICADO">Plantão Unificado</option>
               </select>
             </div>
 
             <div class="sm:col-span-2">
-              <label class="block font-bold text-slate-800 mb-1">Nome Completo da Unidade / SDP:</label>
-              <input type="text" id="modal-del-nome" required placeholder="Ex: 8ª SDP Paranavaí ou DP Loanda" class="w-full border rounded-lg p-2 bg-white font-bold text-slate-900">
+              <label class="block font-bold text-slate-800 mb-1">Nome Completo da Delegacia:</label>
+              <input type="text" id="modal-del-nome" required placeholder="Ex: Delegacia de Polícia de Loanda" class="w-full border rounded-lg p-2 bg-white font-bold text-slate-900">
             </div>
           </div>
 
-          <!-- Seletor de SDP Pré-Cadastrada -->
-          <div id="box-sdp-seletor">
-            <label class="block font-bold text-slate-700 mb-1">Subdivisão / Regional (SDP) Pertencente:</label>
+          <!-- Seletor de SDP -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Subdivisão / Regional (SDP):</label>
             <select id="modal-del-sdp" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
-          </div>
-
-          <!-- Campo SDP Manual (Apenas quando for criar nova SDP) -->
-          <div id="box-sdp-manual" class="hidden">
-            <label class="block font-bold text-slate-700 mb-1">Nome do Agrupamento SDP:</label>
-            <input type="text" id="modal-del-sdp-manual" placeholder="Ex: 8ª SDP" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
           </div>
 
           <!-- Seleção de Delegacias Integrantes (Apenas quando for Plantão Unificado) -->
           <div id="box-unificacao-delegacias" class="hidden bg-purple-50 p-3 rounded-xl border border-purple-200 space-y-2">
-            <label class="block font-bold text-purple-950">Delegacias Integrantes do Plantão Unificado:</label>
+            <label class="block font-bold text-purple-950">Marque as Delegacias Participantes deste Plantão Unificado:</label>
             <div id="container-vinculo-delegacias" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1"></div>
           </div>
 
