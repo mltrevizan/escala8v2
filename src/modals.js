@@ -1,5 +1,5 @@
 // src/modals.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
 export function initModalsModule() {
@@ -19,49 +19,61 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   const inputData = document.getElementById('modal-esc-data');
   const selectTipo = document.getElementById('modal-esc-tipo');
   const selectTurno = document.getElementById('modal-esc-turno');
-  const selectDelegacia = document.getElementById('modal-esc-delegacia');
+  const filtroUnidadeSelect = document.getElementById('modal-esc-filtro-unidade');
   const buscaSrvInput = document.getElementById('modal-esc-busca-srv');
 
   if (selectScope) selectScope.value = scopeTarget;
 
-  // 1. Opções de Tipo ajustadas por Escopo
+  // 1. Tipos e Turnos Ajustados por Escopo
   if (scopeTarget === 'CRF') {
     selectTipo.innerHTML = `
       <option value="REGULAR">REGULAR</option>
       <option value="EXTRAJORNADA">EXTRAJORNADA</option>
     `;
+    selectTurno.innerHTML = `
+      <option value="12h (D)">12h (D) - Diurno</option>
+      <option value="12h (N)">12h (N) - Noturno</option>
+    `;
+    const horaAtual = new Date().getHours();
+    selectTurno.value = horaAtual >= 18 ? '12h (N)' : '12h (D)';
   } else {
     selectTipo.innerHTML = `
       <option value="PLANTÃO">PLANTÃO</option>
       <option value="SOBREAVISO">SOBREAVISO</option>
       <option value="EXTRAJORNADA">EXTRAJORNADA</option>
     `;
+    selectTurno.innerHTML = `
+      <option value="12h">12 Horas</option>
+      <option value="24h">24 Horas (1 Dia)</option>
+      <option value="2 dias">2 Dias</option>
+      <option value="3 dias">3 Dias</option>
+      <option value="4 dias">4 Dias</option>
+      <option value="5 dias">5 Dias</option>
+      <option value="6 dias">6 Dias</option>
+      <option value="7 dias">7 Dias (1 Semana)</option>
+    `;
+    
+    // Atualiza o turno padrão com base na delegacia ativa e tipo
+    window.atualizarTurnoPadraoDelegacia();
   }
 
-  // 2. Preenche seletor de delegacias
-  let delOptions = (appState.delegacias || []).map(d => 
-    `<option value="${d.id}">${d.nome}</option>`
-  ).join('');
-  if (selectDelegacia) selectDelegacia.innerHTML = delOptions;
+  // 2. Preenche o Filtro de Unidades para a lista de servidores
+  let delFilterOptions = `<option value="TODAS">Todas as Unidades</option>`;
+  (appState.delegacias || []).forEach(d => {
+    delFilterOptions += `<option value="${d.id}">${d.nome}</option>`;
+  });
+  if (filtroUnidadeSelect) filtroUnidadeSelect.innerHTML = delFilterOptions;
 
-  // Pré-seleciona a delegacia ativa na Gestão por Delegacias
+  // No escopo Delegacia, pré-seleciona a delegacia/plantão unificado atual como filtro padrão
   if (scopeTarget === 'DELEGACIA' && appState.selectedDelegaciaId) {
-    if (selectDelegacia) selectDelegacia.value = appState.selectedDelegaciaId;
-  }
-
-  // 3. Sugestão Inteligente de Próxima Data e Turno
-  const hojeIso = getHojeISO();
-  let dataInicial = dataSugerida || hojeIso;
-  
-  if (inputData) inputData.value = dataInicial;
-
-  if (scopeTarget === 'CRF') {
-    const horaAtual = new Date().getHours();
-    selectTurno.value = horaAtual >= 18 ? '12h (N)' : '12h (D)';
+    if (filtroUnidadeSelect) filtroUnidadeSelect.value = appState.selectedDelegaciaId;
   } else {
-    selectTurno.value = '24h';
+    if (filtroUnidadeSelect) filtroUnidadeSelect.value = 'TODAS';
   }
 
+  // 3. Data Sugerida
+  const hojeIso = getHojeISO();
+  if (inputData) inputData.value = dataSugerida || hojeIso;
   if (buscaSrvInput) buscaSrvInput.value = '';
 
   // 4. Edição ou Inclusão
@@ -70,9 +82,8 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
     if (esc) {
       inputId.value = esc.id;
       inputData.value = esc.data;
-      selectTipo.value = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || 'REGULAR'));
-      selectTurno.value = esc.turno || '12h (D)';
-      if (selectDelegacia) selectDelegacia.value = esc.delegaciaId || (appState.delegacias[0]?.id || '');
+      selectTipo.value = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || (scopeTarget === 'CRF' ? 'REGULAR' : 'PLANTÃO')));
+      selectTurno.value = esc.turno || (scopeTarget === 'CRF' ? '12h (D)' : '24h');
 
       renderListaServidoresCheckboxes([esc.servidorId]);
     }
@@ -84,18 +95,51 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   modal.classList.remove('hidden');
 };
 
+window.atualizarTurnoPadraoDelegacia = function() {
+  const scope = document.getElementById('modal-esc-scope')?.value;
+  if (scope !== 'DELEGACIA') return;
+
+  const tipo = document.getElementById('modal-esc-tipo')?.value || 'PLANTÃO';
+  const selectTurno = document.getElementById('modal-esc-turno');
+  const delAtiva = (appState.delegacias || []).find(d => d.id === appState.selectedDelegaciaId);
+
+  if (!selectTurno || !delAtiva) return;
+
+  let config = tipo === 'SOBREAVISO' ? delAtiva.sobreavisoConfig : delAtiva.plantaoConfig;
+  let intervaloPadrao = config ? config.intervalo : '24h';
+
+  if (intervaloPadrao) {
+    selectTurno.value = intervaloPadrao;
+  }
+};
+
 window.fecharModalEscala = function() {
   document.getElementById('modal-escala')?.classList.add('hidden');
 };
 
 window.filtrarServidoresModalInline = function() {
   const busca = document.getElementById('modal-esc-busca-srv')?.value?.toLowerCase() || '';
+  const unidadeFiltro = document.getElementById('modal-esc-filtro-unidade')?.value || 'TODAS';
   const cards = document.querySelectorAll('.srv-checkbox-item');
 
   cards.forEach(card => {
     const nome = card.getAttribute('data-nome') || '';
     const cargo = card.getAttribute('data-cargo') || '';
-    if (nome.includes(busca) || cargo.includes(busca)) {
+    const delId = card.getAttribute('data-del-id') || '';
+
+    let atendeBusca = !busca || nome.includes(busca) || cargo.includes(busca);
+    
+    let atendeUnidade = true;
+    if (unidadeFiltro !== 'TODAS') {
+      const delObj = (appState.delegacias || []).find(d => d.id === unidadeFiltro);
+      if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
+        atendeUnidade = delId === unidadeFiltro || delObj.delegaciasIds.includes(delId);
+      } else {
+        atendeUnidade = delId === unidadeFiltro;
+      }
+    }
+
+    if (atendeBusca && atendeUnidade) {
       card.classList.remove('hidden');
     } else {
       card.classList.add('hidden');
@@ -107,7 +151,13 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
   const container = document.getElementById('modal-esc-servidores-lista');
   if (!container) return;
 
-  const listaSrv = [...(appState.servidores || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  // FILTRO SEGURANÇA: Oculta "ADMINISTRADOR DO SISTEMA" e "admin"
+  const listaSrv = [...(appState.servidores || [])]
+    .filter(srv => {
+      const n = normalizeText(srv.nome || '');
+      return n !== 'administrador do sistema' && n !== 'admin' && n !== 'administrador';
+    })
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   if (listaSrv.length === 0) {
     container.innerHTML = `<p class="text-xs text-slate-500 italic p-2">Nenhum servidor cadastrado no sistema.</p>`;
@@ -121,18 +171,20 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
 
     return `
       <label class="srv-checkbox-item flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer select-none"
-             data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}">
+             data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}" data-del-id="${srv.delegaciaId || ''}">
         <div class="flex items-center gap-2.5">
           <input type="checkbox" name="modal_srv_ids" value="${srv.id}" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
           <div>
             <div class="font-bold text-slate-900 text-xs">${srv.nome}</div>
-            <div class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • ${del ? del.nome : (srv.delegaciaNome || 'Sem Lotação')}</div>
+            <div class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • Lotação: <b>${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</b></div>
           </div>
         </div>
         ${isDel ? '<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded">DEL</span>' : ''}
       </label>
     `;
   }).join('');
+
+  window.filtrarServidoresModalInline();
 }
 
 window.salvarEscalaModal = async function(e) {
@@ -143,7 +195,6 @@ window.salvarEscalaModal = async function(e) {
   const dataIso = document.getElementById('modal-esc-data').value;
   const tipo = document.getElementById('modal-esc-tipo').value;
   const turno = document.getElementById('modal-esc-turno').value;
-  const delegaciaId = document.getElementById('modal-esc-delegacia').value;
 
   const checkboxes = document.querySelectorAll('input[name="modal_srv_ids"]:checked');
   const servidoresIds = Array.from(checkboxes).map(cb => cb.value);
@@ -158,54 +209,31 @@ window.salvarEscalaModal = async function(e) {
     return;
   }
 
-  const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaId);
-
-  // Validação de Lotação / Plantão Unificado na Gestão por Delegacias
-  if (scope === 'DELEGACIA' && delAlvo) {
-    const foraDaLotacao = [];
-
-    servidoresIds.forEach(sId => {
-      const srv = (appState.servidores || []).find(s => s.id === sId);
-      if (srv) {
-        const pertenceDireto = srv.delegaciaId === delAlvo.id;
-        const pertenceUnificado = delAlvo.delegaciasIds && delAlvo.delegaciasIds.includes(srv.delegaciaId);
-
-        if (!pertenceDireto && !pertenceUnificado) {
-          foraDaLotacao.push(srv.nome);
-        }
-      }
-    });
-
-    if (foraDaLotacao.length > 0) {
-      const confirma = confirm(
-        `⚠️ ATENÇÃO: O(s) seguinte(s) policial(is) não pertencem à lotação de "${delAlvo.nome}" nem a um Plantão Unificado com ela:\n\n` +
-        `- ${foraDaLotacao.join('\n- ')}\n\n` +
-        `Deseja realmente confirmar a inclusão na escala dessa unidade?`
-      );
-      if (!confirma) return;
-    }
-  }
-
   if (id) {
     // Edição individual
     const esc = (appState.escalas || []).find(e => e.id === id);
     if (esc) {
+      const srv = (appState.servidores || []).find(s => s.id === servidoresIds[0]);
       esc.data = dataIso;
       esc.tipo = tipo;
       esc.turno = turno;
-      esc.delegaciaId = delegaciaId;
+      // Atribuição automática da delegacia
+      esc.delegaciaId = scope === 'CRF' ? (srv?.delegaciaId || '') : appState.selectedDelegaciaId;
       esc.servidorId = servidoresIds[0];
       await syncDocToFirestore('escalas', esc.id, esc);
     }
   } else {
-    // Inclusão de múltiplos policiais selecionados
+    // Inclusão múltipla
     for (const sId of servidoresIds) {
+      const srv = (appState.servidores || []).find(s => s.id === sId);
       const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      
       const novaEscala = {
         id: newEscId,
         data: dataIso,
         servidorId: sId,
-        delegaciaId: delegaciaId,
+        // Atribuição automática da delegacia do servidor (CRF) ou da unidade ativa (Delegacia)
+        delegaciaId: scope === 'CRF' ? (srv?.delegaciaId || '') : appState.selectedDelegaciaId,
         scope: scope,
         tipo: tipo,
         turno: turno
@@ -244,48 +272,40 @@ function criarModalEscalaDOM() {
           <input type="hidden" id="modal-esc-id">
           <input type="hidden" id="modal-esc-scope">
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Data do Plantão:</label>
+              <label class="block font-bold text-slate-700 mb-1">Data:</label>
               <input type="date" id="modal-esc-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
             </div>
 
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
-              <select id="modal-esc-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <label class="block font-bold text-slate-700 mb-1">Tipo:</label>
+              <select id="modal-esc-tipo" onchange="window.atualizarTurnoPadraoDelegacia()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
-          </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Turno / Duração:</label>
-              <select id="modal-esc-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="12h (D)">12h (D) - Diurno</option>
-                <option value="12h (N)">12h (N) - Noturno</option>
-                <option value="24h">24h - Integral</option>
-                <option value="2 dias">2 Dias</option>
-                <option value="3 dias">3 Dias</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
-              <select id="modal-esc-delegacia" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <select id="modal-esc-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
           </div>
 
-          <!-- FILTRO E SELEÇÃO DE POLICIAIS -->
+          <!-- FILTRO OPCIONAL E LISTA DE POLICIAIS -->
           <div class="space-y-2 pt-2 border-t">
             <div class="flex items-center justify-between">
               <label class="block font-bold text-slate-800">Selecione o(s) Policial(is):</label>
-              <span class="text-[10px] text-slate-500">Permite seleção múltipla</span>
+              <span class="text-[10px] text-slate-500">Unidade de lotação atribuída automaticamente</span>
             </div>
 
-            <div>
-              <input type="text" id="modal-esc-busca-srv" oninput="window.filtrarServidoresModalInline()" placeholder="🔍 Digite para filtrar policial..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <input type="text" id="modal-esc-busca-srv" oninput="window.filtrarServidoresModalInline()" placeholder="🔍 Filtrar por nome/cargo..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              </div>
+              <div>
+                <select id="modal-esc-filtro-unidade" onchange="window.filtrarServidoresModalInline()" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-bold text-slate-800"></select>
+              </div>
             </div>
 
-            <div id="modal-esc-servidores-lista" class="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200"></div>
+            <div id="modal-esc-servidores-lista" class="space-y-1.5 max-h-52 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200"></div>
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
