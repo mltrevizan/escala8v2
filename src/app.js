@@ -1,5 +1,4 @@
 // src/app.js
-import { initDatabase } from './db.js';
 import { appState } from './state.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
@@ -16,10 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // 1. Inicializa o Firestore
-    await initDatabase();
-
-    // 2. Carrega as coleções em paralelo
+    // 1. Carrega as coleções do banco em paralelo
     await Promise.all([
       initDelegaciasModule(),
       initServidoresModule(),
@@ -27,14 +23,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       initFeriasModule()
     ]);
 
-    // 3. Inicializa os modais do sistema
+    // 2. Inicializa os modais do sistema
     initModalsModule();
 
     if (statusEl) {
       statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
     }
 
-    // 4. Renderiza a aba inicial (Escala CRF)
+    // 3. Renderiza a aba inicial (Escala CRF)
     renderCalendarGrid('calendar-crf-container', 'CRF');
 
   } catch (err) {
