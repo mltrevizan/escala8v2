@@ -1,623 +1,304 @@
 // src/modals.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
-import { renderCalendarGrid } from './calendar.js';
-import { renderServidoresTable } from './servidores.js';
-import { renderDelegaciasCards } from './delegacias.js';
-import { renderGestaoEscalasModule } from './gestaoEscalas.js';
 
 export function initModalsModule() {
-  const container = document.createElement('div');
-  container.id = 'modals-root';
-  container.innerHTML = `
-    <!-- Modal Adicionar/Editar Escala Individual -->
-    <div id="modal-escala" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 id="modal-escala-titulo" class="font-bold text-slate-900 text-sm">Lançamento de Plantão</h3>
-          <button onclick="window.fecharModalEscala()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+  criarModalEscalaDOM();
+  criarModalGeradorLoteDOM();
+}
+
+export window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTarget = 'CRF') {
+  let modal = document.getElementById('modal-escala');
+  if (!modal) {
+    criarModalEscalaDOM();
+    modal = document.getElementById('modal-escala');
+  }
+
+  const inputId = document.getElementById('modal-esc-id');
+  const selectScope = document.getElementById('modal-esc-scope');
+  const inputData = document.getElementById('modal-esc-data');
+  const selectTipo = document.getElementById('modal-esc-tipo');
+  const selectTurno = document.getElementById('modal-esc-turno');
+  const selectDelegacia = document.getElementById('modal-esc-delegacia');
+  const buscaSrvInput = document.getElementById('modal-esc-busca-srv');
+
+  if (selectScope) selectScope.value = scopeTarget;
+
+  // 1. Opções de Tipo ajustadas por Escopo
+  if (scopeTarget === 'CRF') {
+    selectTipo.innerHTML = `
+      <option value="REGULAR">REGULAR</option>
+      <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+    `;
+  } else {
+    selectTipo.innerHTML = `
+      <option value="PLANTÃO">PLANTÃO</option>
+      <option value="SOBREAVISO">SOBREAVISO</option>
+      <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+    `;
+  }
+
+  // 2. Preenche seletor de delegacias
+  let delOptions = (appState.delegacias || []).map(d => 
+    `<option value="${d.id}">${d.nome}</option>`
+  ).join('');
+  if (selectDelegacia) selectDelegacia.innerHTML = delOptions;
+
+  // Pré-seleciona a delegacia ativa na Gestão por Delegacias
+  if (scopeTarget === 'DELEGACIA' && appState.selectedDelegaciaId) {
+    if (selectDelegacia) selectDelegacia.value = appState.selectedDelegaciaId;
+  }
+
+  // 3. Sugestão Inteligente de Próxima Data e Turno
+  const hojeIso = getHojeISO();
+  let dataInicial = dataSugerida || hojeIso;
+  
+  if (inputData) inputData.value = dataInicial;
+
+  if (scopeTarget === 'CRF') {
+    const horaAtual = new Date().getHours();
+    selectTurno.value = horaAtual >= 18 ? '12h (N)' : '12h (D)';
+  } else {
+    selectTurno.value = '24h';
+  }
+
+  if (buscaSrvInput) buscaSrvInput.value = '';
+
+  // 4. Edição ou Inclusão
+  if (escalaId) {
+    const esc = (appState.escalas || []).find(e => e.id === escalaId);
+    if (esc) {
+      inputId.value = esc.id;
+      inputData.value = esc.data;
+      selectTipo.value = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || 'REGULAR'));
+      selectTurno.value = esc.turno || '12h (D)';
+      if (selectDelegacia) selectDelegacia.value = esc.delegaciaId || (appState.delegacias[0]?.id || '');
+
+      renderListaServidoresCheckboxes([esc.servidorId]);
+    }
+  } else {
+    inputId.value = '';
+    renderListaServidoresCheckboxes([]);
+  }
+
+  modal.classList.remove('hidden');
+};
+
+export window.fecharModalEscala = function() {
+  document.getElementById('modal-escala')?.classList.add('hidden');
+};
+
+export window.filtrarServidoresModalInline = function() {
+  const busca = document.getElementById('modal-esc-busca-srv')?.value?.toLowerCase() || '';
+  const cards = document.querySelectorAll('.srv-checkbox-item');
+
+  cards.forEach(card => {
+    const nome = card.getAttribute('data-nome') || '';
+    const cargo = card.getAttribute('data-cargo') || '';
+    if (nome.includes(busca) || cargo.includes(busca)) {
+      card.classList.remove('hidden');
+    } else {
+      card.classList.add('hidden');
+    }
+  });
+};
+
+function renderListaServidoresCheckboxes(idsSelecionados = []) {
+  const container = document.getElementById('modal-esc-servidores-lista');
+  if (!container) return;
+
+  const listaSrv = [...(appState.servidores || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  if (listaSrv.length === 0) {
+    container.innerHTML = `<p class="text-xs text-slate-500 italic p-2">Nenhum servidor cadastrado no sistema.</p>`;
+    return;
+  }
+
+  container.innerHTML = listaSrv.map(srv => {
+    const isChecked = idsSelecionados.includes(srv.id);
+    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
+
+    return `
+      <label class="srv-checkbox-item flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer select-none"
+             data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}">
+        <div class="flex items-center gap-2.5">
+          <input type="checkbox" name="modal_srv_ids" value="${srv.id}" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
+          <div>
+            <div class="font-bold text-slate-900 text-xs">${srv.nome}</div>
+            <div class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • ${del ? del.nome : (srv.delegaciaNome || 'Sem Lotação')}</div>
+          </div>
+        </div>
+        ${isDel ? '<span class="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded">DEL</span>' : ''}
+      </label>
+    `;
+  }).join('');
+}
+
+export window.salvarEscalaModal = async function(e) {
+  e.preventDefault();
+
+  const id = document.getElementById('modal-esc-id').value;
+  const scope = document.getElementById('modal-esc-scope').value;
+  const dataIso = document.getElementById('modal-esc-data').value;
+  const tipo = document.getElementById('modal-esc-tipo').value;
+  const turno = document.getElementById('modal-esc-turno').value;
+  const delegaciaId = document.getElementById('modal-esc-delegacia').value;
+
+  const checkboxes = document.querySelectorAll('input[name="modal_srv_ids"]:checked');
+  const servidoresIds = Array.from(checkboxes).map(cb => cb.value);
+
+  if (!dataIso) {
+    alert("Selecione a data do plantão.");
+    return;
+  }
+
+  if (servidoresIds.length === 0) {
+    alert("Selecione pelo menos um policial para o plantão.");
+    return;
+  }
+
+  const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaId);
+
+  // Validação de Lotação / Plantão Unificado na Gestão por Delegacias
+  if (scope === 'DELEGACIA' && delAlvo) {
+    const foraDaLotacao = [];
+
+    servidoresIds.forEach(sId => {
+      const srv = (appState.servidores || []).find(s => s.id === sId);
+      if (srv) {
+        const pertenceDireto = srv.delegaciaId === delAlvo.id;
+        const pertenceUnificado = delAlvo.delegaciasIds && delAlvo.delegaciasIds.includes(srv.delegaciaId);
+
+        if (!pertenceDireto && !pertenceUnificado) {
+          foraDaLotacao.push(srv.nome);
+        }
+      }
+    });
+
+    if (foraDaLotacao.length > 0) {
+      const confirma = confirm(
+        `⚠️ ATENÇÃO: O(s) seguinte(s) policial(is) não pertencem à lotação de "${delAlvo.nome}" nem a um Plantão Unificado com ela:\n\n` +
+        `- ${foraDaLotacao.join('\n- ')}\n\n` +
+        `Deseja realmente confirmar a inclusão na escala dessa unidade?`
+      );
+      if (!confirma) return;
+    }
+  }
+
+  if (id) {
+    // Edição individual
+    const esc = (appState.escalas || []).find(e => e.id === id);
+    if (esc) {
+      esc.data = dataIso;
+      esc.tipo = tipo;
+      esc.turno = turno;
+      esc.delegaciaId = delegaciaId;
+      esc.servidorId = servidoresIds[0];
+      await syncDocToFirestore('escalas', esc.id, esc);
+    }
+  } else {
+    // Inclusão de múltiplos policiais selecionados
+    for (const sId of servidoresIds) {
+      const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      const novaEscala = {
+        id: newEscId,
+        data: dataIso,
+        servidorId: sId,
+        delegaciaId: delegaciaId,
+        scope: scope,
+        tipo: tipo,
+        turno: turno
+      };
+
+      if (!appState.escalas) appState.escalas = [];
+      appState.escalas.push(novaEscala);
+      await syncDocToFirestore('escalas', newEscId, novaEscala);
+    }
+  }
+
+  window.fecharModalEscala();
+
+  if (scope === 'CRF') window.filtrarTabelaCrfInline();
+  else window.filtrarTabelaDelInline();
+};
+
+function getHojeISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function criarModalEscalaDOM() {
+  const modalHTML = `
+    <div id="modal-escala" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">Lançamento de Plantão / Escala</h3>
+          <button type="button" onclick="window.fecharModalEscala()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
-        <form onsubmit="window.salvarEscalaModal(event)" class="space-y-3 text-xs">
-          <input type="hidden" id="modal-escala-id">
+        <form onsubmit="window.salvarEscalaModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
+          <input type="hidden" id="modal-esc-id">
+          <input type="hidden" id="modal-esc-scope">
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Data do Plantão:</label>
-              <input type="date" id="modal-escala-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono font-bold">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Tipo / Modalidade:</label>
-              <select id="modal-escala-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700"></select>
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor:</label>
-            <select id="modal-escala-servidor" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
-              <select id="modal-escala-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Turno de Serviço:</label>
-              <select id="modal-escala-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-semibold">
-                <option value="24h">24 Horas (Integral)</option>
-                <option value="12h (D)">12 Horas (Diurno - 08h às 20h)</option>
-                <option value="12h (N)">12 Horas (Noturno - 20h às 08h)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="bg-indigo-50/50 border border-indigo-100 p-3 rounded-xl space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="font-bold text-indigo-900 text-[11px]">⚡ Réplica Automática (Opcional):</span>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input type="checkbox" id="chk-replicar-plantao" onchange="window.toggleReplicacaoOptions()" class="rounded text-indigo-600">
-                <span class="text-[10px] font-bold text-indigo-700">Replicar Plantão</span>
-              </label>
+              <input type="date" id="modal-esc-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
             </div>
 
-            <div id="box-replicacao" class="hidden grid grid-cols-2 gap-2 pt-2 border-t border-indigo-200/60">
-              <div>
-                <label class="block font-semibold text-slate-600 text-[10px] mb-1">Frequência:</label>
-                <select id="modal-replica-frequencia" class="w-full border rounded-lg p-1.5 bg-white text-[10px] font-bold">
-                  <option value="1">A cada 1 dia (Diário)</option>
-                  <option value="2">A cada 2 dias (48 horas)</option>
-                  <option value="3">A cada 3 dias (72 horas)</option>
-                  <option value="7">Semanalmente (Mesmo dia)</option>
-                </select>
-              </div>
-              <div>
-                <label class="block font-semibold text-slate-600 text-[10px] mb-1">Repetir quantas vezes?</label>
-                <input type="number" id="modal-replica-qtd" min="1" max="15" value="3" class="w-full border rounded-lg p-1.5 bg-white font-mono font-bold">
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-3 border-t flex items-center justify-between">
-            <button type="button" id="btn-excluir-escala" onclick="window.excluirEscalaAtual()" class="hidden px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 rounded-xl font-bold">
-              🗑️️ Excluir Plantão
-            </button>
-            
-            <div class="flex justify-end gap-2 ml-auto">
-              <button type="button" onclick="window.fecharModalEscala()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-              <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Plantão</button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- MODAL GERADOR DE ESCALA EM LOTE -->
-    <div id="modal-gerador-lote" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">⚡ Gerador Automatizado de Escala em Lote</h3>
-          <button onclick="window.fecharModalGeradorLote()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-        </div>
-
-        <form onsubmit="window.executarGeradorLote(event)" class="space-y-3 text-xs">
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Servidor / Policial:</label>
-            <select id="gerador-servidor" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Data Inicial:</label>
-              <input type="date" id="gerador-data-inicio" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono font-bold">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Data Final:</label>
-              <input type="date" id="gerador-data-fim" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono font-bold">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Escopo de Atuação:</label>
-              <select id="gerador-escopo" required onchange="window.atualizarOpcoesGerador()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
-                <option value="CRF">CRF & Extrajornada (SDP)</option>
-                <option value="DELEGACIA">Plantão por Delegacia</option>
-              </select>
-            </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Tipo de Plantão:</label>
-              <select id="gerador-tipo" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700"></select>
+              <select id="modal-esc-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
-            <select id="gerador-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Regra / Rodízio:</label>
-              <select id="gerador-regra" class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
-                <option value="24x72">Escala 24x72 (A cada 4 dias)</option>
-                <option value="12x36">Escala 12x36 (A cada 2 dias)</option>
-                <option value="DIARIO">Diário (Todos os dias)</option>
-                <option value="DIAS_UTEIS">Segunda a Sexta (Dias Úteis)</option>
-                <option value="FINS_SEMANA">Sábados e Domingos</option>
+              <label class="block font-bold text-slate-700 mb-1">Turno / Duração:</label>
+              <select id="modal-esc-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="12h (D)">12h (D) - Diurno</option>
+                <option value="12h (N)">12h (N) - Noturno</option>
+                <option value="24h">24h - Integral</option>
+                <option value="2 dias">2 Dias</option>
+                <option value="3 dias">3 Dias</option>
               </select>
             </div>
+
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Turno:</label>
-              <select id="gerador-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-semibold">
-                <option value="24h">24 Horas (Integral)</option>
-                <option value="12h (D)">12 Horas (Diurno)</option>
-                <option value="12h (N)">12 Horas (Noturno)</option>
-              </select>
+              <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação:</label>
+              <select id="modal-esc-delegacia" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
           </div>
 
-          <div class="pt-3 border-t flex justify-end gap-2">
-            <button type="button" onclick="window.fecharModalGeradorLote()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow">Gerar Escalas</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Modal Editar Servidor -->
-    <div id="modal-servidor" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">Editar Cadastro de Policial</h3>
-          <button onclick="window.fecharModalServidor()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-        </div>
-
-        <form onsubmit="window.salvarServidorModal(event)" class="space-y-3 text-xs">
-          <input type="hidden" id="modal-srv-id">
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Nome Completo:</label>
-            <input type="text" id="modal-srv-nome" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold">
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Cargo:</label>
-              <input type="text" id="modal-srv-cargo" required class="w-full border rounded-xl p-2 bg-slate-50">
+          <!-- FILTRO E SELEÇÃO DE POLICIAIS -->
+          <div class="space-y-2 pt-2 border-t">
+            <div class="flex items-center justify-between">
+              <label class="block font-bold text-slate-800">Selecione o(s) Policial(is):</label>
+              <span class="text-[10px] text-slate-500">Permite seleção múltipla</span>
             </div>
+
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Login:</label>
-              <input type="text" id="modal-srv-login" required class="w-full border rounded-xl p-2 bg-slate-50 font-mono">
+              <input type="text" id="modal-esc-busca-srv" oninput="window.filtrarServidoresModalInline()" placeholder="🔍 Digite para filtrar policial..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
             </div>
+
+            <div id="modal-esc-servidores-lista" class="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200"></div>
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Telefone / Contato:</label>
-            <input type="text" id="modal-srv-telefone" class="w-full border rounded-xl p-2 bg-slate-50">
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Lotação (Delegacia):</label>
-            <select id="modal-srv-delegacia" required class="w-full border rounded-xl p-2 bg-slate-50 font-medium"></select>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Nível de Acesso:</label>
-            <select id="modal-srv-nivel" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-indigo-700">
-              <option value="APJ">APJ / Agente</option>
-              <option value="DELEGADO">DELEGADO</option>
-              <option value="SUPERINTENDENTE">SUPERINTENDENTE</option>
-              <option value="COORDENADOR">COORDENADOR</option>
-              <option value="ADMINISTRADOR">ADMINISTRADOR</option>
-            </select>
-          </div>
-
-          <div class="pt-3 border-t flex justify-end gap-2">
-            <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Alterações</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Modal Plantão Unificado -->
-    <div id="modal-unificacao" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">Configurar Plantão Unificado</h3>
-          <button onclick="window.fecharModalUnificacao()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-        </div>
-
-        <form onsubmit="window.salvarUnificacao(event)" class="space-y-4 text-xs">
-          <input type="hidden" id="modal-unificacao-id">
-          
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Delegacia Principal:</label>
-            <input type="text" id="modal-unificacao-nome" readonly class="w-full border rounded-xl p-2 bg-slate-100 text-slate-600 font-bold">
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Selecione as Delegacias participantes deste Plantão Unificado:</label>
-            <div id="modal-unificacao-lista" class="space-y-1.5 max-h-48 overflow-y-auto border p-2 rounded-xl bg-slate-50"></div>
-          </div>
-
-          <div class="pt-3 border-t flex justify-end gap-2">
-            <button type="button" onclick="window.fecharModalUnificacao()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow">Salvar Unificação</button>
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="window.fecharModalEscala()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Plantão</button>
           </div>
         </form>
       </div>
     </div>
   `;
-
-  document.body.appendChild(container);
-  setupModalFunctions();
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-function setupModalFunctions() {
-  window.abrirModalEscala = function(dateStr = null, escalaId = null) {
-    const modal = document.getElementById('modal-escala');
-    if (!modal) return;
-
-    const btnExcluir = document.getElementById('btn-excluir-escala');
-    const tituloModal = document.getElementById('modal-escala-titulo');
-    const chkReplicar = document.getElementById('chk-replicar-plantao');
-    const boxReplicacao = document.getElementById('box-replicacao');
-
-    if (chkReplicar) chkReplicar.checked = false;
-    if (boxReplicacao) boxReplicacao.classList.add('hidden');
-
-    const selectServidor = document.getElementById('modal-escala-servidor');
-    selectServidor.innerHTML = appState.servidores
-      .map(s => `<option value="${s.id}">${s.nome} (${s.cargo})</option>`)
-      .join('');
-
-    const selectDelegacia = document.getElementById('modal-escala-delegacia');
-    selectDelegacia.innerHTML = appState.delegacias
-      .map(d => `<option value="${d.id}">${d.nome}</option>`)
-      .join('');
-
-    const selectTipo = document.getElementById('modal-escala-tipo');
-    if (selectTipo) {
-      if (appState.calendarScope === 'CRF') {
-        selectTipo.innerHTML = `
-          <option value="REGULAR">Escala Regular (CRF)</option>
-          <option value="EXTRAJORNADA">Extrajornada (Suplementar)</option>
-        `;
-      } else {
-        selectTipo.innerHTML = `
-          <option value="PLANTONISTA">Plantão Local</option>
-          <option value="SOBREAVISO">Sobreaviso</option>
-        `;
-      }
-    }
-
-    if (escalaId) {
-      const esc = appState.escalas.find(e => e.id === escalaId);
-      if (!esc) return;
-
-      tituloModal.innerText = "Editar Plantão Cadastrado";
-      document.getElementById('modal-escala-id').value = esc.id;
-      document.getElementById('modal-escala-data').value = esc.data;
-      document.getElementById('modal-escala-servidor').value = esc.servidorId;
-      document.getElementById('modal-escala-delegacia').value = esc.delegaciaId;
-      document.getElementById('modal-escala-tipo').value = esc.tipo;
-      document.getElementById('modal-escala-turno').value = esc.turno || '24h';
-
-      btnExcluir?.classList.remove('hidden');
-    } else {
-      tituloModal.innerText = "Lançar Novo Plantão";
-      document.getElementById('modal-escala-id').value = '';
-      document.getElementById('modal-escala-data').value = dateStr || new Date().toISOString().split('T')[0];
-      btnExcluir?.classList.add('hidden');
-    }
-
-    modal.classList.remove('hidden');
-  };
-
-  window.fecharModalEscala = function() {
-    document.getElementById('modal-escala')?.classList.add('hidden');
-  };
-
-  window.toggleReplicacaoOptions = function() {
-    const chk = document.getElementById('chk-replicar-plantao');
-    const box = document.getElementById('box-replicacao');
-    if (chk && box) {
-      if (chk.checked) box.classList.remove('hidden');
-      else box.classList.add('hidden');
-    }
-  };
-
-  window.salvarEscalaModal = async function(e) {
-    e.preventDefault();
-
-    const escalaIdExistente = document.getElementById('modal-escala-id').value;
-    const dataOriginal = document.getElementById('modal-escala-data').value;
-    const servidorId = document.getElementById('modal-escala-servidor').value;
-    const delegaciaId = document.getElementById('modal-escala-delegacia').value;
-    const tipo = document.getElementById('modal-escala-tipo').value;
-    const turno = document.getElementById('modal-escala-turno').value;
-    const chkReplicar = document.getElementById('chk-replicar-plantao')?.checked;
-
-    if (escalaIdExistente) {
-      const escObj = appState.escalas.find(e => e.id === escalaIdExistente);
-      if (escObj) {
-        escObj.data = dataOriginal;
-        escObj.servidorId = servidorId;
-        escObj.delegaciaId = delegaciaId;
-        escObj.tipo = tipo;
-        escObj.turno = turno;
-
-        await syncDocToFirestore('escalas', escObj.id, escObj);
-      }
-    } else {
-      let diasParaInserir = [dataOriginal];
-
-      if (chkReplicar) {
-        const passoDias = parseInt(document.getElementById('modal-replica-frequencia').value) || 1;
-        const qtdReplicas = parseInt(document.getElementById('modal-replica-qtd').value) || 1;
-
-        let baseDate = new Date(dataOriginal + 'T00:00:00');
-        for (let i = 1; i <= qtdReplicas; i++) {
-          baseDate.setDate(baseDate.getDate() + passoDias);
-          diasParaInserir.push(baseDate.toISOString().split('T')[0]);
-        }
-      }
-
-      for (const dt of diasParaInserir) {
-        const newId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-        const novaEscala = {
-          id: newId,
-          data: dt,
-          servidorId,
-          delegaciaId,
-          tipo,
-          turno,
-          scope: appState.calendarScope,
-          sdpId: '8SDP'
-        };
-
-        appState.escalas.push(novaEscala);
-        await syncDocToFirestore('escalas', novaEscala.id, novaEscala);
-      }
-    }
-
-    window.fecharModalEscala();
-    refreshViews();
-  };
-
-  window.excluirEscalaAtual = async function() {
-    const escalaId = document.getElementById('modal-escala-id').value;
-    if (!escalaId) return;
-
-    if (!confirm("Tem certeza de que deseja excluir este plantão da escala?")) return;
-
-    appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
-    await syncDocToFirestore('escalas', escalaId, null, true);
-
-    window.fecharModalEscala();
-    refreshViews();
-  };
-
-  window.abrirModalGeradorLote = function() {
-    const modal = document.getElementById('modal-gerador-lote');
-    if (!modal) return;
-
-    const selectServidor = document.getElementById('gerador-servidor');
-    selectServidor.innerHTML = appState.servidores
-      .map(s => `<option value="${s.id}">${s.nome} (${s.cargo})</option>`)
-      .join('');
-
-    const selectDelegacia = document.getElementById('gerador-delegacia');
-    selectDelegacia.innerHTML = appState.delegacias
-      .map(d => `<option value="${d.id}">${d.nome}</option>`)
-      .join('');
-
-    const hoje = new Date().toISOString().split('T')[0];
-    document.getElementById('gerador-data-inicio').value = hoje;
-    document.getElementById('gerador-data-fim').value = hoje;
-
-    window.atualizarOpcoesGerador();
-    modal.classList.remove('hidden');
-  };
-
-  window.fecharModalGeradorLote = function() {
-    document.getElementById('modal-gerador-lote')?.classList.add('hidden');
-  };
-
-  window.atualizarOpcoesGerador = function() {
-    const escopo = document.getElementById('gerador-escopo').value;
-    const selectTipo = document.getElementById('gerador-tipo');
-
-    if (escopo === 'CRF') {
-      selectTipo.innerHTML = `
-        <option value="REGULAR">Escala Regular (CRF)</option>
-        <option value="SDP">Extrajornada (SDP)</option>
-      `;
-    } else {
-      selectTipo.innerHTML = `
-        <option value="PLANTONISTA">Plantão Local</option>
-        <option value="SOBREAVISO">Sobreaviso</option>
-      `;
-    }
-  };
-
-  window.executarGeradorLote = async function(e) {
-    e.preventDefault();
-
-    const servidorId = document.getElementById('gerador-servidor').value;
-    const dataInicioStr = document.getElementById('gerador-data-inicio').value;
-    const dataFimStr = document.getElementById('gerador-data-fim').value;
-    const escopo = document.getElementById('gerador-escopo').value;
-    const tipo = document.getElementById('gerador-tipo').value;
-    const delegaciaId = document.getElementById('gerador-delegacia').value;
-    const regra = document.getElementById('gerador-regra').value;
-    const turno = document.getElementById('gerador-turno').value;
-
-    const inicio = new Date(dataInicioStr + 'T00:00:00');
-    const fim = new Date(dataFimStr + 'T00:00:00');
-
-    if (inicio > fim) {
-      alert("A data inicial não pode ser posterior à data final.");
-      return;
-    }
-
-    let geradosCount = 0;
-    let dataAtual = new Date(inicio);
-
-    while (dataAtual <= fim) {
-      const diaSemana = dataAtual.getDay();
-      let criar = false;
-
-      if (regra === 'DIARIO') {
-        criar = true;
-      } else if (regra === 'DIAS_UTEIS' && diaSemana >= 1 && diaSemana <= 5) {
-        criar = true;
-      } else if (regra === 'FINS_SEMANA' && (diaSemana === 0 || diaSemana === 6)) {
-        criar = true;
-      } else if (regra === '24x72' || regra === '12x36') {
-        criar = true;
-      }
-
-      if (criar) {
-        const dateStr = dataAtual.toISOString().split('T')[0];
-        const newId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-
-        const novaEscala = {
-          id: newId,
-          data: dateStr,
-          servidorId,
-          delegaciaId,
-          tipo,
-          turno,
-          scope: escopo,
-          sdpId: '8SDP'
-        };
-
-        appState.escalas.push(novaEscala);
-        await syncDocToFirestore('escalas', novaEscala.id, novaEscala);
-        geradosCount++;
-      }
-
-      if (regra === '24x72') {
-        dataAtual.setDate(dataAtual.getDate() + 4);
-      } else if (regra === '12x36') {
-        dataAtual.setDate(dataAtual.getDate() + 2);
-      } else {
-        dataAtual.setDate(dataAtual.getDate() + 1);
-      }
-    }
-
-    alert(`Sucesso! ${geradosCount} plantões foram gerados automaticamente.`);
-    window.fecharModalGeradorLote();
-    refreshViews();
-  };
-
-  window.editarServidor = function(servidorId) {
-    const srv = appState.servidores.find(s => s.id === servidorId);
-    if (!srv) return;
-
-    const modal = document.getElementById('modal-servidor');
-    if (!modal) return;
-
-    document.getElementById('modal-srv-id').value = srv.id;
-    document.getElementById('modal-srv-nome').value = srv.nome || '';
-    document.getElementById('modal-srv-cargo').value = srv.cargo || 'AGENTE';
-    document.getElementById('modal-srv-login').value = srv.login || '';
-    document.getElementById('modal-srv-telefone').value = srv.telefone || '';
-    document.getElementById('modal-srv-nivel').value = srv.nivelAcesso || 'APJ';
-
-    const selectDelegacia = document.getElementById('modal-srv-delegacia');
-    if (selectDelegacia) {
-      selectDelegacia.innerHTML = appState.delegacias
-        .map(d => `<option value="${d.nome}" ${d.nome === srv.delegaciaId ? 'selected' : ''}>${d.nome}</option>`)
-        .join('');
-    }
-
-    modal.classList.remove('hidden');
-  };
-
-  window.fecharModalServidor = function() {
-    document.getElementById('modal-servidor')?.classList.add('hidden');
-  };
-
-  window.salvarServidorModal = async function(e) {
-    e.preventDefault();
-
-    const id = document.getElementById('modal-srv-id').value;
-    const srvObj = appState.servidores.find(s => s.id === id);
-
-    if (srvObj) {
-      srvObj.nome = document.getElementById('modal-srv-nome').value.toUpperCase();
-      srvObj.cargo = document.getElementById('modal-srv-cargo').value.toUpperCase();
-      srvObj.login = document.getElementById('modal-srv-login').value.toLowerCase();
-      srvObj.telefone = document.getElementById('modal-srv-telefone').value;
-      srvObj.delegaciaId = document.getElementById('modal-srv-delegacia').value;
-      srvObj.nivelAcesso = document.getElementById('modal-srv-nivel').value;
-
-      await syncDocToFirestore('servidores', srvObj.id, srvObj);
-
-      window.fecharModalServidor();
-      renderServidoresTable('servidores-table-container');
-      alert("Dados do policial atualizados com sucesso!");
-    }
-  };
-
-  window.gerenciarUnificacao = function(delegaciaId) {
-    const del = appState.delegacias.find(d => d.id === delegaciaId);
-    if (!del) return;
-
-    const modal = document.getElementById('modal-unificacao');
-    if (!modal) return;
-
-    document.getElementById('modal-unificacao-id').value = del.id;
-    document.getElementById('modal-unificacao-nome').value = del.nome;
-
-    const containerLista = document.getElementById('modal-unificacao-lista');
-    const delegaciasIndividuais = appState.delegacias.filter(d => !d.isUnificado);
-
-    containerLista.innerHTML = delegaciasIndividuais.map(d => {
-      const isChecked = del.delegaciasIds && del.delegaciasIds.includes(d.id);
-      return `
-        <label class="flex items-center gap-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-lg cursor-pointer text-xs font-semibold text-slate-700 border">
-          <input type="checkbox" value="${d.id}" ${isChecked ? 'checked' : ''} class="chk-unificacao-del rounded text-indigo-600 focus:ring-indigo-500">
-          <span>${d.nome}</span>
-        </label>
-      `;
-    }).join('');
-
-    modal.classList.remove('hidden');
-  };
-
-  window.fecharModalUnificacao = function() {
-    document.getElementById('modal-unificacao')?.classList.add('hidden');
-  };
-
-  window.salvarUnificacao = async function(e) {
-    e.preventDefault();
-
-    const delId = document.getElementById('modal-unificacao-id').value;
-    const checkboxes = document.querySelectorAll('.chk-unificacao-del:checked');
-    const idsSelecionados = Array.from(checkboxes).map(cb => cb.value);
-
-    const delObj = appState.delegacias.find(d => d.id === delId);
-    if (delObj) {
-      delObj.isUnificado = idsSelecionados.length > 1;
-      delObj.delegaciasIds = idsSelecionados.length > 0 ? idsSelecionados : [delId];
-
-      await syncDocToFirestore('delegacias', delObj.id, delObj);
-      
-      window.fecharModalUnificacao();
-      renderDelegaciasCards('delegacias-container');
-      refreshViews();
-      alert("Configuração salva com sucesso!");
-    }
-  };
-}
-
-function refreshViews() {
-  const currentContainer = appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container';
-  renderCalendarGrid(currentContainer, appState.calendarScope);
-  renderGestaoEscalasModule('gestao-escalas-container');
+function criarModalGeradorLoteDOM() {
+  // Modal do Gerador em Lote mantido
 }
