@@ -6,8 +6,8 @@ export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // Limpeza preventiva de delegacias falsas (logins) no appState
-  limparDelegaciasInvalidas();
+  // Executa a limpeza física de logins/admin gravados por engano na coleção delegacias do Firestore
+  limparDelegaciasInvalidasNoBanco();
 
   const subdivisoesUnicas = [...new Set(
     (appState.servidores || [])
@@ -43,7 +43,7 @@ export function renderServidoresTable(containerId) {
             <input type="file" id="csv-file-input-servidores" accept=".csv" class="hidden" onchange="window.processarAtualizacaoCSV(event)">
           </label>
           <button onclick="window.excluirTodosServidores()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            🗑️ Excluir Todos
+            🗑️ Excluir Todos Servidores
           </button>
         </div>
       </div>
@@ -97,19 +97,29 @@ export function renderServidoresTable(containerId) {
   window.filtrarServidoresInline();
 }
 
-function limparDelegaciasInvalidas() {
+// Remove fisicamente do Firestore qualquer delegacia criada com nome/login de usuário
+async function limparDelegaciasInvalidasNoBanco() {
   if (!appState.delegacias) return;
 
-  // Filtra e remove delegacias que iniciam com "del." ou "apj." (logins inseridos por engano)
   const delegaciasValidas = [];
   for (const del of appState.delegacias) {
-    const nomeNorm = (del.nome || '').toLowerCase().trim();
-    if (nomeNorm.startsWith('del.') || nomeNorm.startsWith('apj.')) {
-      syncDocToFirestore('delegacias', del.id, null, true);
+    const nome = (del.nome || '').toLowerCase().trim();
+    
+    // Verifica se é um login ou texto inválido gravado por erro de coluna
+    const isLogin = nome === 'admin' || 
+                    nome === 'login' || 
+                    nome === 'cargo' || 
+                    nome.startsWith('del.') || 
+                    nome.startsWith('apj.');
+
+    if (isLogin) {
+      // Exclui diretamente da coleção do Firestore
+      await syncDocToFirestore('delegacias', del.id, null, true);
     } else {
       delegaciasValidas.push(del);
     }
   }
+
   appState.delegacias = delegaciasValidas;
 }
 
@@ -197,6 +207,7 @@ window.processarAtualizacaoCSV = function(event) {
     try {
       const texto = e.target.result;
       const { atualizados, criados } = await processCSVImportComUpsert(texto);
+      await limparDelegaciasInvalidasNoBanco();
       alert(`Sucesso!\n- ${atualizados} servidores tiveram sua lotação e subdivisão corrigidas.\n- ${criados} novos policiais foram adicionados.`);
       renderServidoresTable('servidores-table-container');
     } catch (err) {
@@ -211,7 +222,6 @@ export async function processCSVImportComUpsert(csvText) {
   let atualizados = 0;
   let criados = 0;
 
-  // Índices padrão
   let idxCargo = -1, idxNome = -1, idxSdp = -1, idxDelegacia = -1, idxTel = -1;
 
   for (let i = 0; i < lines.length; i++) {
@@ -221,7 +231,7 @@ export async function processCSVImportComUpsert(csvText) {
     const sep = line.includes(';') ? ';' : ',';
     const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
 
-    // Identificação dinâmica de colunas pelo cabeçalho
+    // Identificação de colunas exatas pelo cabeçalho do CSV
     if (i === 0 || idxNome === -1) {
       if (parts.includes('CARGO') || parts.includes('NOME')) {
         idxCargo = parts.indexOf('CARGO');
@@ -242,12 +252,15 @@ export async function processCSVImportComUpsert(csvText) {
 
       if (!nome || normalizeText(nome) === 'nome' || normalizeText(cargo) === 'cargo') continue;
 
-      // Validação de segurança: ignora se por algum motivo for um login (ex: del.mltrevizan)
-      if (delegaciaNome.toLowerCase().startsWith('del.') || delegaciaNome.toLowerCase().startsWith('apj.')) {
-        continue;
-      }
+      // Ignora logins gravados por engano
+      const isDelegaciaInvalida = delegaciaNome.toLowerCase() === 'admin' || 
+                                  delegaciaNome.toLowerCase() === 'login' || 
+                                  delegaciaNome.toLowerCase().startsWith('del.') || 
+                                  delegaciaNome.toLowerCase().startsWith('apj.');
 
-      // Localiza ou cadastra a unidade correspondente
+      if (isDelegaciaInvalida) continue;
+
+      // Localiza ou cadastra a unidade válida no banco
       let delObj = (appState.delegacias || []).find(d => 
         normalizeText(d.nome) === normalizeText(delegaciaNome)
       );
@@ -325,8 +338,6 @@ window.abrirModalServidor = function(servidorId = null) {
     criarModalServidorDOM();
     modal = document.getElementById('modal-servidor');
   }
-
-  limparDelegaciasInvalidas();
 
   const inputId = document.getElementById('modal-srv-id');
   const inputNome = document.getElementById('modal-srv-nome');
