@@ -1,5 +1,5 @@
 // src/modals.js
-import { appState, normalizeText } from './state.js';
+import { appState } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
 export function initModalsModule() {
@@ -7,7 +7,7 @@ export function initModalsModule() {
   criarModalGeradorLoteDOM();
 }
 
-export window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTarget = 'CRF') {
+window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTarget = 'CRF') {
   let modal = document.getElementById('modal-escala');
   if (!modal) {
     criarModalEscalaDOM();
@@ -84,11 +84,11 @@ export window.abrirModalEscala = function(dataSugerida = null, escalaId = null, 
   modal.classList.remove('hidden');
 };
 
-export window.fecharModalEscala = function() {
+window.fecharModalEscala = function() {
   document.getElementById('modal-escala')?.classList.add('hidden');
 };
 
-export window.filtrarServidoresModalInline = function() {
+window.filtrarServidoresModalInline = function() {
   const busca = document.getElementById('modal-esc-busca-srv')?.value?.toLowerCase() || '';
   const cards = document.querySelectorAll('.srv-checkbox-item');
 
@@ -135,7 +135,7 @@ function renderListaServidoresCheckboxes(idsSelecionados = []) {
   }).join('');
 }
 
-export window.salvarEscalaModal = async function(e) {
+window.salvarEscalaModal = async function(e) {
   e.preventDefault();
 
   const id = document.getElementById('modal-esc-id').value;
@@ -300,5 +300,5 @@ function criarModalEscalaDOM() {
 }
 
 function criarModalGeradorLoteDOM() {
-  // Modal do Gerador em Lote mantido
+  // Estrutura do gerador em lote
 }
