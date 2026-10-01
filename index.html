@@ -87,16 +87,16 @@
       </div>
     </header>
 
-    <!-- Barra de Navegação por Abas (7 Abas) -->
+    <!-- Barra de Navegação por Abas (Nomes Atualizados) -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm">
-        <span>📅</span> Escala CRF / Extrajornada
+        <span>📅</span> Escala CRF
       </button>
       <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>🏢</span> Escala por Delegacia
       </button>
       <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
-        <span>⚙️</span> Gestão CRF & Extrajornada
+        <span>⚙️</span> Gestão CRF
       </button>
       <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>⚙️</span> Gestão por Delegacias
@@ -105,7 +105,7 @@
         <span>🎉</span> Feriados
       </button>
       <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
-        <span>🚔</span> Delegacias & Unificações
+        <span>🚔</span> Delegacias
       </button>
       <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
         <span>👮</span> Servidores
@@ -114,32 +114,32 @@
 
     <!-- CONTEÚDO DAS ABAS -->
 
-    <!-- Aba 1: Escala CRF (Grade Visual) -->
+    <!-- Aba 1: Escala CRF -->
     <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
-    <!-- Aba 2: Escala por Delegacia (Grade Visual) -->
+    <!-- Aba 2: Escala por Delegacia -->
     <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-delegacia-container"></div>
     </main>
 
-    <!-- Aba 3: MÓDULO DE GESTÃO CRF & EXTRAJORNADA -->
+    <!-- Aba 3: Gestão CRF -->
     <main id="tab-content-gestao-crf" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-crf-container"></div>
     </main>
 
-    <!-- Aba 4: MÓDULO DE GESTÃO DE DELEGACIAS & UNIFICADOS -->
+    <!-- Aba 4: Gestão por Delegacias -->
     <main id="tab-content-gestao-del" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-delegacias-container"></div>
     </main>
 
-    <!-- Aba 5: MÓDULO DE FERIADOS -->
+    <!-- Aba 5: Feriados -->
     <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="feriados-container"></div>
     </main>
 
-    <!-- Aba 6: Gestão de Unidades -->
+    <!-- Aba 6: Delegacias -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="delegacias-container"></div>
     </main>
@@ -151,7 +151,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v2.5.7) -->
-  <script type="module" src="./src/app.js?v=2.5.7"></script>
+  <!-- Script Principal ES6 (v2.6.2) -->
+  <script type="module" src="./src/app.js?v=2.6.2"></script>
 </body>
 </html>
