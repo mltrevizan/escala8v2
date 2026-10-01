@@ -57,13 +57,13 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
-          ${scope === 'CRF' ? '🏛️ Escala Geral CRF' : '🏢 Escala por Delegacia / Plantão Unificado'}
+          ${scope === 'CRF' ? '🏛️ Escala Geral CRF' : '🏢 Escala por Delegacia'}
         </span>
       </div>
 
       ${scope === 'DELEGACIA' ? `
         <div class="flex items-center gap-2">
-          <label class="text-xs font-medium text-slate-600">Unidade:</label>
+          <label class="text-xs font-medium text-slate-600">Unidade / Plantão:</label>
           <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1.5 shadow-xs">
             ${delegaciasOptionsEscala}
           </select>
@@ -131,8 +131,10 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       
       if (scope === 'DELEGACIA') {
         const delObj = appState.delegacias.find(d => d.id === selectedDelegaciaId);
-        if (delObj && delObj.delegaciasIds) {
-          return delObj.delegaciasIds.includes(e.delegaciaId);
+        
+        // Verifica se pertence ao ID direto ou ao grupo de delegacias unificadas
+        if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
+          return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
         return e.delegaciaId === selectedDelegaciaId;
       }
@@ -187,19 +189,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      html += renderBalaoPeriodo(
-        'DIURNO', 
-        '07h30 - 19h30', 
-        diurnoEscalas, 
-        'bg-amber-100/90 border-amber-300 text-amber-950 shadow-xs'
-      );
-
-      html += renderBalaoPeriodo(
-        'NOTURNO', 
-        '19h30 - 07h30', 
-        noturnoEscalas, 
-        'bg-indigo-50 border-indigo-200 text-indigo-950 shadow-xs'
-      );
+      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-amber-100/90 border-amber-300 text-amber-950 shadow-xs');
+      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-indigo-50 border-indigo-200 text-indigo-950 shadow-xs');
     } else {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
@@ -276,24 +267,21 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     `;
   }
 
-  const ordenarEscalas = (lista) => {
-    return lista.sort((a, b) => {
-      const srvA = appState.servidores.find(s => s.id === a.servidorId);
-      const srvB = appState.servidores.find(s => s.id === b.servidorId);
+  const ordenadas = [...escalasArray].sort((a, b) => {
+    const srvA = appState.servidores.find(s => s.id === a.servidorId);
+    const srvB = appState.servidores.find(s => s.id === b.servidorId);
 
-      const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
-      const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
+    const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
+    const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
 
-      if (isExtraA !== isExtraB) return isExtraA - isExtraB;
+    if (isExtraA !== isExtraB) return isExtraA - isExtraB;
 
-      const isDelA = srvA?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
-      const isDelB = srvB?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
+    const isDelA = srvA?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
+    const isDelB = srvB?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
 
-      return isDelA - isDelB;
-    });
-  };
+    return isDelA - isDelB;
+  });
 
-  const ordenadas = ordenarEscalas([...escalasArray]);
   const idsString = ordenadas.map(e => e.id).join(',');
 
   let listaHtml = ordenadas.map(esc => {
