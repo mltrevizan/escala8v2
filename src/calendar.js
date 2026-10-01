@@ -355,11 +355,13 @@ window.mudarFiltroDelCrf = function(valor) {
 };
 
 function setupCalendarEvents(containerId, scope) {
+  // Troca de Delegacia Selecionada no topo
   document.getElementById('select-calendar-delegacia')?.addEventListener('change', (e) => {
     appState.selectedDelegaciaId = e.target.value;
     renderCalendarGrid(containerId, scope);
   });
 
+  // Botão Mês Anterior
   document.getElementById('btn-prev-month')?.addEventListener('click', () => {
     if (appState.currentMonth === 0) {
       appState.currentMonth = 11;
@@ -367,9 +369,11 @@ function setupCalendarEvents(containerId, scope) {
     } else {
       appState.currentMonth--;
     }
+    // Garante a re-renderização mantendo o escopo ativo (CRF ou DELEGACIA)
     renderCalendarGrid(containerId, scope);
   });
 
+  // Botão Próximo Mês
   document.getElementById('btn-next-month')?.addEventListener('click', () => {
     if (appState.currentMonth === 11) {
       appState.currentMonth = 0;
@@ -377,10 +381,10 @@ function setupCalendarEvents(containerId, scope) {
     } else {
       appState.currentMonth++;
     }
+    // Garante a re-renderização mantendo o escopo ativo (CRF ou DELEGACIA)
     renderCalendarGrid(containerId, scope);
   });
 }
-
 // TOOLTIP FLUTUANTE DE GRUPO (CRF)
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
