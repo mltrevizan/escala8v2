@@ -31,9 +31,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  // Consolida e padroniza as SDPs únicas (evita duplicatas como 8SDP / 8ª SDP)
-  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
-  
+  // Padronização rigorosa de nomes de SDPs (evita duplicatas e falsos positivos)
   const padronizarSdpStr = (txt) => {
     if (!txt) return '';
     let norm = txt.trim();
@@ -43,13 +41,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     return norm;
   };
 
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
   (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(padronizarSdpStr(d.subdivisao)); });
   (appState.servidores || []).forEach(s => { if (s.subdivisao) setSdps.add(padronizarSdpStr(s.subdivisao)); });
   (appState.escalas || []).forEach(e => { if (e.sdpId) setSdps.add(padronizarSdpStr(e.sdpId)); });
 
   const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs / Regionais</option>`;
+  // RÓTULO ATUALIZADO: "Todas as SDPs"
+  let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs</option>`;
   sdpsUnicas.forEach(sdp => {
     sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
   });
@@ -157,17 +157,17 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
+    // CORREÇÃO CRÍTICA NO FILTRO DE SDP
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
         escalasDoDia = escalasDoDia.filter(e => {
           const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
           const del = (appState.delegacias || []).find(d => d.id === e.delegaciaId);
 
-          const sdpEscala = padronizarSdpStr(e.sdpId);
-          const sdpDel = padronizarSdpStr(del?.subdivisao);
-          const sdpSrv = padronizarSdpStr(srv?.subdivisao);
+          const sdpDel = del?.subdivisao ? padronizarSdpStr(del.subdivisao) : '';
+          const sdpSrv = srv?.subdivisao ? padronizarSdpStr(srv.subdivisao) : '';
 
-          return sdpEscala === sdpFiltroAtual || sdpDel === sdpFiltroAtual || sdpSrv === sdpFiltroAtual;
+          return sdpDel === sdpFiltroAtual || sdpSrv === sdpFiltroAtual;
         });
       }
 
@@ -218,7 +218,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
       } else {
         escalasDoDia.forEach(esc => {
-          const srv = appState.servidores.find(s => s.id === esc.servidorId);
+          const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
           const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
           const prefixo = isDel ? 'DEL.' : 'APJ';
           const nomeCurto = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
@@ -287,8 +287,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   }
 
   const ordenadas = [...escalasArray].sort((a, b) => {
-    const srvA = appState.servidores.find(s => s.id === a.servidorId);
-    const srvB = appState.servidores.find(s => s.id === b.servidorId);
+    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
+    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
 
     const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
     const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
@@ -304,7 +304,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   const idsString = ordenadas.map(e => e.id).join(',');
 
   let listaHtml = ordenadas.map(esc => {
-    const srv = appState.servidores.find(s => s.id === esc.servidorId);
+    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
     const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
@@ -383,109 +383,78 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// Modal Responsivo para Móvel
-window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
-  let modal = document.getElementById('modal-detalhes-turno');
-  if (!modal) {
-    criarModalDetalhesTurnoDOM();
-    modal = document.getElementById('modal-detalhes-turno');
-  }
+// CORREÇÃO E PROTEÇÃO TOTAL DA TOOLTIP FLUTUANTE
+window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
+  if (window.innerWidth < 768) return;
 
-  const ids = idsString.split(',');
-  const escalas = appState.escalas.filter(e => ids.includes(e.id));
+  try {
+    const ids = idsString.split(',');
+    const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
 
-  const tituloEl = document.getElementById('modal-turno-titulo');
-  const corpoEl = document.getElementById('modal-turno-corpo');
+    let content = `
+      <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
+        <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
+          <span>${titulo}</span>
+          <span class="text-[10px] font-mono text-slate-500">${horario}</span>
+        </div>
+    `;
 
-  if (tituloEl) tituloEl.innerHTML = `${titulo} <span class="text-xs font-mono font-normal text-slate-500">(${horario})</span>`;
-
-  let htmlContent = '';
-
-  if (escalas.length === 0) {
-    htmlContent = `<p class="text-xs text-slate-500 italic p-4 text-center">Nenhum policial escalado para este período.</p>`;
-  } else {
     escalas.forEach(esc => {
-      const srv = appState.servidores.find(s => s.id === esc.servidorId);
-      const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-      const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
-      const tagRotulo = isSobreaviso ? 'SOBREAVISO' : (isExtra ? 'EXTRAJORNADA' : 'PLANTÃO');
-      const tagColor = isSobreaviso ? 'bg-amber-600 text-white' : (isExtra ? 'bg-purple-600 text-white' : 'bg-sky-600 text-white');
-
-      const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
-
-      htmlContent += `
-        <div class="p-3 bg-slate-50 border rounded-xl space-y-1 font-sans">
-          <div class="font-bold text-slate-900 text-xs flex items-center justify-between">
+      content += `
+        <div class="pt-1 border-t border-slate-100 space-y-0.5">
+          <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
             <span>${srv?.nome || 'Não informado'}</span>
-            <span class="text-[9px] ${tagColor} px-1.5 py-0.5 rounded font-extrabold uppercase">${tagRotulo}</span>
+            ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
           </div>
-          <div class="text-xs text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-          <div class="text-xs text-slate-600"><b>Lotação / SDP:</b> ${del?.nome || 'CRF'}</div>
-          <div class="text-xs text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
-          <div class="text-xs text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
-          <div class="text-xs text-slate-600"><b>Contato/Tel:</b> ${srv?.telefone || '-'}</div>
+          <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
+          <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || srv?.delegaciaNome || 'CRF'}</div>
+          <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
         </div>
       `;
     });
+
+    content += `</div>`;
+    exibirElementoTooltip(event, content);
+  } catch (err) {
+    console.error("Erro tooltip grupo:", err);
   }
-
-  if (corpoEl) corpoEl.innerHTML = htmlContent;
-  modal.classList.remove('hidden');
 };
-
-window.fecharModalDetalhesTurno = function() {
-  document.getElementById('modal-detalhes-turno')?.classList.add('hidden');
-};
-
-function criarModalDetalhesTurnoDOM() {
-  const modalHTML = `
-    <div id="modal-detalhes-turno" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
-        <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <h3 id="modal-turno-titulo" class="font-black text-slate-900 text-sm"></h3>
-          <button onclick="window.fecharModalDetalhesTurno()" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
-        </div>
-
-        <div id="modal-turno-corpo" class="space-y-2 overflow-y-auto flex-1 pr-1"></div>
-
-        <div class="pt-2 border-t flex justify-end shrink-0">
-          <button onclick="window.fecharModalDetalhesTurno()" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs">Fechar</button>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
 
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
 
-  const esc = appState.escalas.find(e => e.id === escalaId);
-  if (!esc) return;
+  try {
+    const esc = (appState.escalas || []).find(e => e.id === escalaId);
+    if (!esc) return;
 
-  const srv = appState.servidores.find(s => s.id === esc.servidorId);
-  const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
-  const isSobreaviso = esc.tipo === 'SOBREAVISO';
+    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
-  const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
+    const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
 
-  const content = `
-    <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
-      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
-        <span>${srv?.nome || 'Não informado'}</span>
-        <span class="text-[8px] ${isSobreaviso ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+    const content = `
+      <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
+        <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
+          <span>${srv?.nome || 'Não informado'}</span>
+          <span class="text-[8px] ${isSobreaviso ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+        </div>
+        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
+        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || srv?.delegaciaNome || 'Delegacia'}</div>
+        <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
+        <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
+        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
       </div>
-      <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-      <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
-      <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
-      <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
-      <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
-    </div>
-  `;
+    `;
 
-  exibirElementoTooltip(event, content);
+    exibirElementoTooltip(event, content);
+  } catch (err) {
+    console.error("Erro tooltip escala:", err);
+  }
 };
 
 function calcularHorariosEntradaSaida(escala, delObj) {
@@ -553,17 +522,12 @@ function exibirElementoTooltip(event, htmlContent) {
   
   const tooltipRect = tooltip.getBoundingClientRect();
   const screenWidth = window.innerWidth;
-  const screenHeight = window.innerHeight;
 
   let posX = event.clientX + 14;
   let posY = event.clientY + 14;
 
   if (posX + tooltipRect.width > screenWidth - 10) {
     posX = event.clientX - tooltipRect.width - 10;
-  }
-
-  if (posY + tooltipRect.height > screenHeight - 10) {
-    posY = event.clientY - tooltipRect.height - 10;
   }
 
   tooltip.style.left = `${Math.max(10, posX)}px`;
