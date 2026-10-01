@@ -2,20 +2,20 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore, fetchCollection } from './db.js';
 
-export async function initFeriasModule() {
+export async function renderFeriasModule(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Busca do banco apenas se o appState de ferias ainda não tiver sido populado
   if (!appState.ferias || appState.ferias.length === 0) {
-    const doBanco = await fetchCollection('ferias');
-    if (doBanco && doBanco.length > 0) {
-      appState.ferias = doBanco;
-    } else {
+    try {
+      const doBanco = await fetchCollection('ferias');
+      appState.ferias = doBanco || [];
+    } catch (e) {
+      console.error("Erro ao carregar férias:", e);
       appState.ferias = appState.ferias || [];
     }
   }
-}
-
-export function renderFeriasModule(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
 
   let html = `
     <!-- Cabeçalho de Controle e Ações -->
@@ -44,7 +44,7 @@ export function renderFeriasModule(containerId) {
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏷️ Tipo de Afastamento:</label>
+          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏷️️ Tipo de Afastamento:</label>
           <select id="filtro-ferias-tipo" onchange="window.filtrarTabelaFeriasInline()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-bold text-slate-800">
             <option value="TODOS">Todos os Tipos</option>
             <option value="FERIAS">Férias Regulamentares</option>
@@ -181,7 +181,6 @@ window.abrirModalFerias = function(feriasId = null) {
   const inputFim = document.getElementById('modal-fer-fim');
   const inputObs = document.getElementById('modal-fer-obs');
 
-  // Preenche lista de servidores (excluindo administradores)
   const listaSrv = (appState.servidores || [])
     .filter(s => {
       const n = normalizeText(s.nome || '');
