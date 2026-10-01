@@ -16,40 +16,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // Carrega dados iniciais das coleções principais
-    const [delegacias, servidores, escalas, feriados] = await Promise.all([
-      fetchCollection('delegacias'),
-      fetchCollection('servidores'),
-      fetchCollection('escalas'),
-      fetchCollection('feriados')
-    ]);
+    // Busca todas as coleções do banco e popula o appState global
+    await carregarTodasColecoes();
 
-    appState.delegacias = delegacias || [];
-    appState.servidores = servidores || [];
-    appState.escalas = escalas || [];
-    appState.feriados = feriados || [];
-
-    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
-      appState.selectedDelegaciaId = appState.delegacias[0].id;
-    }
-
+    // Inicializa modais do DOM
     initModalsModule();
 
     if (statusEl) {
       statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
     }
 
+    // Renderiza a tela inicial do calendário CRF
     renderCalendarGrid('calendar-crf-container', 'CRF');
 
   } catch (err) {
     console.error("Erro na inicialização do aplicativo:", err);
     if (statusEl) {
-      statusEl.innerHTML = `<span class="text-xs bg-rose-100 text-rose-800 px-3 py-1 rounded-full font-bold">⚠️️ Erro de Conexão</span>`;
+      statusEl.innerHTML = `<span class="text-xs bg-rose-100 text-rose-800 px-3 py-1 rounded-full font-bold">⚠️ Erro de Conexão</span>`;
     }
   }
 });
 
-window.switchTab = function(tabId) {
+async function carregarTodasColecoes() {
+  const [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
+    fetchCollection('delegacias'),
+    fetchCollection('servidores'),
+    fetchCollection('escalas'),
+    fetchCollection('feriados'),
+    fetchCollection('ferias')
+  ]);
+
+  appState.delegacias = delegacias || [];
+  appState.servidores = servidores || [];
+  appState.escalas = escalas || [];
+  appState.feriados = feriados || [];
+  appState.ferias = ferias || [];
+
+  if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
+    appState.selectedDelegaciaId = appState.delegacias[0].id;
+  }
+}
+
+// Troca de Abas
+window.switchTab = async function(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
