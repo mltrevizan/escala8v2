@@ -1,45 +1,65 @@
 // src/db.js
-import { firebaseConfig } from './config.js';
 import { appState } from './state.js';
 
-let db = null;
+// Inicializa o Firestore caso não tenha sido instanciado no HTML
+const db = firebase.firestore();
 
-export function initFirebase() {
-  if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    console.log("🔥 Firebase Inicializado com sucesso na v2!");
-  } else if (typeof firebase !== 'undefined') {
-    db = firebase.firestore();
-  }
-}
-
-export async function syncDocToFirestore(collectionName, docId, dataObject, isDelete = false) {
-  if (!db) return;
-  try {
-    const docRef = db.collection(collectionName).doc(String(docId));
-    if (isDelete) {
-      await docRef.delete();
-      console.log(`[Firestore DB] Documento ${docId} removido de '${collectionName}'`);
-    } else {
-      const cleanObj = JSON.parse(JSON.stringify(dataObject));
-      await docRef.set(cleanObj, { merge: true });
-      console.log(`[Firestore DB] Documento ${docId} gravado em '${collectionName}'`);
-    }
-  } catch (err) {
-    console.error(`[Firestore Error] Erro ao gravar em '${collectionName}':`, err);
-  }
-}
-
+/**
+ * Busca todos os documentos de uma coleção no Firestore
+ * e insere no appState caso exista o array.
+ */
 export async function fetchCollection(collectionName) {
-  if (!db) return [];
   try {
     const snapshot = await db.collection(collectionName).get();
-    const items = [];
-    snapshot.forEach(doc => items.push({ ...doc.data(), id: doc.id }));
-    return items;
-  } catch (err) {
-    console.error(`[Firestore Error] Erro ao buscar '${collectionName}':`, err);
+    const docs = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    if (appState && appState[collectionName] !== undefined) {
+      appState[collectionName] = docs;
+    }
+
+    return docs;
+  } catch (error) {
+    console.error(`Erro ao buscar a coleção ${collectionName}:`, error);
     return [];
   }
+}
+
+/**
+ * Sincroniza (Salva/Edita/Exclui) um documento no Firestore
+ */
+export async function syncDocToFirestore(collectionName, docId, data, isDelete = false) {
+  try {
+    const ref = db.collection(collectionName).doc(docId);
+    if (isDelete) {
+      await ref.delete();
+    } else {
+      await ref.set(data, { merge: true });
+    }
+  } catch (error) {
+    console.error(`Erro ao sincronizar documento ${docId} em ${collectionName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Configura escutadores em tempo real para sincronização instantânea
+ */
+export function listenToCollection(collectionName, callback) {
+  return db.collection(collectionName).onSnapshot(snapshot => {
+    const docs = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    if (appState && appState[collectionName] !== undefined) {
+      appState[collectionName] = docs;
+    }
+
+    if (callback) callback(docs);
+  }, err => {
+    console.error(`Erro no listener da coleção ${collectionName}:`, err);
+  });
 }
