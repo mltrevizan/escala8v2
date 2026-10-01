@@ -6,7 +6,7 @@
   
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚔</text></svg>">
 
-  <!-- PREVENÇÃO DE CACHE -->
+  <!-- PREVENÇÃO RIGOROSA DE CACHE -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -32,7 +32,7 @@
     }
   </script>
 
-  <!-- REGRAS TIPOGRÁFICAS EXATAS DA V1 -->
+  <!-- REGRAS TIPOGRÁFICAS -->
   <style>
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -87,28 +87,31 @@
       </div>
     </header>
 
-    <!-- Barra de Navegação por Abas (Nomes Atualizados) -->
+    <!-- Barra de Navegação por Abas (Férias posicionado após Servidores) -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
-      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm">
+      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm cursor-pointer">
         <span>📅</span> Escala CRF
       </button>
-      <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>🏢</span> Escala por Delegacia
       </button>
-      <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>⚙️</span> Gestão CRF
       </button>
-      <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>⚙️</span> Gestão por Delegacias
       </button>
-      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>🎉</span> Feriados
       </button>
-      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>🚔</span> Delegacias
       </button>
-      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100">
+      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>👮</span> Servidores
+      </button>
+      <button id="tab-btn-ferias" onclick="window.switchTab('ferias')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
+        <span>🏖️</span> Férias
       </button>
     </nav>
 
@@ -149,9 +152,14 @@
       <div id="servidores-table-container"></div>
     </main>
 
+    <!-- Aba 8: Férias (Posicionada após Servidores) -->
+    <main id="tab-content-ferias" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div id="ferias-container"></div>
+    </main>
+
   </div>
 
-  <!-- Script Principal ES6 (v2.6.2) -->
-  <script type="module" src="./src/app.js?v=2.7.0"></script>
+  <!-- Script Principal ES6 (v2.8.1) -->
+  <script type="module" src="./src/app.js?v=2.8.1"></script>
 </body>
 </html>
