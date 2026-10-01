@@ -32,7 +32,7 @@
     }
   </script>
 
-  <!-- REGRAS TIPOGRÁFICAS -->
+  <!-- REGRAS TIPOGRÁFICAS DE PADRONIZAÇÃO -->
   <style>
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -71,6 +71,21 @@
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- INICIALIZAÇÃO OBRIGATÓRIA DO FIREBASE -->
+  <script>
+    if (!firebase.apps.length) {
+      const firebaseConfig = {
+        apiKey: "AIzaSyDummyKeyForFirestoreInit",
+        authDomain: "escala-crf.firebaseapp.com",
+        projectId: "escala-crf",
+        storageBucket: "escala-crf.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:abcdef"
+      };
+      firebase.initializeApp(firebaseConfig);
+    }
+  </script>
 </head>
 <body class="h-full flex flex-col font-sans p-3 sm:p-6 text-slate-800 bg-slate-100/80">
 
@@ -87,7 +102,7 @@
       </div>
     </header>
 
-    <!-- Barra de Navegação por Abas (Férias posicionado após Servidores) -->
+    <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm cursor-pointer">
         <span>📅</span> Escala CRF
@@ -117,49 +132,41 @@
 
     <!-- CONTEÚDO DAS ABAS -->
 
-    <!-- Aba 1: Escala CRF -->
     <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
-    <!-- Aba 2: Escala por Delegacia -->
     <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-delegacia-container"></div>
     </main>
 
-    <!-- Aba 3: Gestão CRF -->
     <main id="tab-content-gestao-crf" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-crf-container"></div>
     </main>
 
-    <!-- Aba 4: Gestão por Delegacias -->
     <main id="tab-content-gestao-del" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-delegacias-container"></div>
     </main>
 
-    <!-- Aba 5: Feriados -->
     <main id="tab-content-feriados" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="feriados-container"></div>
     </main>
 
-    <!-- Aba 6: Delegacias -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="delegacias-container"></div>
     </main>
 
-    <!-- Aba 7: Servidores -->
     <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="servidores-table-container"></div>
     </main>
 
-    <!-- Aba 8: Férias (Posicionada após Servidores) -->
     <main id="tab-content-ferias" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="ferias-container"></div>
     </main>
 
   </div>
 
-  <!-- Script Principal ES6 (v2.8.7) -->
-  <script type="module" src="./src/app.js?v=2.8.7"></script>
+  <!-- Script Principal ES6 (v3.0.0) -->
+  <script type="module" src="./src/app.js?v=3.0.0"></script>
 </body>
 </html>
