@@ -31,23 +31,32 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  // Consolida todas as SDPs únicas a partir das Delegacias, Servidores e Escalas
-  const sdpsUnicasSet = new Set();
-  (appState.delegacias || []).forEach(d => { if (d.subdivisao) sdpsUnicasSet.add(d.subdivisao.trim()); });
-  (appState.servidores || []).forEach(s => { if (s.subdivisao) sdpsUnicasSet.add(s.subdivisao.trim()); });
-  (appState.escalas || []).forEach(e => { if (e.sdpId) sdpsUnicasSet.add(e.sdpId.trim()); });
+  // Consolida e padroniza as SDPs únicas (evita duplicatas como 8SDP / 8ª SDP)
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  
+  const padronizarSdpStr = (txt) => {
+    if (!txt) return '';
+    let norm = txt.trim();
+    if (norm.startsWith('7')) return '7ª SDP';
+    if (norm.startsWith('8')) return '8ª SDP';
+    if (norm.startsWith('21')) return '21ª SDP';
+    return norm;
+  };
 
-  const sdpsUnicas = [...sdpsUnicasSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(padronizarSdpStr(d.subdivisao)); });
+  (appState.servidores || []).forEach(s => { if (s.subdivisao) setSdps.add(padronizarSdpStr(s.subdivisao)); });
+  (appState.escalas || []).forEach(e => { if (e.sdpId) setSdps.add(padronizarSdpStr(e.sdpId)); });
+
+  const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs / Regionais</option>`;
   sdpsUnicas.forEach(sdp => {
     sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
   });
 
-  // Delegacias pertencentes à SDP selecionada
   const delegaciasFiltradasSdp = (appState.delegacias || []).filter(d => {
     if (sdpFiltroAtual !== 'TODOS') {
-      return normalizeText(d.subdivisao || '') === normalizeText(sdpFiltroAtual);
+      return padronizarSdpStr(d.subdivisao) === sdpFiltroAtual;
     }
     return true;
   });
@@ -148,20 +157,17 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // APLICAÇÃO PRECISA DO FILTRO DE SDP E DELEGACIA NA ESCALA CRF
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
-        const sdpNormFiltro = normalizeText(sdpFiltroAtual);
-
         escalasDoDia = escalasDoDia.filter(e => {
           const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
           const del = (appState.delegacias || []).find(d => d.id === e.delegaciaId);
 
-          const sdpEscala = normalizeText(e.sdpId || '');
-          const sdpDel = normalizeText(del?.subdivisao || '');
-          const sdpSrv = normalizeText(srv?.subdivisao || '');
+          const sdpEscala = padronizarSdpStr(e.sdpId);
+          const sdpDel = padronizarSdpStr(del?.subdivisao);
+          const sdpSrv = padronizarSdpStr(srv?.subdivisao);
 
-          return sdpEscala === sdpNormFiltro || sdpDel === sdpNormFiltro || sdpSrv === sdpNormFiltro;
+          return sdpEscala === sdpFiltroAtual || sdpDel === sdpFiltroAtual || sdpSrv === sdpFiltroAtual;
         });
       }
 
@@ -452,42 +458,6 @@ function criarModalDetalhesTurnoDOM() {
   `;
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
-
-window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
-  if (window.innerWidth < 768) return;
-
-  const ids = idsString.split(',');
-  const escalas = appState.escalas.filter(e => ids.includes(e.id));
-
-  let content = `
-    <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
-      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
-        <span>${titulo}</span>
-        <span class="text-[10px] font-mono text-slate-500">${horario}</span>
-      </div>
-  `;
-
-  escalas.forEach(esc => {
-    const srv = appState.servidores.find(s => s.id === esc.servidorId);
-    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
-    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-
-    content += `
-      <div class="pt-1 border-t border-slate-100 space-y-0.5">
-        <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
-          <span>${srv?.nome || 'Não informado'}</span>
-          ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
-        </div>
-        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
-        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
-      </div>
-    `;
-  });
-
-  content += `</div>`;
-  exibirElementoTooltip(event, content);
-};
 
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
