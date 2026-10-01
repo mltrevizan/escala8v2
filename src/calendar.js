@@ -1,5 +1,5 @@
 // src/calendar.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -31,15 +31,24 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  const sdpsUnicas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
+  // Consolida todas as SDPs únicas a partir das Delegacias, Servidores e Escalas
+  const sdpsUnicasSet = new Set();
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) sdpsUnicasSet.add(d.subdivisao.trim()); });
+  (appState.servidores || []).forEach(s => { if (s.subdivisao) sdpsUnicasSet.add(s.subdivisao.trim()); });
+  (appState.escalas || []).forEach(e => { if (e.sdpId) sdpsUnicasSet.add(e.sdpId.trim()); });
+
+  const sdpsUnicas = [...sdpsUnicasSet].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs / Regionais</option>`;
   sdpsUnicas.forEach(sdp => {
     sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
   });
 
+  // Delegacias pertencentes à SDP selecionada
   const delegaciasFiltradasSdp = (appState.delegacias || []).filter(d => {
-    if (sdpFiltroAtual !== 'TODOS' && d.subdivisao !== sdpFiltroAtual) return false;
+    if (sdpFiltroAtual !== 'TODOS') {
+      return normalizeText(d.subdivisao || '') === normalizeText(sdpFiltroAtual);
+    }
     return true;
   });
 
@@ -71,7 +80,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês + Filtros -->
+    <!-- Navegação de Mês + Filtros Encadeados -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
         <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
@@ -131,7 +140,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       
       if (scope === 'DELEGACIA') {
         const delObj = appState.delegacias.find(d => d.id === selectedDelegaciaId);
-        
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
           return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
@@ -140,11 +148,20 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
+    // APLICAÇÃO PRECISA DO FILTRO DE SDP E DELEGACIA NA ESCALA CRF
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
+        const sdpNormFiltro = normalizeText(sdpFiltroAtual);
+
         escalasDoDia = escalasDoDia.filter(e => {
-          const del = appState.delegacias.find(d => d.id === e.delegaciaId);
-          return del && del.subdivisao === sdpFiltroAtual;
+          const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+          const del = (appState.delegacias || []).find(d => d.id === e.delegaciaId);
+
+          const sdpEscala = normalizeText(e.sdpId || '');
+          const sdpDel = normalizeText(del?.subdivisao || '');
+          const sdpSrv = normalizeText(srv?.subdivisao || '');
+
+          return sdpEscala === sdpNormFiltro || sdpDel === sdpNormFiltro || sdpSrv === sdpNormFiltro;
         });
       }
 
@@ -436,6 +453,42 @@ function criarModalDetalhesTurnoDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
+window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
+  if (window.innerWidth < 768) return;
+
+  const ids = idsString.split(',');
+  const escalas = appState.escalas.filter(e => ids.includes(e.id));
+
+  let content = `
+    <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
+      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
+        <span>${titulo}</span>
+        <span class="text-[10px] font-mono text-slate-500">${horario}</span>
+      </div>
+  `;
+
+  escalas.forEach(esc => {
+    const srv = appState.servidores.find(s => s.id === esc.servidorId);
+    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+    content += `
+      <div class="pt-1 border-t border-slate-100 space-y-0.5">
+        <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
+          <span>${srv?.nome || 'Não informado'}</span>
+          ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
+        </div>
+        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
+        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
+        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
+      </div>
+    `;
+  });
+
+  content += `</div>`;
+  exibirElementoTooltip(event, content);
+};
+
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
 
@@ -465,12 +518,10 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   exibirElementoTooltip(event, content);
 };
 
-// CÁLCULO EXATO DE ENTRADA E SAÍDA UTILIZANDO AS DATAS ORIGINAIS DO CICLO (dataInicio E dataFim)
 function calcularHorariosEntradaSaida(escala, delObj) {
   const isSobreaviso = escala.tipo === 'SOBREAVISO';
   let config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
 
-  // 1. Usa a dataInicio real do ciclo ou recorre à data do card
   const dtInicioIso = escala.dataInicio || escala.data;
 
   const [anoIn, mesIn, diaIn] = dtInicioIso.split('-').map(Number);
@@ -494,7 +545,6 @@ function calcularHorariosEntradaSaida(escala, delObj) {
 
   const dtBrIn = `${String(diaIn).padStart(2, '0')}/${String(mesIn).padStart(2, '0')}/${anoIn}`;
 
-  // 2. Determina a dataFim real do ciclo
   let dtBrOut = dtBrIn;
   if (escala.dataFim) {
     const [anoOut, mesOut, diaOut] = escala.dataFim.split('-').map(Number);
