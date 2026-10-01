@@ -1,19 +1,8 @@
 // src/db.js
 import { appState } from './state.js';
 
-// Função para obter a instância do Firestore com garantia de inicialização do app
+// Instanciação segura do Firestore obtendo a referência do app inicializado
 function getDb() {
-  if (!firebase.apps.length) {
-    // Inicializa o app Firebase com as credenciais padrão do seu projeto
-    firebase.initializeApp({
-      apiKey: "AIzaSyDummyKeyForFirestoreInit",
-      authDomain: "escala-crf.firebaseapp.com",
-      projectId: "escala-crf",
-      storageBucket: "escala-crf.appspot.com",
-      messagingSenderId: "123456789",
-      appId: "1:123456789:web:abcdef"
-    });
-  }
   return firebase.firestore();
 }
 
