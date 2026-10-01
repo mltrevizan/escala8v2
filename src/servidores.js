@@ -6,6 +6,9 @@ export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // Limpeza preventiva de delegacias falsas (logins) no appState
+  limparDelegaciasInvalidas();
+
   const subdivisoesUnicas = [...new Set(
     (appState.servidores || [])
       .map(s => s.subdivisao)
@@ -92,6 +95,22 @@ export function renderServidoresTable(containerId) {
 
   container.innerHTML = html;
   window.filtrarServidoresInline();
+}
+
+function limparDelegaciasInvalidas() {
+  if (!appState.delegacias) return;
+
+  // Filtra e remove delegacias que iniciam com "del." ou "apj." (logins inseridos por engano)
+  const delegaciasValidas = [];
+  for (const del of appState.delegacias) {
+    const nomeNorm = (del.nome || '').toLowerCase().trim();
+    if (nomeNorm.startsWith('del.') || nomeNorm.startsWith('apj.')) {
+      syncDocToFirestore('delegacias', del.id, null, true);
+    } else {
+      delegaciasValidas.push(del);
+    }
+  }
+  appState.delegacias = delegaciasValidas;
 }
 
 window.filtrarServidoresInline = function() {
@@ -192,7 +211,8 @@ export async function processCSVImportComUpsert(csvText) {
   let atualizados = 0;
   let criados = 0;
 
-  let idxCargo = 0, idxNome = 1, idxSdp = 3, idxDelegacia = 4, idxTel = 5;
+  // Índices padrão
+  let idxCargo = -1, idxNome = -1, idxSdp = -1, idxDelegacia = -1, idxTel = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -201,24 +221,33 @@ export async function processCSVImportComUpsert(csvText) {
     const sep = line.includes(';') ? ';' : ',';
     const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
 
-    if (i === 0 && (parts.includes('CARGO') || parts.includes('NOME'))) {
-      idxCargo = parts.indexOf('CARGO') !== -1 ? parts.indexOf('CARGO') : 0;
-      idxNome = parts.indexOf('NOME') !== -1 ? parts.indexOf('NOME') : 1;
-      idxSdp = parts.indexOf('SDP') !== -1 ? parts.indexOf('SDP') : 3;
-      idxDelegacia = parts.indexOf('DELEGACIA') !== -1 ? parts.indexOf('DELEGACIA') : 4;
-      idxTel = parts.indexOf('TELEFONE') !== -1 ? parts.indexOf('TELEFONE') : 5;
-      continue;
+    // Identificação dinâmica de colunas pelo cabeçalho
+    if (i === 0 || idxNome === -1) {
+      if (parts.includes('CARGO') || parts.includes('NOME')) {
+        idxCargo = parts.indexOf('CARGO');
+        idxNome = parts.indexOf('NOME');
+        idxSdp = parts.indexOf('SDP');
+        idxDelegacia = parts.indexOf('DELEGACIA');
+        idxTel = parts.indexOf('TELEFONE');
+        continue;
+      }
     }
 
     if (parts.length >= 2) {
-      const cargo = parts[idxCargo] || 'APJ';
-      const nome = parts[idxNome];
-      const subdivisao = parts[idxSdp] || '8ª SDP';
-      const delegaciaNome = parts[idxDelegacia] || '';
-      const telefone = parts[idxTel] || '';
+      const cargo = (idxCargo !== -1 && parts[idxCargo]) ? parts[idxCargo] : 'APJ';
+      const nome = (idxNome !== -1) ? parts[idxNome] : parts[1];
+      const subdivisao = (idxSdp !== -1 && parts[idxSdp]) ? parts[idxSdp] : '8ª SDP';
+      const delegaciaNome = (idxDelegacia !== -1 && parts[idxDelegacia]) ? parts[idxDelegacia] : '';
+      const telefone = (idxTel !== -1 && parts[idxTel]) ? parts[idxTel] : '';
 
-      if (!nome || normalizeText(nome) === 'nome') continue;
+      if (!nome || normalizeText(nome) === 'nome' || normalizeText(cargo) === 'cargo') continue;
 
+      // Validação de segurança: ignora se por algum motivo for um login (ex: del.mltrevizan)
+      if (delegaciaNome.toLowerCase().startsWith('del.') || delegaciaNome.toLowerCase().startsWith('apj.')) {
+        continue;
+      }
+
+      // Localiza ou cadastra a unidade correspondente
       let delObj = (appState.delegacias || []).find(d => 
         normalizeText(d.nome) === normalizeText(delegaciaNome)
       );
@@ -238,6 +267,7 @@ export async function processCSVImportComUpsert(csvText) {
         await syncDocToFirestore('delegacias', newDelId, delObj);
       }
 
+      // Busca servidor por nome normalizado
       const srvExistente = (appState.servidores || []).find(s => 
         normalizeText(s.nome) === normalizeText(nome)
       );
@@ -288,15 +318,15 @@ window.excluirTodosServidores = async function() {
   renderServidoresTable('servidores-table-container');
 };
 
-// JANELA MODAL PARA CRIAR / EDITAR SERVIDOR (Ordem corrigida)
 window.abrirModalServidor = function(servidorId = null) {
   let modal = document.getElementById('modal-servidor');
   
-  // 1. Garante a criação da estrutura do modal no DOM antes de qualquer seleção
   if (!modal) {
     criarModalServidorDOM();
     modal = document.getElementById('modal-servidor');
   }
+
+  limparDelegaciasInvalidas();
 
   const inputId = document.getElementById('modal-srv-id');
   const inputNome = document.getElementById('modal-srv-nome');
@@ -305,13 +335,11 @@ window.abrirModalServidor = function(servidorId = null) {
   const inputSub = document.getElementById('modal-srv-subdivisao');
   const inputTel = document.getElementById('modal-srv-telefone');
 
-  // 2. Preenche as opções de delegacias
   let delOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}">${d.nome}</option>`
   ).join('');
   if (selectDel) selectDel.innerHTML = delOptions;
 
-  // 3. Define os valores de edição ou criação
   if (servidorId) {
     const srv = (appState.servidores || []).find(s => s.id === servidorId);
     if (srv) {
