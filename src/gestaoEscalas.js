@@ -233,7 +233,6 @@ window.filtrarTabelaDelInline = function() {
     if (esc.scope !== 'DELEGACIA') return false;
 
     if (delSelecionada) {
-      // CORREÇÃO: Verifica busca por ID direto, IDs unificados e nome normalizado da delegacia
       const escDelObj = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
       const bateuId = esc.delegaciaId === delSelecionada.id;
       const bateuUnificado = delSelecionada.delegaciasIds && delSelecionada.delegaciasIds.includes(esc.delegaciaId);
@@ -257,7 +256,7 @@ window.filtrarTabelaDelInline = function() {
 };
 
 // =========================================================================
-// 3. LEITOR INTELIGENTE DE CSV (COM DESMEMBRAMENTO DE MÚLTIPLOS DIAS)
+// 3. LEITOR INTELIGENTE DE CSV
 // =========================================================================
 window.importarEscalasCSV = function(event, targetScope) {
   const file = event.target.files[0];
@@ -325,7 +324,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       delegaciaNome = parts[idxDel] || '';
       sdpNome = parts[idxSdp] || '';
 
-      tipoRotulo = isExtra ? 'EXTRAJORNADA' : 'PLANTÃO';
+      tipoRotulo = isExtra ? 'EXTRAJORNADA' : 'REGULAR';
       turnoRotulo = periodo.includes('NOTURNO') ? '12h (N)' : '12h (D)';
 
     } else if (isFormatoSobreaviso) {
@@ -341,17 +340,10 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       const fimRaw = parts[idxFim] || '';
       nomePolicial = parts[idxSrv] || '';
 
-      // DESMEMBRAMENTO DE MÚLTIPLOS DIAS (INICIO -> FIM)
       datasParaSalvar = calcularIntervaloDiasISO(inicioRaw, fimRaw);
 
       tipoRotulo = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'PLANTÃO';
-      
-      // Se tiver mais de 1 dia de sobreaviso, calcula a quantidade de dias
-      if (datasParaSalvar.length > 1) {
-        turnoRotulo = `${datasParaSalvar.length} dias`;
-      } else {
-        turnoRotulo = '24h';
-      }
+      turnoRotulo = datasParaSalvar.length > 1 ? `${datasParaSalvar.length} dias` : '24h';
     } else {
       const dIso = parts[0];
       if (dIso) datasParaSalvar.push(dIso);
@@ -361,7 +353,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
 
     if (datasParaSalvar.length === 0 || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
-    // Busca/Cria Servidor
     let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
     if (!srvObj) {
       const newSrvId = 'srv_' + Date.now() + '_' + i;
@@ -378,7 +369,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('servidores', newSrvId, srvObj);
     }
 
-    // Busca/Cria Delegacia
     let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
     if (!delObj && delegaciaNome) {
       const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -395,7 +385,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('delegacias', newDelId, delObj);
     }
 
-    // GRAVA O LANÇAMENTO PARA CADA DIA DO INTERVALO
     for (const dtIso of datasParaSalvar) {
       const escExistente = (appState.escalas || []).find(e => 
         e.data === dtIso &&
@@ -435,7 +424,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
   return { importados, atualizados };
 }
 
-// Função utilitária para desmembrar o intervalo de datas ISO (ex: 2026-09-02 ate 2026-09-05)
 function calcularIntervaloDiasISO(inicioStr, fimStr) {
   if (!inicioStr) return [];
   const dtInicioRaw = inicioStr.split('T')[0] || inicioStr.split(' ')[0];
@@ -452,7 +440,6 @@ function calcularIntervaloDiasISO(inicioStr, fimStr) {
   const datas = [];
   const curr = new Date(dInicio);
 
-  // Inclui todos os dias de inicio ate antes do dia final (se o fim for ex: 05 de manha, escala abrange dia 02, 03 e 04)
   while (curr < dFim) {
     const yyyy = curr.getFullYear();
     const mm = String(curr.getMonth() + 1).padStart(2, '0');
@@ -532,7 +519,7 @@ function renderLinhasTabela(listaEscalas) {
     if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
     else if (isSobreaviso) badgeClass = 'bg-amber-100 text-amber-950 border-amber-300 font-bold';
 
-    const tipoExibicao = (esc.tipo === 'ORDINARIO' || !esc.tipo) ? 'PLANTÃO' : esc.tipo;
+    const tipoExibicao = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || 'REGULAR'));
 
     return `
       <tr class="hover:bg-slate-50 transition">
