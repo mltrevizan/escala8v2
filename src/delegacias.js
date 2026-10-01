@@ -1,5 +1,5 @@
 // src/delegacias.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore, fetchCollection } from './db.js';
 
 export async function initDelegaciasModule() {
@@ -11,13 +11,56 @@ export async function initDelegaciasModule() {
       appState.delegacias = appState.delegacias || [];
     }
   }
+
+  // Auto-correção de subdivisões das delegacias com base no mapeamento da região
+  await autocorrigirSubdivisoesDelegacias();
+}
+
+// Garante que 7ª SDP, 8ª SDP e 21ª SDP existam e ajusta a subdivisão das delegacias
+async function autocorrigirSubdivisoesDelegacias() {
+  if (!appState.delegacias) return;
+
+  let houveAlteracao = false;
+
+  for (const del of appState.delegacias) {
+    const nomeNorm = normalizeText(del.nome || '');
+    let sdpCorreta = '';
+
+    // Mapeamento das Regionais por Delegacia
+    if (nomeNorm.includes('umuarama') || nomeNorm.includes('altônia') || nomeNorm.includes('altonia') ||
+        nomeNorm.includes('iporã') || nomeNorm.includes('ipora') || nomeNorm.includes('pérola') || 
+        nomeNorm.includes('perola') || nomeNorm.includes('icaraíma') || nomeNorm.includes('icaraima') ||
+        nomeNorm.includes('xambrê') || nomeNorm.includes('xambre') || nomeNorm.includes('alto piquiri') ||
+        nomeNorm.includes('cruzeiro do oeste')) {
+      sdpCorreta = '7ª SDP';
+    } else if (nomeNorm.includes('cianorte') || nomeNorm.includes('goioerê') || nomeNorm.includes('goioere')) {
+      sdpCorreta = '21ª SDP';
+    } else if (nomeNorm.includes('paranavaí') || nomeNorm.includes('paranavai') || nomeNorm.includes('loanda') ||
+               nomeNorm.includes('nova esperança') || nomeNorm.includes('nova esperanca') || 
+               nomeNorm.includes('nova londrina') || nomeNorm.includes('paranacity') || 
+               nomeNorm.includes('paraíso do norte') || nomeNorm.includes('paraiso do norte') ||
+               nomeNorm.includes('terra rica') || nomeNorm.includes('alto paraná') || nomeNorm.includes('alto parana') ||
+               nomeNorm.includes('santa isabel')) {
+      sdpCorreta = '8ª SDP';
+    }
+
+    if (sdpCorreta && del.subdivisao !== sdpCorreta) {
+      del.subdivisao = sdpCorreta;
+      await syncDocToFirestore('delegacias', del.id, del);
+      houveAlteracao = true;
+    }
+  }
+
+  if (houveAlteracao) {
+    console.log("Subdivisões das delegacias auto-corrigidas com sucesso!");
+  }
 }
 
 export function renderDelegaciasCards(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const subdivisoesUnicas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
+  const subdivisoesUnicas = getListaSdpsUnicas();
 
   let subOptions = `<option value="TODAS">Todas as Subdivisões</option>`;
   subdivisoesUnicas.forEach(s => {
@@ -82,6 +125,13 @@ export function renderDelegaciasCards(containerId) {
   window.filtrarDelegaciasInline();
 }
 
+function getListaSdpsUnicas() {
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim()); });
+  (appState.servidores || []).forEach(s => { if (s.subdivisao) setSdps.add(s.subdivisao.trim()); });
+  return [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
 window.filtrarDelegaciasInline = function() {
   const tbody = document.getElementById('tabela-delegacias-corpo');
   if (!tbody) return;
@@ -95,7 +145,7 @@ window.filtrarDelegaciasInline = function() {
       if (!nomeNorm.includes(busca)) return false;
     }
 
-    if (subFiltro !== 'TODAS' && del.subdivisao !== subFiltro) {
+    if (subFiltro !== 'TODAS' && normalizeText(del.subdivisao || '') !== normalizeText(subFiltro)) {
       return false;
     }
 
@@ -160,7 +210,7 @@ window.filtrarDelegaciasInline = function() {
             ${rotuloTipo}
           </span>
         </td>
-        <td class="p-3 text-slate-600 font-medium">${del.subdivisao || '8ª SDP'}</td>
+        <td class="p-3 text-slate-800 font-bold">${del.subdivisao || '8ª SDP'}</td>
         <td class="p-3 font-mono text-[10.5px] text-slate-700 bg-sky-50/40 rounded-lg">
           <div><b>Regime:</b> ${pConfig.regime} (${pConfig.intervalo})</div>
           <div><b>Úteis:</b> ${pConfig.uteis}</div>
@@ -206,10 +256,8 @@ window.abrirModalDelegacia = function(delId = null) {
   const sUteis = document.getElementById('modal-sobreaviso-uteis');
   const sNaoUteis = document.getElementById('modal-sobreaviso-nao-uteis');
 
-  // Preenche seletor de SDPs
-  const sdpsCadastradas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
-  if (!sdpsCadastradas.includes('8ª SDP')) sdpsCadastradas.unshift('8ª SDP');
-
+  // Preenche seletor de SDPs dinamicamente
+  const sdpsCadastradas = getListaSdpsUnicas();
   let sdpOptions = sdpsCadastradas.map(s => `<option value="${s}">${s}</option>`).join('');
   if (selectSdp) selectSdp.innerHTML = sdpOptions;
 
@@ -363,7 +411,7 @@ window.salvarDelegaciaModal = async function(e) {
     await syncDocToFirestore('delegacias', delAlvoId, novaDel);
   }
 
-  // SINCRONIZAÇÃO BIDIRECIONAL: Atualiza os vínculos em todas as delegacias selecionadas no Plantão Unificado
+  // Sincronização bidirecional do Plantão Unificado
   if (tipoCadastro === 'UNIFICADO') {
     const todasParticipantes = [delAlvoId, ...vinculosIds];
 
@@ -375,7 +423,6 @@ window.salvarDelegaciaModal = async function(e) {
       }
     }
   } else {
-    // Se deixou de ser unificado, limpa as referências cruzadas
     for (const pDel of appState.delegacias) {
       if (pDel.delegaciasIds && pDel.delegaciasIds.includes(delAlvoId)) {
         pDel.delegaciasIds = pDel.delegaciasIds.filter(xId => xId !== delAlvoId);
