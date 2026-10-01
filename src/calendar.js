@@ -31,7 +31,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  // Obter lista única de SDPs
   const sdpsUnicas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
 
   let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs / Regionais</option>`;
@@ -39,7 +38,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
   });
 
-  // Delegacias filtradas pela SDP selecionada
   const delegaciasFiltradasSdp = (appState.delegacias || []).filter(d => {
     if (sdpFiltroAtual !== 'TODOS' && d.subdivisao !== sdpFiltroAtual) return false;
     return true;
@@ -73,7 +71,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês Agrupada + Filtros Encadeados (SDP -> Delegacia) -->
+    <!-- Navegação de Mês + Filtros -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
         <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
@@ -83,7 +81,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
       ${scope === 'CRF' ? `
         <div class="flex flex-wrap items-center gap-2">
-          <!-- 1º Filtro: SDP / Regional -->
           <div class="flex items-center gap-1.5">
             <label class="text-[11px] font-bold text-slate-600">SDP:</label>
             <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
@@ -91,7 +88,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             </select>
           </div>
 
-          <!-- 2º Filtro: Delegacia da SDP -->
           <div class="flex items-center gap-1.5">
             <label class="text-[11px] font-bold text-slate-600">Delegacia:</label>
             <select id="select-filtro-del-crf" onchange="window.mudarFiltroDelCrf(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
@@ -102,7 +98,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Cabeçalho dos Dias da Semana -->
+    <!-- Cabeçalho Dias da Semana -->
     <div class="grid grid-cols-7 text-center bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 py-1.5 font-sans uppercase">
       <div class="text-red-600">Dom</div>
       <div>Seg</div>
@@ -143,7 +139,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // Aplicação dos Filtros Encadeados na Escala CRF
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
         escalasDoDia = escalasDoDia.filter(e => {
@@ -215,12 +210,33 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const prefixo = isDel ? 'DEL.' : 'APJ';
           const nomeCurto = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
+          const isSobreaviso = esc.tipo === 'SOBREAVISO';
+          const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+
+          let cardStyle = 'bg-sky-100/90 border-sky-300 text-sky-950';
+          let tagRotulo = 'PLANTÃO';
+          let tagStyle = 'bg-sky-600 text-white';
+
+          if (isSobreaviso) {
+            cardStyle = 'bg-amber-100/90 border-amber-300 text-amber-950';
+            tagRotulo = 'SOBREAVISO';
+            tagStyle = 'bg-amber-600 text-white';
+          } else if (isExtra) {
+            cardStyle = 'bg-purple-100/90 border-purple-300 text-purple-950';
+            tagRotulo = 'EXTRA';
+            tagStyle = 'bg-purple-600 text-white';
+          }
+
           html += `
-            <div onclick="window.abrirModalDetalhesTurno('Plantão Local', '${esc.data}', '${esc.id}')"
+            <div onclick="window.abrirModalDetalhesTurno('Escala Local', '${esc.data}', '${esc.id}')"
                  onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
-                 class="p-1 rounded border bg-sky-100/80 border-sky-300 text-sky-950 font-semibold shadow-xs cursor-pointer hover:bg-sky-200 transition">
-              <span class="cal-v1-srv-name truncate block">${nomeCurto} (${esc.turno || '24h'})</span>
+                 class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
+              <div class="flex items-center justify-between gap-1">
+                <span class="cal-v1-srv-name truncate block">${nomeCurto}</span>
+                <span class="text-[6.5px] ${tagStyle} font-extrabold px-1 py-0.2 rounded shrink-0 uppercase">${tagRotulo}</span>
+              </div>
+              <div class="text-[7.5px] font-mono opacity-80">${esc.turno || '24h'}</div>
             </div>
           `;
         });
@@ -324,7 +340,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
 
 window.mudarFiltroSdp = function(valor) {
   appState.filtroSdp = valor;
-  appState.filtroDelegaciaCrf = 'TODAS'; // Reseta o filtro de delegacia específica
+  appState.filtroDelegaciaCrf = 'TODAS';
   renderCalendarGrid('calendar-crf-container', 'CRF');
 };
 
@@ -385,12 +401,16 @@ window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
       const srv = appState.servidores.find(s => s.id === esc.servidorId);
       const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+      const isSobreaviso = esc.tipo === 'SOBREAVISO';
+
+      const tagRotulo = isSobreaviso ? 'SOBREAVISO' : (isExtra ? 'EXTRAJORNADA' : 'PLANTÃO');
+      const tagColor = isSobreaviso ? 'bg-amber-600 text-white' : (isExtra ? 'bg-purple-600 text-white' : 'bg-sky-600 text-white');
 
       htmlContent += `
         <div class="p-3 bg-slate-50 border rounded-xl space-y-1">
-          <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-900'} text-xs flex items-center justify-between">
+          <div class="font-bold text-slate-900 text-xs flex items-center justify-between">
             <span>${srv?.nome || 'Não informado'}</span>
-            ${isExtra ? '<span class="text-[9px] bg-purple-600 text-white px-1.5 py-0.5 rounded font-extrabold">EXTRA</span>' : ''}
+            <span class="text-[9px] ${tagColor} px-1.5 py-0.5 rounded font-extrabold uppercase">${tagRotulo}</span>
           </div>
           <div class="text-xs text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
           <div class="text-xs text-slate-600"><b>Lotação / SDP:</b> ${del?.nome || 'CRF'}</div>
@@ -428,7 +448,6 @@ function criarModalDetalhesTurnoDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-// Tooltip Flutuante
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
 
@@ -473,10 +492,14 @@ window.mostrarTooltipEscala = function(event, escalaId) {
 
   const srv = appState.servidores.find(s => s.id === esc.servidorId);
   const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
+  const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
   const content = `
     <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
-      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs">${srv?.nome || 'Não informado'}</div>
+      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
+        <span>${srv?.nome || 'Não informado'}</span>
+        <span class="text-[8px] ${isSobreaviso ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+      </div>
       <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
       <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
       <div class="text-[10px] text-slate-600"><b>Turno:</b> ${esc.turno || '24h'}</div>
