@@ -125,7 +125,7 @@ window.filtrarTabelaCrfInline = function() {
 };
 
 // =========================================================================
-// 2. GESTÃO DE ESCALAS POR DELEGACIAS (Menu 2)
+// 2. GESTÃO DE ESCALAS POR DELEGACIAS
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -233,11 +233,13 @@ window.filtrarTabelaDelInline = function() {
     if (esc.scope !== 'DELEGACIA') return false;
 
     if (delSelecionada) {
-      if (delSelecionada.delegaciasIds) {
-        if (!delSelecionada.delegaciasIds.includes(esc.delegaciaId)) return false;
-      } else if (esc.delegaciaId !== delSelecionada.id) {
-        return false;
-      }
+      // CORREÇÃO: Verifica busca por ID direto, IDs unificados e nome normalizado da delegacia
+      const escDelObj = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+      const bateuId = esc.delegaciaId === delSelecionada.id;
+      const bateuUnificado = delSelecionada.delegaciasIds && delSelecionada.delegaciasIds.includes(esc.delegaciaId);
+      const bateuNome = escDelObj && normalizeText(escDelObj.nome) === normalizeText(delSelecionada.nome);
+
+      if (!bateuId && !bateuUnificado && !bateuNome) return false;
     }
 
     if (busca) {
@@ -255,7 +257,7 @@ window.filtrarTabelaDelInline = function() {
 };
 
 // =========================================================================
-// 3. LEITOR INTELIGENTE DE CSV DE ESCALAS (DESDUPLICAÇÃO E MAPEAMENTO)
+// 3. LEITOR INTELIGENTE DE CSV (COM DESMEMBRAMENTO DE MÚLTIPLOS DIAS)
 // =========================================================================
 window.importarEscalasCSV = function(event, targetScope) {
   const file = event.target.files[0];
@@ -298,7 +300,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
     const parts = line.split(sep).map(p => p.trim().replace(/^"|"$/g, ''));
     if (parts.length < 3) continue;
 
-    let dataIso = '';
+    let datasParaSalvar = [];
     let nomePolicial = '';
     let delegaciaNome = '';
     let tipoRotulo = 'PLANTÃO';
@@ -313,7 +315,9 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       const idxDel = headerParts.indexOf('DELEGACIA');
       const idxSdp = headerParts.indexOf('SDP');
 
-      dataIso = parts[idxData] || '';
+      const dataIso = parts[idxData] || '';
+      if (dataIso) datasParaSalvar.push(dataIso);
+
       const periodo = (parts[idxPeriodo] || 'DIURNO').toUpperCase();
       const isExtra = (parts[idxExtra] || 'NAO').toUpperCase() === 'SIM';
       
@@ -328,24 +332,36 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       const idxMod = headerParts.indexOf('MODALIDADE');
       const idxDel = headerParts.indexOf('DELEGACIA');
       const idxInicio = headerParts.indexOf('INICIO');
+      const idxFim = headerParts.indexOf('FIM');
       const idxSrv = headerParts.indexOf('SERVIDORES');
 
       const modalidade = parts[idxMod] || 'PLANTONISTA';
       delegaciaNome = parts[idxDel] || '';
       const inicioRaw = parts[idxInicio] || '';
+      const fimRaw = parts[idxFim] || '';
       nomePolicial = parts[idxSrv] || '';
 
-      dataIso = inicioRaw.split('T')[0] || inicioRaw.split(' ')[0] || '';
+      // DESMEMBRAMENTO DE MÚLTIPLOS DIAS (INICIO -> FIM)
+      datasParaSalvar = calcularIntervaloDiasISO(inicioRaw, fimRaw);
+
       tipoRotulo = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'PLANTÃO';
-      turnoRotulo = '24h';
+      
+      // Se tiver mais de 1 dia de sobreaviso, calcula a quantidade de dias
+      if (datasParaSalvar.length > 1) {
+        turnoRotulo = `${datasParaSalvar.length} dias`;
+      } else {
+        turnoRotulo = '24h';
+      }
     } else {
-      dataIso = parts[0];
+      const dIso = parts[0];
+      if (dIso) datasParaSalvar.push(dIso);
       nomePolicial = parts[1];
       delegaciaNome = parts[2] || '';
     }
 
-    if (!dataIso || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
+    if (datasParaSalvar.length === 0 || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
+    // Busca/Cria Servidor
     let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
     if (!srvObj) {
       const newSrvId = 'srv_' + Date.now() + '_' + i;
@@ -362,6 +378,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('servidores', newSrvId, srvObj);
     }
 
+    // Busca/Cria Delegacia
     let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
     if (!delObj && delegaciaNome) {
       const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -378,40 +395,73 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('delegacias', newDelId, delObj);
     }
 
-    const escExistente = (appState.escalas || []).find(e => 
-      e.data === dataIso &&
-      e.servidorId === srvObj.id &&
-      e.scope === targetScope &&
-      e.turno === turnoRotulo
-    );
+    // GRAVA O LANÇAMENTO PARA CADA DIA DO INTERVALO
+    for (const dtIso of datasParaSalvar) {
+      const escExistente = (appState.escalas || []).find(e => 
+        e.data === dtIso &&
+        e.servidorId === srvObj.id &&
+        e.scope === targetScope &&
+        e.tipo === tipoRotulo
+      );
 
-    if (escExistente) {
-      escExistente.delegaciaId = delObj ? delObj.id : (srvObj.delegaciaId || '');
-      escExistente.tipo = tipoRotulo;
-      escExistente.sdpId = sdpNome;
-      await syncDocToFirestore('escalas', escExistente.id, escExistente);
-      atualizados++;
-    } else {
-      const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-      const novaEscala = {
-        id: newEscId,
-        data: dataIso,
-        servidorId: srvObj.id,
-        delegaciaId: delObj ? delObj.id : (srvObj.delegaciaId || ''),
-        scope: targetScope,
-        tipo: tipoRotulo,
-        turno: turnoRotulo,
-        sdpId: sdpNome
-      };
+      if (escExistente) {
+        escExistente.delegaciaId = delObj ? delObj.id : (srvObj.delegaciaId || '');
+        escExistente.tipo = tipoRotulo;
+        escExistente.turno = turnoRotulo;
+        escExistente.sdpId = sdpNome;
+        await syncDocToFirestore('escalas', escExistente.id, escExistente);
+        atualizados++;
+      } else {
+        const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const novaEscala = {
+          id: newEscId,
+          data: dtIso,
+          servidorId: srvObj.id,
+          delegaciaId: delObj ? delObj.id : (srvObj.delegaciaId || ''),
+          scope: targetScope,
+          tipo: tipoRotulo,
+          turno: turnoRotulo,
+          sdpId: sdpNome
+        };
 
-      if (!appState.escalas) appState.escalas = [];
-      appState.escalas.push(novaEscala);
-      await syncDocToFirestore('escalas', newEscId, novaEscala);
-      importados++;
+        if (!appState.escalas) appState.escalas = [];
+        appState.escalas.push(novaEscala);
+        await syncDocToFirestore('escalas', newEscId, novaEscala);
+        importados++;
+      }
     }
   }
 
   return { importados, atualizados };
+}
+
+// Função utilitária para desmembrar o intervalo de datas ISO (ex: 2026-09-02 ate 2026-09-05)
+function calcularIntervaloDiasISO(inicioStr, fimStr) {
+  if (!inicioStr) return [];
+  const dtInicioRaw = inicioStr.split('T')[0] || inicioStr.split(' ')[0];
+  if (!fimStr) return [dtInicioRaw];
+
+  const dtFimRaw = fimStr.split('T')[0] || fimStr.split(' ')[0];
+
+  const dInicio = new Date(dtInicioRaw + 'T00:00:00');
+  const dFim = new Date(dtFimRaw + 'T00:00:00');
+
+  if (isNaN(dInicio.getTime())) return [dtInicioRaw];
+  if (isNaN(dFim.getTime()) || dFim <= dInicio) return [dtInicioRaw];
+
+  const datas = [];
+  const curr = new Date(dInicio);
+
+  // Inclui todos os dias de inicio ate antes do dia final (se o fim for ex: 05 de manha, escala abrange dia 02, 03 e 04)
+  while (curr < dFim) {
+    const yyyy = curr.getFullYear();
+    const mm = String(curr.getMonth() + 1).padStart(2, '0');
+    const dd = String(curr.getDate()).padStart(2, '0');
+    datas.push(`${yyyy}-${mm}-${dd}`);
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  return datas.length > 0 ? datas : [dtInicioRaw];
 }
 
 window.exportarEscalasCSV = function(scope) {
