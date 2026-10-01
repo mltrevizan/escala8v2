@@ -1,8 +1,18 @@
 // src/db.js
 import { appState } from './state.js';
 
-// Instanciação segura do Firestore obtendo a referência do app inicializado
+// Retorna a referência do Firestore iniciada pelas credenciais do index.html
 function getDb() {
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey: "AIzaSyAupeszDjCFIhxdz0AlGNgTOws1L4oC8ZE",
+      authDomain: "escala8v2.firebaseapp.com",
+      projectId: "escala8v2",
+      storageBucket: "escala8v2.firebasestorage.app",
+      messagingSenderId: "974252050712",
+      appId: "1:974252050712:web:debb093dc6eea1f4c6766d"
+    });
+  }
   return firebase.firestore();
 }
 
