@@ -465,23 +465,24 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   exibirElementoTooltip(event, content);
 };
 
-// Função auxiliar para calcular entrada e saída detalhadas
+// CÁLCULO EXATO DE ENTRADA E SAÍDA UTILIZANDO AS DATAS ORIGINAIS DO CICLO (dataInicio E dataFim)
 function calcularHorariosEntradaSaida(escala, delObj) {
-  const dataIso = escala.data;
   const isSobreaviso = escala.tipo === 'SOBREAVISO';
-
   let config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
-  
-  const [ano, mes, dia] = dataIso.split('-').map(Number);
-  const dt = new Date(ano, mes - 1, dia);
-  const dayOfWeek = dt.getDay();
-  const isFimDeSemana = (dayOfWeek === 0 || dayOfWeek === 6);
+
+  // 1. Usa a dataInicio real do ciclo ou recorre à data do card
+  const dtInicioIso = escala.dataInicio || escala.data;
+
+  const [anoIn, mesIn, diaIn] = dtInicioIso.split('-').map(Number);
+  const dtInObj = new Date(anoIn, mesIn - 1, diaIn);
+  const dayOfWeekIn = dtInObj.getDay();
+  const isFimDeSemanaIn = (dayOfWeekIn === 0 || dayOfWeekIn === 6);
 
   let horarioTexto = '08:00 às 08:00';
   if (config) {
-    horarioTexto = isFimDeSemana ? (config.naoUteis || '08:00 às 08:00') : (config.uteis || '08:00 às 08:00');
+    horarioTexto = isFimDeSemanaIn ? (config.naoUteis || '08:00 às 08:00') : (config.uteis || '08:00 às 08:00');
   } else if (delObj) {
-    horarioTexto = isFimDeSemana ? (delObj.horarioNaoUteis || '08:00 às 08:00') : (delObj.horarioUteis || '08:00 às 08:00');
+    horarioTexto = isFimDeSemanaIn ? (delObj.horarioNaoUteis || '08:00 às 08:00') : (delObj.horarioUteis || '08:00 às 08:00');
   }
 
   let horaIn = '08:00', horaOut = '08:00';
@@ -491,19 +492,24 @@ function calcularHorariosEntradaSaida(escala, delObj) {
     horaOut = partes[1] || '08:00';
   }
 
-  const dtBrIn = `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}`;
+  const dtBrIn = `${String(diaIn).padStart(2, '0')}/${String(mesIn).padStart(2, '0')}/${anoIn}`;
 
-  // Se o turno for de múltiplos dias, ajusta a data de saída
-  let duracaoDias = 1;
-  if (escala.turno && escala.turno.includes('dias')) {
-    duracaoDias = parseInt(escala.turno) || 1;
+  // 2. Determina a dataFim real do ciclo
+  let dtBrOut = dtBrIn;
+  if (escala.dataFim) {
+    const [anoOut, mesOut, diaOut] = escala.dataFim.split('-').map(Number);
+    dtBrOut = `${String(diaOut).padStart(2, '0')}/${String(mesOut).padStart(2, '0')}/${anoOut}`;
+  } else {
+    let duracaoDias = 1;
+    if (escala.turno && escala.turno.includes('dias')) {
+      duracaoDias = parseInt(escala.turno) || 1;
+    }
+    const dtSaidaObj = new Date(anoIn, mesIn - 1, diaIn + duracaoDias);
+    const ddOut = String(dtSaidaObj.getDate()).padStart(2, '0');
+    const mmOut = String(dtSaidaObj.getMonth() + 1).padStart(2, '0');
+    const yyOut = dtSaidaObj.getFullYear();
+    dtBrOut = `${ddOut}/${mmOut}/${yyOut}`;
   }
-
-  const dtSaidaObj = new Date(ano, mes - 1, dia + duracaoDias);
-  const ddOut = String(dtSaidaObj.getDate()).padStart(2, '0');
-  const mmOut = String(dtSaidaObj.getMonth() + 1).padStart(2, '0');
-  const yyOut = dtSaidaObj.getFullYear();
-  const dtBrOut = `${ddOut}/${mmOut}/${yyOut}`;
 
   return {
     entradaStr: `${dtBrIn} às ${horaIn}`,
