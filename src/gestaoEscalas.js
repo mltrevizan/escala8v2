@@ -7,7 +7,7 @@ export function renderGestaoEscalasModule(containerId) {
 }
 
 // =========================================================================
-// 1. GESTÃO DE ESCALAS CRF (Menu 1)
+// 1. GESTÃO DE ESCALAS CRF
 // =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
@@ -83,7 +83,7 @@ export function renderGestaoCrfModule(containerId) {
             <th class="p-3">Data</th>
             <th class="p-3">Policial / Servidor</th>
             <th class="p-3">Unidade / Lotação</th>
-            <th class="p-3">Tipo de Plantão</th>
+            <th class="p-3">Tipo</th>
             <th class="p-3">Turno</th>
             <th class="p-3 text-right">Ações</th>
           </tr>
@@ -144,7 +144,7 @@ export function renderGestaoDelegaciasModule(containerId) {
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
-          <p class="text-[11px] text-slate-500">Configuração individual de horário por unidade, escalas ordinárias e sobreavisos</p>
+          <p class="text-[11px] text-slate-500">Configuração de horários customizados, plantões locais e sobreavisos</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -164,11 +164,11 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Seleção e Parametrização -->
+      <!-- Parametrização da Unidade Selecionada -->
       <div class="bg-sky-50/70 p-3 rounded-xl border border-sky-200 space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-sky-950">🏢 Unidade / Delegacia Selecionada:</span>
+            <span class="text-xs font-bold text-sky-950">🏢 Unidade Selecionada:</span>
             <select id="select-gestao-delegacia-ativa" onchange="window.mudarDelegaciaAtivaGestao(this.value)" class="text-xs font-bold bg-white border border-sky-300 rounded-lg p-1.5 text-slate-800">
               ${delegaciasOptions}
             </select>
@@ -179,13 +179,13 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div class="bg-white p-2 rounded-lg border border-sky-200 space-y-1">
-            <label class="font-bold text-sky-900 block text-[11px]">⏰ Horário Padrão Plantão 24h / Integral:</label>
-            <input type="text" id="horario-del-24h" value="${delSelecionada?.horario24h || '08:00 às 08:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
+          <div class="bg-white p-2.5 rounded-lg border border-sky-200 space-y-1">
+            <label class="font-bold text-emerald-900 block text-[11px]">⏰ Horário Padrão (Dias Úteis):</label>
+            <input type="text" id="horario-del-uteis" value="${delSelecionada?.horarioUteis || delSelecionada?.horario24h || '08:00 às 08:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
           </div>
-          <div class="bg-white p-2 rounded-lg border border-sky-200 space-y-1">
-            <label class="font-bold text-sky-900 block text-[11px]">⏰ Horário Padrão Plantão 12h / Fracionado:</label>
-            <input type="text" id="horario-del-12h" value="${delSelecionada?.horario12h || '08:00 às 20:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
+          <div class="bg-white p-2.5 rounded-lg border border-sky-200 space-y-1">
+            <label class="font-bold text-amber-900 block text-[11px]">⏰ Horário Padrão (Fins de Semana / Feriados):</label>
+            <input type="text" id="horario-del-nao-uteis" value="${delSelecionada?.horarioNaoUteis || delSelecionada?.horario12h || '08:00 às 08:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@ export function renderGestaoDelegaciasModule(containerId) {
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition cursor-pointer">
-            🗑️ Limpar Mês Local
+            🗑️️ Limpar Mês Local
           </button>
           <span id="total-del-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
             Total Unidade: 0 Plantões
@@ -215,7 +215,7 @@ export function renderGestaoDelegaciasModule(containerId) {
             <th class="p-3">Data</th>
             <th class="p-3">Policial / Servidor</th>
             <th class="p-3">Unidade / Lotação</th>
-            <th class="p-3">Tipo de Plantão</th>
+            <th class="p-3">Tipo</th>
             <th class="p-3">Turno</th>
             <th class="p-3 text-right">Ações</th>
           </tr>
@@ -267,7 +267,7 @@ window.filtrarTabelaDelInline = function() {
 };
 
 // =========================================================================
-// 3. LEITOR INTELIGENTE DE CSV DE ESCALAS (COM PREVENÇÃO DE DUPLICATAS)
+// 3. LEITOR INTELIGENTE DE CSV DE ESCALAS (DESDUPLICAÇÃO E MAPEAMENTO)
 // =========================================================================
 window.importarEscalasCSV = function(event, targetScope) {
   const file = event.target.files[0];
@@ -278,12 +278,12 @@ window.importarEscalasCSV = function(event, targetScope) {
     try {
       const text = e.target.result;
       const { importados, atualizados } = await processarCSVImportEscalas(text, targetScope);
-      alert(`Sucesso no processamento de escalas (${targetScope})!\n- ${importados} novos plantões cadastrados.\n- ${atualizados} plantões existentes atualizados (sem duplicação).`);
+      alert(`Sucesso no processamento (${targetScope})!\n- ${importados} novos registros salvos.\n- ${atualizados} registros existentes atualizados.`);
       
       if (targetScope === 'CRF') window.filtrarTabelaCrfInline();
       else window.filtrarTabelaDelInline();
     } catch (err) {
-      alert("Erro ao importar CSV de escalas: " + err.message);
+      alert("Erro ao importar CSV: " + err.message);
     }
   };
   reader.readAsText(file);
@@ -300,7 +300,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
   const sep = firstLine.includes(';') ? ';' : ',';
   const headerParts = firstLine.split(sep).map(p => p.trim().toUpperCase().replace(/^"|"$/g, ''));
 
-  // Detecta se é o formato 'export_gestao' (CRF) ou 'export_sobreaviso' (DELEGACIA)
   const isFormatoGestao = headerParts.includes('DATA') && headerParts.includes('PERIODO');
   const isFormatoSobreaviso = headerParts.includes('MODALIDADE') && headerParts.includes('INICIO');
 
@@ -314,12 +313,11 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
     let dataIso = '';
     let nomePolicial = '';
     let delegaciaNome = '';
-    let tipoTurno = 'ORDINARIO';
+    let tipoRotulo = 'PLANTÃO';
     let turnoRotulo = '24h';
     let sdpNome = '';
 
     if (isFormatoGestao) {
-      // Formato CRF: DATA, PERIODO, EXTRAJORNADA, CARGO, NOME, LOGIN, SDP, DELEGACIA, TELEFONE
       const idxData = headerParts.indexOf('DATA');
       const idxPeriodo = headerParts.indexOf('PERIODO');
       const idxExtra = headerParts.indexOf('EXTRAJORNADA');
@@ -335,11 +333,10 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       delegaciaNome = parts[idxDel] || '';
       sdpNome = parts[idxSdp] || '';
 
-      tipoTurno = isExtra ? 'EXTRAJORNADA' : 'ORDINARIO';
+      tipoRotulo = isExtra ? 'EXTRAJORNADA' : 'PLANTÃO';
       turnoRotulo = periodo.includes('NOTURNO') ? '12h (N)' : '12h (D)';
 
     } else if (isFormatoSobreaviso) {
-      // Formato Sobreaviso / Local: MODALIDADE, DELEGACIA, INICIO, FIM, VIATURA, SERVIDORES
       const idxMod = headerParts.indexOf('MODALIDADE');
       const idxDel = headerParts.indexOf('DELEGACIA');
       const idxInicio = headerParts.indexOf('INICIO');
@@ -350,12 +347,10 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       const inicioRaw = parts[idxInicio] || '';
       nomePolicial = parts[idxSrv] || '';
 
-      // Extrai data ISO YYYY-MM-DD
       dataIso = inicioRaw.split('T')[0] || inicioRaw.split(' ')[0] || '';
-      tipoTurno = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'ORDINARIO';
+      tipoRotulo = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'PLANTÃO';
       turnoRotulo = '24h';
     } else {
-      // Formato genérico de contingência
       dataIso = parts[0];
       nomePolicial = parts[1];
       delegaciaNome = parts[2] || '';
@@ -363,10 +358,9 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
 
     if (!dataIso || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
-    // 1. Busca Policial no Cadastro
+    // Busca/Cria Servidor
     let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
     if (!srvObj) {
-      // Se não existir, cadastra automaticamente o policial
       const newSrvId = 'srv_' + Date.now() + '_' + i;
       srvObj = {
         id: newSrvId,
@@ -381,7 +375,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('servidores', newSrvId, srvObj);
     }
 
-    // 2. Busca Delegacia no Cadastro
+    // Busca/Cria Delegacia
     let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
     if (!delObj && delegaciaNome) {
       const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -389,8 +383,10 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
         id: newDelId,
         nome: delegaciaNome,
         subdivisao: sdpNome || '8ª SDP',
-        horario24h: '08:00 às 08:00',
-        horario12h: '08:00 às 20:00',
+        regimeEscala: 'ININTERRUPTA',
+        intervaloSucessao: '24h',
+        horarioUteis: '08:00 às 08:00',
+        horarioNaoUteis: '08:00 às 08:00',
         tipo: 'UNIDADE'
       };
       if (!appState.delegacias) appState.delegacias = [];
@@ -398,7 +394,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('delegacias', newDelId, delObj);
     }
 
-    // 3. PREVENÇÃO DE DUPLICATAS: Busca se este mesmo lançamento já existe no banco
+    // Prevenção de Duplicatas
     const escExistente = (appState.escalas || []).find(e => 
       e.data === dataIso &&
       e.servidorId === srvObj.id &&
@@ -407,14 +403,12 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
     );
 
     if (escExistente) {
-      // Atualiza o registro pré-existente sem duplicar
       escExistente.delegaciaId = delObj ? delObj.id : (srvObj.delegaciaId || '');
-      escExistente.tipo = tipoTurno;
+      escExistente.tipo = tipoRotulo;
       escExistente.sdpId = sdpNome;
       await syncDocToFirestore('escalas', escExistente.id, escExistente);
       atualizados++;
     } else {
-      // Cria novo lançamento
       const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       const novaEscala = {
         id: newEscId,
@@ -422,7 +416,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
         servidorId: srvObj.id,
         delegaciaId: delObj ? delObj.id : (srvObj.delegaciaId || ''),
         scope: targetScope,
-        tipo: tipoTurno,
+        tipo: tipoRotulo,
         turno: turnoRotulo,
         sdpId: sdpNome
       };
@@ -437,7 +431,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
   return { importados, atualizados };
 }
 
-// Exportação de CSV
 window.exportarEscalasCSV = function(scope) {
   const { currentYear, currentMonth } = appState;
   const lista = (appState.escalas || []).filter(esc => {
@@ -500,9 +493,14 @@ function renderLinhasTabela(listaEscalas) {
     const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
 
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+    const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
-    let badgeClass = 'bg-indigo-50 text-indigo-900 border-indigo-200';
+    let badgeClass = 'bg-sky-100 text-sky-900 border-sky-300 font-bold';
     if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
+    else if (isSobreaviso) badgeClass = 'bg-amber-100 text-amber-950 border-amber-300 font-bold';
+
+    // Garante que "ORDINARIO" seja impresso como "PLANTÃO"
+    const tipoExibicao = (esc.tipo === 'ORDINARIO' || !esc.tipo) ? 'PLANTÃO' : esc.tipo;
 
     return `
       <tr class="hover:bg-slate-50 transition">
@@ -511,7 +509,7 @@ function renderLinhasTabela(listaEscalas) {
         <td class="p-3 text-slate-600">${nomeUnidade}</td>
         <td class="p-3">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
-            ${isExtra ? 'EXTRAJORNADA' : esc.tipo}
+            ${tipoExibicao}
           </span>
         </td>
         <td class="p-3 font-mono text-slate-600">${esc.turno || '24h'}</td>
@@ -549,13 +547,13 @@ window.mudarDelegaciaAtivaGestao = function(idDel) {
 };
 
 window.salvarHorarioCustomizadoDelegacia = async function(idDel) {
-  const input24h = document.getElementById('horario-del-24h')?.value;
-  const input12h = document.getElementById('horario-del-12h')?.value;
+  const inputUteis = document.getElementById('horario-del-uteis')?.value;
+  const inputNaoUteis = document.getElementById('horario-del-nao-uteis')?.value;
 
   const del = (appState.delegacias || []).find(d => d.id === idDel);
   if (del) {
-    del.horario24h = input24h;
-    del.horario12h = input12h;
+    del.horarioUteis = inputUteis;
+    del.horarioNaoUteis = inputNaoUteis;
     await syncDocToFirestore('delegacias', del.id, del);
     alert(`Horários padrão atualizados com sucesso para ${del.nome}!`);
   }
