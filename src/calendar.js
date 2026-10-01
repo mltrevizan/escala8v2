@@ -31,7 +31,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  // Padronização rigorosa de nomes de SDPs (evita duplicatas e falsos positivos)
+  // Padronização rigorosa de nomes de SDPs
   const padronizarSdpStr = (txt) => {
     if (!txt) return '';
     let norm = txt.trim();
@@ -48,7 +48,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  // RÓTULO ATUALIZADO: "Todas as SDPs"
   let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs</option>`;
   sdpsUnicas.forEach(sdp => {
     sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
@@ -143,12 +142,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
     const feriadoDoDia = (feriados || []).find(f => f.data === dateStr);
 
-    let escalasDoDia = appState.escalas.filter(e => {
+    let escalasDoDia = (appState.escalas || []).filter(e => {
       if (e.data !== dateStr) return false;
       if (e.scope !== scope) return false;
       
       if (scope === 'DELEGACIA') {
-        const delObj = appState.delegacias.find(d => d.id === selectedDelegaciaId);
+        const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
           return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
@@ -157,7 +156,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    // CORREÇÃO CRÍTICA NO FILTRO DE SDP
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
         escalasDoDia = escalasDoDia.filter(e => {
@@ -383,7 +381,7 @@ function setupCalendarEvents(containerId, scope) {
   });
 }
 
-// CORREÇÃO E PROTEÇÃO TOTAL DA TOOLTIP FLUTUANTE
+// TOOLTIP FLUTUANTE DE GRUPO (CRF)
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
 
@@ -401,7 +399,11 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 
     escalas.forEach(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+      
+      // Busca a Lotação REAL de Origem do Servidor
+      const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+      const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
+
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
       content += `
@@ -411,7 +413,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
             ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
           </div>
           <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-          <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || srv?.delegaciaNome || 'CRF'}</div>
+          <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
           <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
         </div>
       `;
@@ -424,6 +426,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   }
 };
 
+// TOOLTIP FLUTUANTE INDIVIDUAL (DELEGACIA)
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
 
@@ -432,10 +435,17 @@ window.mostrarTooltipEscala = function(event, escalaId) {
     if (!esc) return;
 
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    
+    // Unidade onde o plantão está sendo executado
+    const delEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    
+    // Lotação REAL de origem do Policial
+    const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+    const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
+
     const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
-    const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
+    const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, delEscala);
 
     const content = `
       <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
@@ -444,7 +454,8 @@ window.mostrarTooltipEscala = function(event, escalaId) {
           <span class="text-[8px] ${isSobreaviso ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
         </div>
         <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || srv?.delegaciaNome || 'Delegacia'}</div>
+        <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
+        <div class="text-[10px] text-slate-600"><b>Unidade do Plantão:</b> ${delEscala ? delEscala.nome : 'Unidade Local'}</div>
         <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
         <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
         <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
