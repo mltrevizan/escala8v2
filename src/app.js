@@ -16,17 +16,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // 1. Carrega TODAS as coleções do Firestore para o appState na inicialização
+    // 1. Aguarda a inicialização do Firebase e carrega todas as coleções
     await carregarDadosGlobais();
 
-    // 2. Inicializa a estrutura dos Modais no DOM
+    // 2. Inicializa os modais no DOM
     initModalsModule();
 
     if (statusEl) {
       statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
     }
 
-    // 3. Renderiza a aba inicial (Escala CRF) com todos os dados carregados
+    // 3. Renderiza a aba inicial (Escala CRF)
     renderCalendarGrid('calendar-crf-container', 'CRF');
 
   } catch (err) {
@@ -37,53 +37,63 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Função responsável por carregar todas as coleções do Firestore na inicialização
-async function carregarDadosGlobais() {
-  const [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
-    fetchCollection('delegacias'),
-    fetchCollection('servidores'),
-    fetchCollection('escalas'),
-    fetchCollection('feriados'),
-    fetchCollection('ferias')
-  ]);
+export async function carregarDadosGlobais() {
+  try {
+    // Busca do banco com retry básico caso a primeira tentativa coincida com o handshake do Firebase
+    let [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
+      fetchCollection('delegacias'),
+      fetchCollection('servidores'),
+      fetchCollection('escalas'),
+      fetchCollection('feriados'),
+      fetchCollection('ferias')
+    ]);
 
-  appState.delegacias = delegacias || [];
-  appState.servidores = servidores || [];
-  appState.escalas = escalas || [];
-  appState.feriados = feriados || [];
-  appState.ferias = ferias || [];
+    // Se estiverem vazios por atraso de handshake, aguarda 500ms e tenta novamente
+    if ((!delegacias || delegacias.length === 0) && (!servidores || servidores.length === 0)) {
+      await new Promise(r => setTimeout(r, 600));
+      [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
+        fetchCollection('delegacias'),
+        fetchCollection('servidores'),
+        fetchCollection('escalas'),
+        fetchCollection('feriados'),
+        fetchCollection('ferias')
+      ]);
+    }
 
-  // Garante que a primeira delegacia seja a selecionada por padrão se não houver selecionada
-  if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
-    appState.selectedDelegaciaId = appState.delegacias[0].id;
+    appState.delegacias = delegacias || [];
+    appState.servidores = servidores || [];
+    appState.escalas = escalas || [];
+    appState.feriados = feriados || [];
+    appState.ferias = ferias || [];
+
+    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
+      appState.selectedDelegaciaId = appState.delegacias[0].id;
+    }
+  } catch (e) {
+    console.error("Erro ao carregar coleções:", e);
   }
 }
 
-// Controle e Troca de Abas
-window.switchTab = function(tabId) {
-  // Esconde todos os contêineres de aba
+// Troca de Abas
+window.switchTab = async function(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
 
-  // Desativa o destaque de todos os botões da barra de navegação
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm', 'active');
     btn.classList.add('text-slate-600', 'hover:bg-slate-100');
   });
 
-  // Exibe o contêiner da aba alvo
   const targetContent = document.getElementById(`tab-content-${tabId}`);
   if (targetContent) {
     targetContent.classList.remove('hidden');
   }
 
-  // Destaca o botão da aba ativa
   const targetBtn = document.getElementById(`tab-btn-${tabId}`);
   if (targetBtn) {
     targetBtn.classList.remove('text-slate-600', 'hover:bg-slate-100');
     targetBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm', 'active');
   }
 
-  // Renderiza dinamicamente o módulo correspondente
   switch (tabId) {
     case 'crf':
       renderCalendarGrid('calendar-crf-container', 'CRF');
@@ -104,7 +114,7 @@ window.switchTab = function(tabId) {
       renderDelegaciasCards('delegacias-container');
       break;
     case 'servidores':
-      renderServidoresTable('servidores-table-container');
+      await renderServidoresTable('servidores-table-container');
       break;
     case 'ferias':
       renderFeriasModule('ferias-container');
