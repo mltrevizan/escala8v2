@@ -16,17 +16,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // 1. Aguarda a inicialização do Firebase e carrega todas as coleções
-    await carregarDadosGlobais();
+    // 1. Carrega todas as coleções do banco e popula o appState
+    await carregarTodasColecoes();
 
-    // 2. Inicializa os modais no DOM
+    // 2. Inicializa a estrutura de modais
     initModalsModule();
 
     if (statusEl) {
       statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
     }
 
-    // 3. Renderiza a aba inicial (Escala CRF)
+    // 3. Renderiza a aba ativa
     renderCalendarGrid('calendar-crf-container', 'CRF');
 
   } catch (err) {
@@ -37,40 +37,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-export async function carregarDadosGlobais() {
-  try {
-    // Busca do banco com retry básico caso a primeira tentativa coincida com o handshake do Firebase
-    let [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
-      fetchCollection('delegacias'),
-      fetchCollection('servidores'),
-      fetchCollection('escalas'),
-      fetchCollection('feriados'),
-      fetchCollection('ferias')
-    ]);
+async function carregarTodasColecoes() {
+  const colecoes = ['delegacias', 'servidores', 'escalas', 'feriados', 'ferias'];
+  
+  // Realiza a leitura em paralelo
+  const resultados = await Promise.all(colecoes.map(col => fetchCollection(col)));
 
-    // Se estiverem vazios por atraso de handshake, aguarda 500ms e tenta novamente
-    if ((!delegacias || delegacias.length === 0) && (!servidores || servidores.length === 0)) {
-      await new Promise(r => setTimeout(r, 600));
-      [delegacias, servidores, escalas, feriados, ferias] = await Promise.all([
-        fetchCollection('delegacias'),
-        fetchCollection('servidores'),
-        fetchCollection('escalas'),
-        fetchCollection('feriados'),
-        fetchCollection('ferias')
-      ]);
-    }
+  appState.delegacias = resultados[0] || [];
+  appState.servidores = resultados[1] || [];
+  appState.escalas = resultados[2] || [];
+  appState.feriados = resultados[3] || [];
+  appState.ferias = resultados[4] || [];
 
-    appState.delegacias = delegacias || [];
-    appState.servidores = servidores || [];
-    appState.escalas = escalas || [];
-    appState.feriados = feriados || [];
-    appState.ferias = ferias || [];
-
-    if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
-      appState.selectedDelegaciaId = appState.delegacias[0].id;
-    }
-  } catch (e) {
-    console.error("Erro ao carregar coleções:", e);
+  if (!appState.selectedDelegaciaId && appState.delegacias.length > 0) {
+    appState.selectedDelegaciaId = appState.delegacias[0].id;
   }
 }
 
@@ -92,6 +72,11 @@ window.switchTab = async function(tabId) {
   if (targetBtn) {
     targetBtn.classList.remove('text-slate-600', 'hover:bg-slate-100');
     targetBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm', 'active');
+  }
+
+  // Garantia de estado populado ao alternar abas
+  if (!appState.delegacias || appState.delegacias.length === 0) {
+    await carregarTodasColecoes();
   }
 
   switch (tabId) {
