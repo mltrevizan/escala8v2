@@ -82,7 +82,7 @@ export function renderGestaoCrfModule(containerId) {
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
             <th class="p-3">Data</th>
             <th class="p-3">Policial / Servidor</th>
-            <th class="p-3">Unidade / Lotação</th>
+            <th class="p-3">Unidade / Lotação de Origem</th>
             <th class="p-3">Tipo</th>
             <th class="p-3">Turno</th>
             <th class="p-3 text-right">Ações</th>
@@ -202,7 +202,7 @@ export function renderGestaoDelegaciasModule(containerId) {
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
             <th class="p-3">Data</th>
             <th class="p-3">Policial / Servidor</th>
-            <th class="p-3">Unidade / Lotação</th>
+            <th class="p-3">Unidade de Plantão</th>
             <th class="p-3">Tipo</th>
             <th class="p-3">Turno</th>
             <th class="p-3 text-right">Ações</th>
@@ -300,6 +300,8 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
     if (parts.length < 3) continue;
 
     let datasParaSalvar = [];
+    let dataInicioReal = '';
+    let dataFimReal = '';
     let nomePolicial = '';
     let delegaciaNome = '';
     let tipoRotulo = 'PLANTÃO';
@@ -315,7 +317,11 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       const idxSdp = headerParts.indexOf('SDP');
 
       const dataIso = parts[idxData] || '';
-      if (dataIso) datasParaSalvar.push(dataIso);
+      if (dataIso) {
+        datasParaSalvar.push(dataIso);
+        dataInicioReal = dataIso;
+        dataFimReal = dataIso;
+      }
 
       const periodo = (parts[idxPeriodo] || 'DIURNO').toUpperCase();
       const isExtra = (parts[idxExtra] || 'NAO').toUpperCase() === 'SIM';
@@ -342,18 +348,30 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
 
       datasParaSalvar = calcularIntervaloDiasISO(inicioRaw, fimRaw);
 
+      dataInicioReal = inicioRaw.split('T')[0] || inicioRaw.split(' ')[0] || '';
+      dataFimReal = fimRaw.split('T')[0] || fimRaw.split(' ')[0] || dataInicioReal;
+
       tipoRotulo = modalidade.toUpperCase().includes('SOBREAVISO') ? 'SOBREAVISO' : 'PLANTÃO';
       turnoRotulo = datasParaSalvar.length > 1 ? `${datasParaSalvar.length} dias` : '24h';
     } else {
       const dIso = parts[0];
-      if (dIso) datasParaSalvar.push(dIso);
+      if (dIso) {
+        datasParaSalvar.push(dIso);
+        dataInicioReal = dIso;
+        dataFimReal = dIso;
+      }
       nomePolicial = parts[1];
       delegaciaNome = parts[2] || '';
     }
 
     if (datasParaSalvar.length === 0 || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
-    let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
+    // Trava para evitar importação do "ADMINISTRADOR DO SISTEMA"
+    const nomeNormalizado = normalizeText(nomePolicial);
+    if (nomeNormalizado === 'administrador do sistema' || nomeNormalizado === 'admin') continue;
+
+    // Busca/Cria Servidor
+    let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === nomeNormalizado);
     if (!srvObj) {
       const newSrvId = 'srv_' + Date.now() + '_' + i;
       srvObj = {
@@ -369,6 +387,7 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('servidores', newSrvId, srvObj);
     }
 
+    // Busca/Cria Delegacia
     let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
     if (!delObj && delegaciaNome) {
       const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -398,6 +417,9 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
         escExistente.tipo = tipoRotulo;
         escExistente.turno = turnoRotulo;
         escExistente.sdpId = sdpNome;
+        escExistente.dataInicio = dataInicioReal;
+        escExistente.dataFim = dataFimReal;
+
         await syncDocToFirestore('escalas', escExistente.id, escExistente);
         atualizados++;
       } else {
@@ -410,7 +432,9 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
           scope: targetScope,
           tipo: tipoRotulo,
           turno: turnoRotulo,
-          sdpId: sdpNome
+          sdpId: sdpNome,
+          dataInicio: dataInicioReal,
+          dataFim: dataFimReal
         };
 
         if (!appState.escalas) appState.escalas = [];
@@ -507,10 +531,19 @@ function renderLinhasTabela(listaEscalas) {
 
   return listaEscalas.map(esc => {
     const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const delegacia = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    
+    // Na CRF exibe a Lotação de Origem do servidor; na Delegacia exibe a Unidade do Plantão
+    const delegaciaServidor = (appState.delegacias || []).find(d => d.id === servidor?.delegaciaId);
+    const delegaciaEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
 
     const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
-    const nomeUnidade = delegacia ? delegacia.nome : 'CRF Geral';
+    
+    let nomeUnidadeExibida = 'CRF Geral';
+    if (esc.scope === 'CRF') {
+      nomeUnidadeExibida = delegaciaServidor ? delegaciaServidor.nome : (servidor?.delegaciaNome || 'Central CRF');
+    } else {
+      nomeUnidadeExibida = delegaciaEscala ? delegaciaEscala.nome : 'Unidade Local';
+    }
 
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
     const isSobreaviso = esc.tipo === 'SOBREAVISO';
@@ -525,7 +558,7 @@ function renderLinhasTabela(listaEscalas) {
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
         <td class="p-3 font-semibold text-slate-800">${nomeServidor}</td>
-        <td class="p-3 text-slate-600">${nomeUnidade}</td>
+        <td class="p-3 text-slate-600 font-medium">${nomeUnidadeExibida}</td>
         <td class="p-3">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
             ${tipoExibicao}
