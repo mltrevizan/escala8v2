@@ -72,17 +72,17 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-  <!-- INICIALIZAÇÃO OBRIGATÓRIA DO FIREBASE -->
+  <!-- CREDENCIAIS OFICIAIS DO PROJETO ESCALA8V2 -->
   <script>
     if (!firebase.apps.length) {
       const firebaseConfig = {
-  apiKey: "AIzaSyAupeszDjCFIhxdz0AlGNgTOws1L4oC8ZE",
-  authDomain: "escala8v2.firebaseapp.com",
-  projectId: "escala8v2",
-  storageBucket: "escala8v2.firebasestorage.app",
-  messagingSenderId: "974252050712",
-  appId: "1:974252050712:web:debb093dc6eea1f4c6766d"
-};
+        apiKey: "AIzaSyAupeszDjCFIhxdz0AlGNgTOws1L4oC8ZE",
+        authDomain: "escala8v2.firebaseapp.com",
+        projectId: "escala8v2",
+        storageBucket: "escala8v2.firebasestorage.app",
+        messagingSenderId: "974252050712",
+        appId: "1:974252050712:web:debb093dc6eea1f4c6766d"
+      };
       firebase.initializeApp(firebaseConfig);
     }
   </script>
@@ -114,7 +114,7 @@
         <span>⚙️</span> Gestão CRF
       </button>
       <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
-        <span>⚙️</span> Gestão por Delegacias
+        <span>⚙️️</span> Gestão por Delegacias
       </button>
       <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>🎉</span> Feriados
@@ -166,7 +166,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v3.0.0) -->
-  <script type="module" src="./src/app.js?v=3.0.0"></script>
+  <!-- Script Principal ES6 (v3.0.1) -->
+  <script type="module" src="./src/app.js?v=3.0.1"></script>
 </body>
 </html>
