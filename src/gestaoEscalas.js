@@ -186,7 +186,7 @@ export function renderGestaoDelegaciasModule(containerId) {
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition cursor-pointer">
-            🗑 Limpar Mês Local
+            🗑️ Limpar Mês Local
           </button>
           <span id="total-del-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
             Total Unidade: 0 Plantões
@@ -366,7 +366,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
 
     if (datasParaSalvar.length === 0 || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
-    // Trava para evitar importação do "ADMINISTRADOR DO SISTEMA"
     const nomeNormalizado = normalizeText(nomePolicial);
     if (nomeNormalizado === 'administrador do sistema' || nomeNormalizado === 'admin') continue;
 
@@ -532,7 +531,7 @@ function renderLinhasTabela(listaEscalas) {
   return listaEscalas.map(esc => {
     const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
     
-    // Na CRF exibe a Lotação de Origem do servidor; na Delegacia exibe a Unidade do Plantão
+    // Resolve dinamicamente a lotação do servidor e do plantão
     const delegaciaServidor = (appState.delegacias || []).find(d => d.id === servidor?.delegaciaId);
     const delegaciaEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
 
