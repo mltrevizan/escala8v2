@@ -164,30 +164,18 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Parametrização da Unidade Selecionada -->
-      <div class="bg-sky-50/70 p-3 rounded-xl border border-sky-200 space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-sky-950">🏢 Unidade Selecionada:</span>
-            <select id="select-gestao-delegacia-ativa" onchange="window.mudarDelegaciaAtivaGestao(this.value)" class="text-xs font-bold bg-white border border-sky-300 rounded-lg p-1.5 text-slate-800">
-              ${delegaciasOptions}
-            </select>
-          </div>
-          <button onclick="window.salvarHorarioCustomizadoDelegacia('${delSelecionada?.id}')" class="px-3 py-1 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer">
-            💾 Salvar Horários da Unidade
-          </button>
+      <!-- Seleção de Delegacia e Botão de Horário Padrão -->
+      <div class="bg-sky-50/70 p-3.5 rounded-xl border border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-sky-950">🏢 Unidade Selecionada:</span>
+          <select id="select-gestao-delegacia-ativa" onchange="window.mudarDelegaciaAtivaGestao(this.value)" class="text-xs font-bold bg-white border border-sky-300 rounded-lg p-2 text-slate-800 focus:ring-2 focus:ring-sky-500">
+            ${delegaciasOptions}
+          </select>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div class="bg-white p-2.5 rounded-lg border border-sky-200 space-y-1">
-            <label class="font-bold text-emerald-900 block text-[11px]">⏰ Horário Padrão (Dias Úteis):</label>
-            <input type="text" id="horario-del-uteis" value="${delSelecionada?.horarioUteis || delSelecionada?.horario24h || '08:00 às 08:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
-          </div>
-          <div class="bg-white p-2.5 rounded-lg border border-sky-200 space-y-1">
-            <label class="font-bold text-amber-900 block text-[11px]">⏰ Horário Padrão (Fins de Semana / Feriados):</label>
-            <input type="text" id="horario-del-nao-uteis" value="${delSelecionada?.horarioNaoUteis || delSelecionada?.horario12h || '08:00 às 08:00'}" class="w-full border rounded px-2 py-1 font-mono text-xs bg-slate-50 font-bold">
-          </div>
-        </div>
+        <button onclick="window.abrirModalDelegacia('${delSelecionada?.id}')" class="px-3.5 py-2 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <span>⏰</span> Horário Padrão da Unidade
+        </button>
       </div>
 
       <!-- Barra de Filtros -->
@@ -198,7 +186,7 @@ export function renderGestaoDelegaciasModule(containerId) {
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <button onclick="window.limparEscalasDoMes('DELEGACIA')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs rounded-lg border border-red-300 transition cursor-pointer">
-            🗑️️ Limpar Mês Local
+            🗑 Limpar Mês Local
           </button>
           <span id="total-del-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-1.5 rounded-lg border font-mono">
             Total Unidade: 0 Plantões
@@ -358,7 +346,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
 
     if (!dataIso || !nomePolicial || normalizeText(nomePolicial) === 'nome') continue;
 
-    // Busca/Cria Servidor
     let srvObj = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
     if (!srvObj) {
       const newSrvId = 'srv_' + Date.now() + '_' + i;
@@ -375,7 +362,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('servidores', newSrvId, srvObj);
     }
 
-    // Busca/Cria Delegacia
     let delObj = (appState.delegacias || []).find(d => normalizeText(d.nome) === normalizeText(delegaciaNome));
     if (!delObj && delegaciaNome) {
       const newDelId = 'del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
@@ -383,10 +369,8 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
         id: newDelId,
         nome: delegaciaNome,
         subdivisao: sdpNome || '8ª SDP',
-        regimeEscala: 'ININTERRUPTA',
-        intervaloSucessao: '24h',
-        horarioUteis: '08:00 às 08:00',
-        horarioNaoUteis: '08:00 às 08:00',
+        plantaoConfig: { regime: 'ININTERRUPTA', intervalo: '24h', uteis: '08:00 às 08:00', naoUteis: '08:00 às 08:00' },
+        sobreavisoConfig: { regime: 'INTERMITENTE', intervalo: '24h', uteis: '18:00 às 08:00', naoUteis: '08:00 às 08:00' },
         tipo: 'UNIDADE'
       };
       if (!appState.delegacias) appState.delegacias = [];
@@ -394,7 +378,6 @@ export async function processarCSVImportEscalas(csvText, targetScope) {
       await syncDocToFirestore('delegacias', newDelId, delObj);
     }
 
-    // Prevenção de Duplicatas
     const escExistente = (appState.escalas || []).find(e => 
       e.data === dataIso &&
       e.servidorId === srvObj.id &&
@@ -499,7 +482,6 @@ function renderLinhasTabela(listaEscalas) {
     if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
     else if (isSobreaviso) badgeClass = 'bg-amber-100 text-amber-950 border-amber-300 font-bold';
 
-    // Garante que "ORDINARIO" seja impresso como "PLANTÃO"
     const tipoExibicao = (esc.tipo === 'ORDINARIO' || !esc.tipo) ? 'PLANTÃO' : esc.tipo;
 
     return `
@@ -544,19 +526,6 @@ window.atualizarPainelGestaoDel = function() {
 window.mudarDelegaciaAtivaGestao = function(idDel) {
   appState.selectedDelegaciaId = idDel;
   renderGestaoDelegaciasModule('gestao-delegacias-container');
-};
-
-window.salvarHorarioCustomizadoDelegacia = async function(idDel) {
-  const inputUteis = document.getElementById('horario-del-uteis')?.value;
-  const inputNaoUteis = document.getElementById('horario-del-nao-uteis')?.value;
-
-  const del = (appState.delegacias || []).find(d => d.id === idDel);
-  if (del) {
-    del.horarioUteis = inputUteis;
-    del.horarioNaoUteis = inputNaoUteis;
-    await syncDocToFirestore('delegacias', del.id, del);
-    alert(`Horários padrão atualizados com sucesso para ${del.nome}!`);
-  }
 };
 
 window.excluirEscalaGestao = async function(escalaId, scope) {
