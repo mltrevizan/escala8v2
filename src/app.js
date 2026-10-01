@@ -8,6 +8,7 @@ import { renderDelegaciasCards } from './delegacias.js';
 import { renderServidoresTable } from './servidores.js';
 import { renderFeriasModule } from './ferias.js';
 import { initModalsModule } from './modals.js';
+import { initGeradorLoteModule } from './geradorLote.js'; // <- IMPORTAÇÃO DO GERADOR
 
 document.addEventListener('DOMContentLoaded', async () => {
   const statusEl = document.getElementById('app-status');
@@ -16,24 +17,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // Busca todas as coleções do banco e popula o appState global
     await carregarTodasColecoes();
 
-    // Inicializa modais do DOM
     initModalsModule();
+    initGeradorLoteModule(); // <- INICIALIZAÇÃO DO GERADOR
 
     if (statusEl) {
       statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">● Sistema Online</span>`;
     }
 
-    // Renderiza a tela inicial do calendário CRF
     renderCalendarGrid('calendar-crf-container', 'CRF');
 
   } catch (err) {
     console.error("Erro na inicialização do aplicativo:", err);
-    if (statusEl) {
-      statusEl.innerHTML = `<span class="text-xs bg-rose-100 text-rose-800 px-3 py-1 rounded-full font-bold">⚠️ Erro de Conexão</span>`;
-    }
   }
 });
 
