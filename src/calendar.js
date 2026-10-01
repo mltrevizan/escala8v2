@@ -132,7 +132,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (scope === 'DELEGACIA') {
         const delObj = appState.delegacias.find(d => d.id === selectedDelegaciaId);
         
-        // Verifica se pertence ao ID direto ou ao grupo de delegacias unificadas
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
           return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
@@ -205,17 +204,14 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
           let cardStyle = 'bg-sky-100/90 border-sky-300 text-sky-950';
-          let tagRotulo = 'PLANTÃO';
-          let tagStyle = 'bg-sky-600 text-white';
+          let rotuloTipo = 'PLANTÃO';
 
           if (isSobreaviso) {
             cardStyle = 'bg-amber-100/90 border-amber-300 text-amber-950';
-            tagRotulo = 'SOBREAVISO';
-            tagStyle = 'bg-amber-600 text-white';
+            rotuloTipo = 'SOBREAVISO';
           } else if (isExtra) {
             cardStyle = 'bg-purple-100/90 border-purple-300 text-purple-950';
-            tagRotulo = 'EXTRA';
-            tagStyle = 'bg-purple-600 text-white';
+            rotuloTipo = 'EXTRA';
           }
 
           html += `
@@ -223,11 +219,11 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
                  onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
-              <div class="flex items-center justify-between gap-1">
-                <span class="cal-v1-srv-name truncate block">${nomeCurto}</span>
-                <span class="text-[6.5px] ${tagStyle} font-extrabold px-1 py-0.2 rounded shrink-0 uppercase">${tagRotulo}</span>
+              <span class="cal-v1-srv-name truncate block text-slate-900">${nomeCurto}</span>
+              <div class="text-[7.5px] font-mono text-slate-700 flex items-center justify-between opacity-90 border-t border-black/10 pt-0.5">
+                <span>${esc.turno || '24h'}</span>
+                <span class="font-bold uppercase tracking-tight">${rotuloTipo}</span>
               </div>
-              <div class="text-[7.5px] font-mono opacity-80">${esc.turno || '24h'}</div>
             </div>
           `;
         });
@@ -394,14 +390,18 @@ window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
       const tagRotulo = isSobreaviso ? 'SOBREAVISO' : (isExtra ? 'EXTRAJORNADA' : 'PLANTÃO');
       const tagColor = isSobreaviso ? 'bg-amber-600 text-white' : (isExtra ? 'bg-purple-600 text-white' : 'bg-sky-600 text-white');
 
+      const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
+
       htmlContent += `
-        <div class="p-3 bg-slate-50 border rounded-xl space-y-1">
+        <div class="p-3 bg-slate-50 border rounded-xl space-y-1 font-sans">
           <div class="font-bold text-slate-900 text-xs flex items-center justify-between">
             <span>${srv?.nome || 'Não informado'}</span>
             <span class="text-[9px] ${tagColor} px-1.5 py-0.5 rounded font-extrabold uppercase">${tagRotulo}</span>
           </div>
           <div class="text-xs text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
           <div class="text-xs text-slate-600"><b>Lotação / SDP:</b> ${del?.nome || 'CRF'}</div>
+          <div class="text-xs text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
+          <div class="text-xs text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
           <div class="text-xs text-slate-600"><b>Contato/Tel:</b> ${srv?.telefone || '-'}</div>
         </div>
       `;
@@ -436,42 +436,6 @@ function criarModalDetalhesTurnoDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
-  if (window.innerWidth < 768) return;
-
-  const ids = idsString.split(',');
-  const escalas = appState.escalas.filter(e => ids.includes(e.id));
-
-  let content = `
-    <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
-      <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
-        <span>${titulo}</span>
-        <span class="text-[10px] font-mono text-slate-500">${horario}</span>
-      </div>
-  `;
-
-  escalas.forEach(esc => {
-    const srv = appState.servidores.find(s => s.id === esc.servidorId);
-    const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
-    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-
-    content += `
-      <div class="pt-1 border-t border-slate-100 space-y-0.5">
-        <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
-          <span>${srv?.nome || 'Não informado'}</span>
-          ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
-        </div>
-        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-        <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'CRF'}</div>
-        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
-      </div>
-    `;
-  });
-
-  content += `</div>`;
-  exibirElementoTooltip(event, content);
-};
-
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
 
@@ -482,21 +446,70 @@ window.mostrarTooltipEscala = function(event, escalaId) {
   const del = appState.delegacias.find(d => d.id === esc.delegaciaId);
   const isSobreaviso = esc.tipo === 'SOBREAVISO';
 
+  const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, del);
+
   const content = `
-    <div class="p-2.5 space-y-1 text-left min-w-[200px] font-sans">
+    <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
       <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
         <span>${srv?.nome || 'Não informado'}</span>
         <span class="text-[8px] ${isSobreaviso ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
       </div>
       <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
       <div class="text-[10px] text-slate-600"><b>Lotação:</b> ${del?.nome || 'Delegacia'}</div>
-      <div class="text-[10px] text-slate-600"><b>Turno:</b> ${esc.turno || '24h'}</div>
+      <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
+      <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
       <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
     </div>
   `;
 
   exibirElementoTooltip(event, content);
 };
+
+// Função auxiliar para calcular entrada e saída detalhadas
+function calcularHorariosEntradaSaida(escala, delObj) {
+  const dataIso = escala.data;
+  const isSobreaviso = escala.tipo === 'SOBREAVISO';
+
+  let config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
+  
+  const [ano, mes, dia] = dataIso.split('-').map(Number);
+  const dt = new Date(ano, mes - 1, dia);
+  const dayOfWeek = dt.getDay();
+  const isFimDeSemana = (dayOfWeek === 0 || dayOfWeek === 6);
+
+  let horarioTexto = '08:00 às 08:00';
+  if (config) {
+    horarioTexto = isFimDeSemana ? (config.naoUteis || '08:00 às 08:00') : (config.uteis || '08:00 às 08:00');
+  } else if (delObj) {
+    horarioTexto = isFimDeSemana ? (delObj.horarioNaoUteis || '08:00 às 08:00') : (delObj.horarioUteis || '08:00 às 08:00');
+  }
+
+  let horaIn = '08:00', horaOut = '08:00';
+  if (horarioTexto.includes('às')) {
+    const partes = horarioTexto.split('às').map(p => p.trim());
+    horaIn = partes[0] || '08:00';
+    horaOut = partes[1] || '08:00';
+  }
+
+  const dtBrIn = `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}`;
+
+  // Se o turno for de múltiplos dias, ajusta a data de saída
+  let duracaoDias = 1;
+  if (escala.turno && escala.turno.includes('dias')) {
+    duracaoDias = parseInt(escala.turno) || 1;
+  }
+
+  const dtSaidaObj = new Date(ano, mes - 1, dia + duracaoDias);
+  const ddOut = String(dtSaidaObj.getDate()).padStart(2, '0');
+  const mmOut = String(dtSaidaObj.getMonth() + 1).padStart(2, '0');
+  const yyOut = dtSaidaObj.getFullYear();
+  const dtBrOut = `${ddOut}/${mmOut}/${yyOut}`;
+
+  return {
+    entradaStr: `${dtBrIn} às ${horaIn}`,
+    saidaStr: `${dtBrOut} às ${horaOut}`
+  };
+}
 
 function exibirElementoTooltip(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
