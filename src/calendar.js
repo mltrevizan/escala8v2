@@ -29,15 +29,28 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   ];
 
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
+  const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  let sdpOptions = `
-    <option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todos os SDPs / Unidades</option>
-  `;
-  (appState.delegacias || []).forEach(d => {
-    sdpOptions += `<option value="${d.id}" ${sdpFiltroAtual === d.id ? 'selected' : ''}>${d.nome}</option>`;
+  // Obter lista única de SDPs
+  const sdpsUnicas = [...new Set((appState.delegacias || []).map(d => d.subdivisao).filter(Boolean))].sort();
+
+  let sdpOptions = `<option value="TODOS" ${sdpFiltroAtual === 'TODOS' ? 'selected' : ''}>Todas as SDPs / Regionais</option>`;
+  sdpsUnicas.forEach(sdp => {
+    sdpOptions += `<option value="${sdp}" ${sdpFiltroAtual === sdp ? 'selected' : ''}>${sdp}</option>`;
   });
 
-  let delegaciasOptions = (appState.delegacias || []).map(d => 
+  // Delegacias filtradas pela SDP selecionada
+  const delegaciasFiltradasSdp = (appState.delegacias || []).filter(d => {
+    if (sdpFiltroAtual !== 'TODOS' && d.subdivisao !== sdpFiltroAtual) return false;
+    return true;
+  });
+
+  let delCrfOptions = `<option value="TODAS" ${delFiltroAtual === 'TODAS' ? 'selected' : ''}>Todas as Delegacias</option>`;
+  delegaciasFiltradasSdp.forEach(d => {
+    delCrfOptions += `<option value="${d.id}" ${delFiltroAtual === d.id ? 'selected' : ''}>${d.nome}</option>`;
+  });
+
+  let delegaciasOptionsEscala = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${selectedDelegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
 
@@ -46,7 +59,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
-          ${scope === 'CRF' ? '🏛️ Escala Geral CRF & Extrajornada' : '🏢 Escala por Delegacia / Plantão Unificado'}
+          ${scope === 'CRF' ? '🏛️ Escala Geral CRF' : '🏢 Escala por Delegacia / Plantão Unificado'}
         </span>
       </div>
 
@@ -54,26 +67,39 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
         <div class="flex items-center gap-2">
           <label class="text-xs font-medium text-slate-600">Unidade:</label>
           <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1.5 shadow-xs">
-            ${delegaciasOptions}
+            ${delegaciasOptionsEscala}
           </select>
         </div>
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês Agrupada + Filtro por SDP à Direita -->
+    <!-- Navegação de Mês Agrupada + Filtros Encadeados (SDP -> Delegacia) -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
-        <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">◀ Anterior</button>
+        <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
         <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
-        <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition">Próximo ▶</button>
+        <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">Próximo ▶</button>
       </div>
 
-      <div class="flex items-center gap-2">
-        <label class="text-[11px] font-bold text-slate-600">Filtro SDP/Origem:</label>
-        <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
-          ${sdpOptions}
-        </select>
-      </div>
+      ${scope === 'CRF' ? `
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 1º Filtro: SDP / Regional -->
+          <div class="flex items-center gap-1.5">
+            <label class="text-[11px] font-bold text-slate-600">SDP:</label>
+            <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
+              ${sdpOptions}
+            </select>
+          </div>
+
+          <!-- 2º Filtro: Delegacia da SDP -->
+          <div class="flex items-center gap-1.5">
+            <label class="text-[11px] font-bold text-slate-600">Delegacia:</label>
+            <select id="select-filtro-del-crf" onchange="window.mudarFiltroDelCrf(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
+              ${delCrfOptions}
+            </select>
+          </div>
+        </div>
+      ` : ''}
     </div>
 
     <!-- Cabeçalho dos Dias da Semana -->
@@ -117,8 +143,18 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
-    if (sdpFiltroAtual !== 'TODOS') {
-      escalasDoDia = escalasDoDia.filter(e => e.delegaciaId === sdpFiltroAtual || e.sdpId === sdpFiltroAtual);
+    // Aplicação dos Filtros Encadeados na Escala CRF
+    if (scope === 'CRF') {
+      if (sdpFiltroAtual !== 'TODOS') {
+        escalasDoDia = escalasDoDia.filter(e => {
+          const del = appState.delegacias.find(d => d.id === e.delegaciaId);
+          return del && del.subdivisao === sdpFiltroAtual;
+        });
+      }
+
+      if (delFiltroAtual !== 'TODAS') {
+        escalasDoDia = escalasDoDia.filter(e => e.delegaciaId === delFiltroAtual);
+      }
     }
 
     let bgDayClass = 'bg-white';
@@ -288,7 +324,13 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
 
 window.mudarFiltroSdp = function(valor) {
   appState.filtroSdp = valor;
-  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+  appState.filtroDelegaciaCrf = 'TODAS'; // Reseta o filtro de delegacia específica
+  renderCalendarGrid('calendar-crf-container', 'CRF');
+};
+
+window.mudarFiltroDelCrf = function(valor) {
+  appState.filtroDelegaciaCrf = valor;
+  renderCalendarGrid('calendar-crf-container', 'CRF');
 };
 
 function setupCalendarEvents(containerId, scope) {
