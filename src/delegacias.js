@@ -82,7 +82,6 @@ window.renderizarListaTroncoGalhos = function() {
 
   const { busca, sdp } = delegaciasFiltroState;
 
-  // Monta conjunto único de SDPs
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
   (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
   (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
@@ -101,7 +100,6 @@ window.renderizarListaTroncoGalhos = function() {
   let htmlTotal = '';
 
   sdpsLista.forEach(sdpNome => {
-    // Filtra delegacias vinculadas a este Tronco (SDP)
     let delVinculadas = (appState.delegacias || []).filter(d => {
       const delSdp = (d.subdivisao || '8ª SDP').trim().toUpperCase();
       if (delSdp !== sdpNome) return false;
@@ -116,7 +114,7 @@ window.renderizarListaTroncoGalhos = function() {
     });
 
     if (busca && delVinculadas.length === 0 && !sdpNome.toLowerCase().includes(busca)) {
-      return; // Oculta a SDP vazia se não bater com a busca
+      return;
     }
 
     let linhasTabela = delVinculadas.map(del => {
@@ -154,7 +152,6 @@ window.renderizarListaTroncoGalhos = function() {
 
     htmlTotal += `
       <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <!-- Cabeçalho do Tronco (SDP) -->
         <div class="p-3 bg-slate-800 text-white flex items-center justify-between font-bold text-xs uppercase tracking-wider">
           <div class="flex items-center gap-2">
             <span>🏛️ TRONCO: ${sdpNome}</span>
@@ -162,7 +159,6 @@ window.renderizarListaTroncoGalhos = function() {
           </div>
         </div>
 
-        <!-- Tabela dos Galhos (Delegacias) -->
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse font-sans">
             <thead>
@@ -183,9 +179,6 @@ window.renderizarListaTroncoGalhos = function() {
   container.innerHTML = htmlTotal;
 };
 
-// =========================================================================
-// MODAL 1: CADASTRAR / EDITAR DELEGACIA (GALHO)
-// =========================================================================
 window.abrirModalDelegacia = function(delId = null) {
   let modal = document.getElementById('modal-delegacia');
   if (!modal) {
@@ -193,7 +186,6 @@ window.abrirModalDelegacia = function(delId = null) {
     modal = document.getElementById('modal-delegacia');
   }
 
-  // Popula seletores de SDPs
   const selectSdp = document.getElementById('del-sdp');
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
   (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
@@ -313,9 +305,6 @@ window.excluirDelegacia = async function(id) {
   renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
 };
 
-// =========================================================================
-// MODAL 2: EDITAR / CRIAR / EXCLUIR SDPS (TRONCO)
-// =========================================================================
 window.abrirModalGerenciarSdps = function() {
   let modal = document.getElementById('modal-gerenciar-sdps');
   if (!modal) {
@@ -341,7 +330,7 @@ window.renderizarListaSdpsModal = function() {
 
   const sdps = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  container.innerHTML = sdps.map((sdpNome, idx) => `
+  container.innerHTML = sdps.map((sdpNome) => `
     <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
       <span>🏛️ ${sdpNome}</span>
       <div class="space-x-1">
@@ -381,7 +370,6 @@ window.editarNomeSdpPrompt = async function(nomeAntigo) {
 
   const nomeFormatado = novoNome.toUpperCase().trim();
 
-  // Atualiza em todas as delegacias vinculadas
   (appState.delegacias || []).forEach(async d => {
     if ((d.subdivisao || '').toUpperCase() === nomeAntigo) {
       d.subdivisao = nomeFormatado;
@@ -389,7 +377,6 @@ window.editarNomeSdpPrompt = async function(nomeAntigo) {
     }
   });
 
-  // Atualiza no cadastro de SDPs
   if (!appState.sdps) appState.sdps = [];
   const sdpObj = appState.sdps.find(s => s.nome === nomeAntigo);
   if (sdpObj) {
@@ -419,7 +406,6 @@ window.excluirSdpModal = async function(nomeSdp) {
 
   appState.sdps = (appState.sdps || []).filter(s => s.nome !== nomeSdp);
   
-  // Tenta sincronizar a exclusão
   const sdpObj = (appState.sdps || []).find(s => s.nome === nomeSdp);
   if (sdpObj) {
     await syncDocToFirestore('sdps', sdpObj.id, null, true);
@@ -429,9 +415,6 @@ window.excluirSdpModal = async function(nomeSdp) {
   renderDelegaciasCards('delegacias-container');
 };
 
-// =========================================================================
-// INJEÇÃO DOM DOS MODAIS
-// =========================================================================
 function criarModalDelegaciaDOM() {
   const modalHTML = `
     <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
@@ -444,7 +427,6 @@ function criarModalDelegaciaDOM() {
         <form onsubmit="window.salvarDelegaciaModal(event)" class="space-y-4 text-xs flex-1 overflow-y-auto pr-1">
           <input type="hidden" id="del-id">
 
-          <!-- Identificação -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Subdivisão / Tronco (SDP):</label>
@@ -456,7 +438,6 @@ function criarModalDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- Parâmetros Plantão Local -->
           <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <span class="font-bold text-slate-900 text-xs block">🏢 Configuração do Plantão Local</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -489,7 +470,6 @@ function criarModalDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- Parâmetros Sobreaviso -->
           <div class="p-3 bg-amber-50/50 rounded-2xl border border-amber-200/80 space-y-2">
             <span class="font-bold text-amber-950 text-xs block">📞 Configuração do Sobreaviso</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -540,7 +520,6 @@ function criarModalGerenciarSdpsDOM() {
           <button type="button" onclick="window.fecharModalGerenciarSdps()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
-        <!-- Formulário Adicionar Nova SDP -->
         <form onsubmit="window.salvarNovaSdpModal(event)" class="flex gap-2">
           <input type="text" id="modal-sdp-novo-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 9ª SDP" class="flex-1 border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 text-xs uppercase">
           <button type="submit" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">➕ Adicionar</button>
