@@ -56,32 +56,17 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   });
   if (selectFiltroCargo) selectFiltroCargo.innerHTML = filtroCargoOpts;
 
-  // Reset do Estado
-  geradorState = {
-    modo: 'INDIVIDUAL',
-    policiaisSelecionados: [],
-    equipes: [
-      { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
-      { id: 2, nome: 'Equipe 2', vtr: '', membros: [] }
-    ],
-    equipeAtivaIdx: 0,
-    filtroTexto: '',
-    filtroDelegacia: scopeTarget === 'DELEGACIA' ? (appState.selectedDelegaciaId || 'TODAS') : 'TODAS',
-    filtroCargo: 'TODOS'
-  };
-
-  const inputBusca = document.getElementById('ger-busca-srv');
-  if (inputBusca) inputBusca.value = '';
-  if (selectFiltroDel) selectFiltroDel.value = geradorState.filtroDelegacia;
-  if (selectFiltroCargo) selectFiltroCargo.value = 'TODOS';
-
+  // Datas Padrão
   const { currentYear, currentMonth } = appState;
   const ultimoDia = new Date(currentYear, currentMonth + 1, 0).getDate();
   document.getElementById('ger-data-inicio').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
   document.getElementById('ger-data-fim').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
 
-  window.alternarModoGerador('INDIVIDUAL');
-  window.atualizarInfoParametrizacaoUnidade();
+  const idDelInicial = selectDel?.value || appState.selectedDelegaciaId;
+  
+  // CARREGA A CONFIGURAÇÃO MEMORIZADA DA DELEGACIA
+  window.carregarConfiguracaoMemorizadaDelegacia(idDelInicial);
+
   modal.classList.remove('hidden');
 };
 
@@ -89,7 +74,41 @@ window.fecharModalGeradorLote = function() {
   document.getElementById('modal-gerador-lote')?.classList.add('hidden');
 };
 
-// ATUALIZA O BLOCOR INFORMATIVO DA DELEGACIA E MODALIDADE
+// RECUPERA DA DELEGACIA AS EQUIPES E FILAS PREVIAMENTE SALVAS
+window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
+  const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+
+  geradorState = {
+    modo: delObj?.geradorConfig?.modo || 'INDIVIDUAL',
+    policiaisSelecionados: delObj?.geradorConfig?.policiaisSelecionados ? [...delObj.geradorConfig.policiaisSelecionados] : [],
+    equipes: delObj?.geradorConfig?.equipes && delObj.geradorConfig.equipes.length > 0 
+      ? JSON.parse(JSON.stringify(delObj.geradorConfig.equipes)) 
+      : [
+          { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
+          { id: 2, nome: 'Equipe 2', vtr: '', membros: [] }
+        ],
+    equipeAtivaIdx: 0,
+    filtroTexto: '',
+    filtroDelegacia: delegaciaId || 'TODAS',
+    filtroCargo: 'TODOS'
+  };
+
+  const inputBusca = document.getElementById('ger-busca-srv');
+  const selectFiltroDel = document.getElementById('ger-filtro-del');
+  const selectFiltroCargo = document.getElementById('ger-filtro-cargo');
+
+  if (inputBusca) inputBusca.value = '';
+  if (selectFiltroDel) selectFiltroDel.value = geradorState.filtroDelegacia;
+  if (selectFiltroCargo) selectFiltroCargo.value = 'TODOS';
+
+  window.alternarModoGerador(geradorState.modo);
+  window.atualizarInfoParametrizacaoUnidade();
+};
+
+window.aoMudarDelegaciaGerador = function(delegaciaId) {
+  window.carregarConfiguracaoMemorizadaDelegacia(delegaciaId);
+};
+
 window.atualizarInfoParametrizacaoUnidade = function() {
   const container = document.getElementById('ger-info-unidade-container');
   if (!container) return;
@@ -468,6 +487,17 @@ window.executarGeradorLote = async function(e) {
     return;
   }
 
+  // 1. SALVA E MEMORIZA A CONFIGURAÇÃO DO GERADOR NA DELEGACIA NO FIRESTORE
+  if (delObj) {
+    delObj.geradorConfig = {
+      modo: geradorState.modo,
+      policiaisSelecionados: [...geradorState.policiaisSelecionados],
+      equipes: JSON.parse(JSON.stringify(geradorState.equipes))
+    };
+    await syncDocToFirestore('delegacias', delObj.id, delObj);
+  }
+
+  // 2. GERA OS LANÇAMENTOS DAS ESCALAS EM LOTE
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
@@ -533,7 +563,7 @@ window.executarGeradorLote = async function(e) {
     }
   }
 
-  alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados em lote.`);
+  alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados e preferência da delegacia salva.`);
   window.fecharModalGeradorLote();
 
   if (scope === 'CRF') {
@@ -575,7 +605,7 @@ function criarModalGeradorLoteDOM() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Unidade / Delegacia de Destino:</label>
-              <select id="ger-delegacia" onchange="window.atualizarInfoParametrizacaoUnidade()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <select id="ger-delegacia" onchange="window.aoMudarDelegaciaGerador(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
@@ -587,7 +617,6 @@ function criarModalGeradorLoteDOM() {
             </div>
           </div>
 
-          <!-- CONTAINER INFORMATIVO DO PADRÃO DA UNIDADE E BOTÃO DE AJUSTE -->
           <div id="ger-info-unidade-container"></div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
