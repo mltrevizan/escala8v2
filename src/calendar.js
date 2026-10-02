@@ -194,17 +194,17 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     }
 
     const hojeBorderClass = isHoje 
-      ? 'border-2 border-indigo-600 bg-indigo-50/20 shadow-inner z-10' 
+      ? 'border-2 border-black bg-slate-100/50 shadow-inner z-10' 
       : 'border-t border-l border-slate-200/80';
 
     html += `
       <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
         <div class="flex items-center justify-between mb-1 px-0.5">
           <div class="flex items-center gap-1">
-            <span class="cal-v1-day-num ${isHoje ? 'text-indigo-800' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
+            <span class="cal-v1-day-num ${isHoje ? 'text-black font-black' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
               ${day}
             </span>
-            ${isHoje ? '<span class="text-[7px] bg-indigo-600 text-white font-extrabold px-1 rounded uppercase tracking-tighter">HOJE</span>' : ''}
+            ${isHoje ? '<span class="text-[7px] bg-black text-pcpr-gold font-extrabold px-1 rounded uppercase tracking-tighter">HOJE</span>' : ''}
           </div>
 
           ${feriadoDoDia ? `
@@ -221,8 +221,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-amber-100/90 border-amber-300 text-amber-950 shadow-xs');
-      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-indigo-50 border-indigo-200 text-indigo-950 shadow-xs');
+      // PALETA OFICIAL PCPR: DIURNO DOURADO / NOTURNO GRAFITE
+      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716] shadow-xs');
+      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs');
     } else {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
@@ -253,18 +254,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // ESTILOS DE COR AJUSTADOS:
-          // PLANTÃO: MESMA COR DO DIURNO CRF (AMARELO / MASSA)
-          // SOBREAVISO: MESMA COR DO NOTURNO CRF (AZUL INDIGO)
-          // EXTRA: ROXO
-          let cardStyle = 'bg-amber-100/90 border-amber-300 text-amber-950';
+          // MESMO PADRÃO PCPR: PLANTÃO LOCAL (DOURADO DIURNO), SOBREAVISO (GRAFITE NOTURNO)
+          let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
           if (isSobreaviso) {
-            cardStyle = 'bg-indigo-50 border-indigo-200 text-indigo-950';
+            cardStyle = 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2]';
             rotuloTipo = 'SOBREAVISO';
           } else if (isExtra) {
-            cardStyle = 'bg-purple-100/90 border-purple-300 text-purple-950';
+            cardStyle = 'bg-purple-100 border-purple-300 text-purple-950';
             rotuloTipo = 'EXTRA';
           }
 
@@ -274,7 +272,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
-            return `<div class="cal-v1-srv-name truncate block text-slate-900">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
+            const corTexto = isSobreaviso ? 'text-white' : 'text-slate-900';
+            return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
           }).join('');
 
           html += `
@@ -282,9 +281,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
                  onmouseenter="window.mostrarTooltipGrupo(event, '${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
-              ${primeiraEsc.vtr ? `<div class="text-[8px] bg-indigo-600 text-white font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
+              ${primeiraEsc.vtr ? `<div class="text-[8px] bg-black text-pcpr-gold font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
               ${nomesHtml}
-              <div class="text-[7.5px] font-mono text-slate-700 flex items-center justify-between opacity-90 border-t border-black/10 pt-0.5">
+              <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${isSobreaviso ? 'border-white/20 text-slate-300' : 'border-black/10 text-slate-700'} pt-0.5">
                 <span>${primeiraEsc.turno || '24h'}</span>
                 <span class="font-bold uppercase tracking-tight">${rotuloTipo}</span>
               </div>
@@ -321,8 +320,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   if (escalasArray.length === 0) {
     return `
       <div class="p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
-        <span class="cal-v1-header-title text-slate-600">${titulo}</span>
-        <span class="text-[7.5px] text-slate-500 italic">Livre</span>
+        <span class="cal-v1-header-title">${titulo}</span>
+        <span class="text-[7.5px] italic opacity-80">Livre</span>
       </div>
     `;
   }
@@ -343,6 +342,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   });
 
   const idsString = ordenadas.map(e => e.id).join(',');
+  const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
@@ -354,21 +354,22 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
 
     if (isExtra) {
       return `
-        <div class="cal-v1-srv-name text-purple-900 flex items-center justify-between gap-1">
+        <div class="cal-v1-srv-name text-purple-300 flex items-center justify-between gap-1">
           <span class="truncate">${nomeExibicao}</span>
           <span class="cal-v1-tag-extra bg-purple-600 text-white rounded shrink-0 shadow-xs">EXTRA</span>
         </div>
       `;
     }
+
+    const corNome = isNoturno ? 'text-white' : 'text-[#3E300E]';
     return `
-      <div class="cal-v1-srv-name text-slate-900 truncate">
+      <div class="cal-v1-srv-name ${corNome} truncate">
         ${nomeExibicao}
       </div>
     `;
   }).join('');
 
-  const isDiurno = titulo === 'DIURNO';
-  const headerColorClass = isDiurno ? 'text-amber-900 border-amber-300/60' : 'text-indigo-900 border-indigo-200';
+  const headerColorClass = isNoturno ? 'border-white/20 text-slate-300' : 'border-[#BEA55A]/50 text-[#5A4716]';
 
   return `
     <div onclick="window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}')"
@@ -498,7 +499,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
       <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
         <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
           <span>${srv?.nome || 'Não informado'}</span>
-          <span class="text-[8px] ${isSobreaviso ? 'bg-indigo-100 text-indigo-900' : 'bg-amber-100 text-amber-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+          <span class="text-[8px] ${isSobreaviso ? 'bg-slate-800 text-pcpr-gold' : 'bg-[#F7F3E8] text-[#5A4716] border border-[#BEA55A]'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
         </div>
         <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
         <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
