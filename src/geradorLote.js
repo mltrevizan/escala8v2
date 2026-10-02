@@ -29,7 +29,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   document.getElementById('ger-scope').value = scopeTarget;
 
-  // Popula o select de Delegacias
+  // Popula o select de Delegacias de Destino
   const selectDel = document.getElementById('ger-delegacia');
   let delOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${d.id === appState.selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
@@ -64,7 +64,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   const idDelInicial = selectDel?.value || appState.selectedDelegaciaId;
   
-  // CARREGA A CONFIGURAÇÃO MEMORIZADA DA DELEGACIA
+  // CARREGA A CONFIGURAÇÃO MEMORIZADA DA DELEGACIA E SINCRONIZA O FILTRO
   window.carregarConfiguracaoMemorizadaDelegacia(idDelInicial);
 
   modal.classList.remove('hidden');
@@ -74,7 +74,7 @@ window.fecharModalGeradorLote = function() {
   document.getElementById('modal-gerador-lote')?.classList.add('hidden');
 };
 
-// RECUPERA DA DELEGACIA AS EQUIPES E FILAS PREVIAMENTE SALVAS
+// RECUPERA A CONFIGURAÇÃO MEMORIZADA E AJUSTA O FILTRO DE BUSCA PARA A UNIDADE SELECIONADA
 window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
   const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
 
@@ -89,7 +89,7 @@ window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
         ],
     equipeAtivaIdx: 0,
     filtroTexto: '',
-    filtroDelegacia: delegaciaId || 'TODAS',
+    filtroDelegacia: delegaciaId || 'TODAS', // 1. SINCRONIZA AUTOMATICAMENTE O FILTRO COM A DELEGACIA DE DESTINO
     filtroCargo: 'TODOS'
   };
 
@@ -472,6 +472,12 @@ window.executarGeradorLote = async function(e) {
   const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
   const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
 
+  // PARSIA A DURAÇÃO EM DIAS DO TURNO DA UNIDADE (Ex: "2 dias", "3 dias")
+  let duracaoDiasTurno = 1;
+  if (turnoPadraoCalculado.includes('dias')) {
+    duracaoDiasTurno = parseInt(turnoPadraoCalculado) || 1;
+  }
+
   if (!dataInicio || !dataFim || dataFim < dataInicio) {
     alert("Selecione um intervalo de datas válido.");
     return;
@@ -497,7 +503,7 @@ window.executarGeradorLote = async function(e) {
     await syncDocToFirestore('delegacias', delObj.id, delObj);
   }
 
-  // 2. GERA OS LANÇAMENTOS DAS ESCALAS EM LOTE
+  // 2. GERA OS LANÇAMENTOS COM SUPORTE A TRANSBORDO DE MÊS
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
@@ -519,40 +525,24 @@ window.executarGeradorLote = async function(e) {
   let filaIndex = 0;
 
   for (const dtIso of diasValidos) {
+    // LÓGICA DE TRANSBORDO / CONTINUIDADE MULTIDIAS:
+    // Gera as datas contínuas do turno (ex: se for 3 dias, gera para dtIso, dtIso+1 e dtIso+2)
+    const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
+
     if (geradorState.modo === 'INDIVIDUAL') {
       const sId = geradorState.policiaisSelecionados[filaIndex % geradorState.policiaisSelecionados.length];
       filaIndex++;
 
-      const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-      const novaEscala = {
-        id: newEscId,
-        data: dtIso,
-        servidorId: sId,
-        delegaciaId: delegaciaId,
-        scope: scope,
-        tipo: tipoModalidade,
-        turno: turnoPadraoCalculado
-      };
-
-      if (!appState.escalas) appState.escalas = [];
-      appState.escalas.push(novaEscala);
-      await syncDocToFirestore('escalas', newEscId, novaEscala);
-      inseridosCount++;
-    } else {
-      const equipeAtiva = geradorState.equipes[filaIndex % geradorState.equipes.length];
-      filaIndex++;
-
-      for (const sId of equipeAtiva.membros) {
+      for (const dataSubsequent of datasDoTurno) {
         const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const novaEscala = {
           id: newEscId,
-          data: dtIso,
+          data: dataSubsequent,
           servidorId: sId,
           delegaciaId: delegaciaId,
           scope: scope,
           tipo: tipoModalidade,
-          turno: turnoPadraoCalculado,
-          vtr: equipeAtiva.vtr || ''
+          turno: turnoPadraoCalculado
         };
 
         if (!appState.escalas) appState.escalas = [];
@@ -560,10 +550,34 @@ window.executarGeradorLote = async function(e) {
         await syncDocToFirestore('escalas', newEscId, novaEscala);
         inseridosCount++;
       }
+    } else {
+      const equipeAtiva = geradorState.equipes[filaIndex % geradorState.equipes.length];
+      filaIndex++;
+
+      for (const sId of equipeAtiva.membros) {
+        for (const dataSubsequent of datasDoTurno) {
+          const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+          const novaEscala = {
+            id: newEscId,
+            data: dataSubsequent,
+            servidorId: sId,
+            delegaciaId: delegaciaId,
+            scope: scope,
+            tipo: tipoModalidade,
+            turno: turnoPadraoCalculado,
+            vtr: equipeAtiva.vtr || ''
+          };
+
+          if (!appState.escalas) appState.escalas = [];
+          appState.escalas.push(novaEscala);
+          await syncDocToFirestore('escalas', newEscId, novaEscala);
+          inseridosCount++;
+        }
+      }
     }
   }
 
-  alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados e preferência da delegacia salva.`);
+  alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados em lote (incluindo continuidades de turno transbordadas).`);
   window.fecharModalGeradorLote();
 
   if (scope === 'CRF') {
@@ -574,6 +588,22 @@ window.executarGeradorLote = async function(e) {
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   }
 };
+
+// GERA ARRAY DE DATAS SEQUENCIAIS PARA TURNOS DE MÚLTIPLOS DIAS (EX: 2 OU 3 DIAS)
+function gerarDatasMultiplasContinuas(dataInicialIso, diasDuracao) {
+  const result = [];
+  const parts = dataInicialIso.split('-').map(Number);
+  
+  for (let i = 0; i < diasDuracao; i++) {
+    const d = new Date(parts[0], parts[1] - 1, parts[2] + i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    result.push(`${yyyy}-${mm}-${dd}`);
+  }
+
+  return result;
+}
 
 function gerarArrayDatasISO(startStr, endStr) {
   const arr = [];
