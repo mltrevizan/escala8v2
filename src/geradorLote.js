@@ -5,7 +5,7 @@ import { renderCalendarGrid } from './calendar.js';
 
 let geradorState = {
   modo: 'INDIVIDUAL', // 'INDIVIDUAL' ou 'EQUIPE'
-  policiaisSelecionados: [], // Lista ordenada de IDs no modo individual
+  policiaisSelecionados: [],
   equipes: [
     { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
     { id: 2, nome: 'Equipe 2', vtr: '', membros: [] }
@@ -81,11 +81,56 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   document.getElementById('ger-data-fim').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
 
   window.alternarModoGerador('INDIVIDUAL');
+  window.atualizarInfoParametrizacaoUnidade();
   modal.classList.remove('hidden');
 };
 
 window.fecharModalGeradorLote = function() {
   document.getElementById('modal-gerador-lote')?.classList.add('hidden');
+};
+
+// ATUALIZA O BLOCOR INFORMATIVO DA DELEGACIA E MODALIDADE
+window.atualizarInfoParametrizacaoUnidade = function() {
+  const container = document.getElementById('ger-info-unidade-container');
+  if (!container) return;
+
+  const idDel = document.getElementById('ger-delegacia')?.value || appState.selectedDelegaciaId;
+  const modalidade = document.getElementById('ger-modalidade')?.value || 'PLANTÃO';
+
+  const delObj = (appState.delegacias || []).find(d => d.id === idDel);
+  if (!delObj) {
+    container.innerHTML = `<p class="text-[11px] text-slate-400 italic">Selecione uma unidade para carregar os parâmetros.</p>`;
+    return;
+  }
+
+  const isSobreaviso = modalidade === 'SOBREAVISO';
+  const config = isSobreaviso ? delObj.sobreavisoConfig : delObj.plantaoConfig;
+
+  const regime = config?.regime || (isSobreaviso ? 'INTERMITENTE' : 'ININTERRUPTA');
+  const intervalo = config?.intervalo || '24h';
+  const uteis = config?.uteis || delObj.horarioUteis || '08:00 às 08:00';
+  const naoUteis = config?.naoUteis || delObj.horarioNaoUteis || '08:00 às 08:00';
+
+  container.innerHTML = `
+    <div class="bg-sky-50/80 border border-sky-200 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+      <div class="space-y-0.5">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sky-950">⏰ Padrão da Unidade (${isSobreaviso ? 'Sobreaviso' : 'Plantão Local'}):</span>
+          <span class="px-1.5 py-0.5 bg-sky-200 text-sky-900 font-extrabold text-[10px] rounded uppercase">${regime}</span>
+          <span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold text-[10px] rounded">Duração: ${intervalo}</span>
+        </div>
+        <div class="text-[11px] text-slate-600 flex flex-wrap items-center gap-3 font-mono">
+          <span><b>Dias Úteis:</b> ${uteis}</span>
+          <span>●</span>
+          <span><b>Fins de Semana / Feriados:</b> ${naoUteis}</span>
+        </div>
+      </div>
+
+      <button type="button" onclick="window.abrirModalDelegacia('${delObj.id}')" class="px-2.5 py-1.5 bg-sky-700 hover:bg-sky-800 text-white font-bold text-[11px] rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1 shrink-0">
+        <span>⚙️</span> Ajustar Padrão
+      </button>
+    </div>
+  `;
 };
 
 window.atualizarFiltrosListaServidoresGerador = function() {
@@ -131,7 +176,6 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
       const n = normalizeText(s.nome || '');
       if (n === 'administrador do sistema' || n === 'admin') return false;
 
-      // GARANTIA: Se já estiver selecionado na equipe/fila, PERMANECE VISÍVEL SEMPRE!
       if (membrosFixosIds.includes(s.id)) return true;
 
       if (filtroTexto) {
@@ -154,7 +198,6 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
       return true;
     })
     .sort((a, b) => {
-      // ORDENAÇÃO INTELIGENTE: Selecionados primeiro!
       const isSelA = membrosFixosIds.includes(a.id);
       const isSelB = membrosFixosIds.includes(b.id);
 
@@ -236,7 +279,6 @@ function renderizarModoEquipesV1(container) {
   const equipeAtiva = equipes[geradorState.equipeAtivaIdx];
   const servidoresFiltrados = filtrarServidoresComPersistencia(equipeAtiva ? equipeAtiva.membros : []);
 
-  // NAVEGAÇÃO DE ABAS REORDENÁVEIS (REORDENAÇÃO POR POSIÇÃO NAS TAGS)
   let htmlAbas = equipes.map((eqp, idx) => {
     const isSelected = idx === geradorState.equipeAtivaIdx;
     return `
@@ -258,7 +300,6 @@ function renderizarModoEquipesV1(container) {
     </button>
   `;
 
-  // LISTA COM NOMES SELECCIONADOS PROMOVIDOS AO TOPO COM NUMERAÇÃO
   let htmlPoliciaisEquipe = servidoresFiltrados.map(srv => {
     const isChecked = equipeAtiva.membros.includes(srv.id);
     const posIndex = equipeAtiva.membros.indexOf(srv.id);
@@ -284,12 +325,10 @@ function renderizarModoEquipesV1(container) {
 
   container.innerHTML = `
     <div class="space-y-3">
-      <!-- ABAS DE SELEÇÃO DE EQUIPES COM REORDENAÇÃO -->
       <div class="flex flex-wrap items-center gap-1 border-b border-slate-300 pb-0">
         ${htmlAbas}
       </div>
 
-      <!-- PAINEL DA EQUIPE ATIVA E CAMPO VTR -->
       <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
           <div>
@@ -409,6 +448,11 @@ window.executarGeradorLote = async function(e) {
   const tipoModalidade = document.getElementById('ger-modalidade').value;
   const regraDias = document.getElementById('ger-regra-dias').value;
 
+  const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+  const isSobreaviso = tipoModalidade === 'SOBREAVISO';
+  const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
+  const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
+
   if (!dataInicio || !dataFim || dataFim < dataInicio) {
     alert("Selecione um intervalo de datas válido.");
     return;
@@ -457,7 +501,7 @@ window.executarGeradorLote = async function(e) {
         delegaciaId: delegaciaId,
         scope: scope,
         tipo: tipoModalidade,
-        turno: scope === 'CRF' ? '12h (D)' : '24h'
+        turno: turnoPadraoCalculado
       };
 
       if (!appState.escalas) appState.escalas = [];
@@ -465,7 +509,6 @@ window.executarGeradorLote = async function(e) {
       await syncDocToFirestore('escalas', newEscId, novaEscala);
       inseridosCount++;
     } else {
-      // A ROTAÇÃO DAS EQUIPES SEGUE A ORDEM DAS POSIÇÕES DAS ABAS (POSIÇÃO 0, POSIÇÃO 1, POSIÇÃO 2...)
       const equipeAtiva = geradorState.equipes[filaIndex % geradorState.equipes.length];
       filaIndex++;
 
@@ -478,7 +521,7 @@ window.executarGeradorLote = async function(e) {
           delegaciaId: delegaciaId,
           scope: scope,
           tipo: tipoModalidade,
-          turno: scope === 'CRF' ? '12h (D)' : '24h',
+          turno: turnoPadraoCalculado,
           vtr: equipeAtiva.vtr || ''
         };
 
@@ -532,17 +575,20 @@ function criarModalGeradorLoteDOM() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Unidade / Delegacia de Destino:</label>
-              <select id="ger-delegacia" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <select id="ger-delegacia" onchange="window.atualizarInfoParametrizacaoUnidade()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
-              <select id="ger-modalidade" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+              <select id="ger-modalidade" onchange="window.atualizarInfoParametrizacaoUnidade()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
                 <option value="PLANTÃO">PLANTÃO LOCAL</option>
                 <option value="SOBREAVISO">SOBREAVISO</option>
                 <option value="EXTRAJORNADA">EXTRAJORNADA</option>
               </select>
             </div>
           </div>
+
+          <!-- CONTAINER INFORMATIVO DO PADRÃO DA UNIDADE E BOTÃO DE AJUSTE -->
+          <div id="ger-info-unidade-container"></div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
