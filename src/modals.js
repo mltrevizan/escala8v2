@@ -10,7 +10,7 @@ export function initModalsModule() {
 }
 
 // =========================================================================
-// 1. MODAL DE LANÇAMENTO / EDIÇÃO DE ESCALA
+// 1. MODAL DE LANÇAMENTO / EDIÇÃO DE ESCALA INDIVIDUAL
 // =========================================================================
 window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTarget = 'CRF') {
   let modal = document.getElementById('modal-escala');
@@ -209,6 +209,8 @@ window.salvarEscalaModal = async function(e) {
     return;
   }
 
+  const conflitosIndividuais = [];
+
   if (id) {
     const idx = (appState.escalas || []).findIndex(e => e.id === id);
     if (idx !== -1) {
@@ -229,6 +231,16 @@ window.salvarEscalaModal = async function(e) {
       esc.delegaciaId = scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId;
 
       await syncDocToFirestore('escalas', esc.id, esc);
+
+      // CHECA SE HÁ FÉRIAS/LICENÇA NESTA DATA
+      const feriasObj = (appState.ferias || []).find(f => f.servidorId === novoSrvId && dataIso >= f.dataInicio && dataIso <= f.dataFim);
+      if (feriasObj && srvObj) {
+        conflitosIndividuais.push({
+          nome: srvObj.nome,
+          motivo: feriasObj.tipo || 'Férias/Licença',
+          periodo: `${formatarDataBr(feriasObj.dataInicio)} a ${formatarDataBr(feriasObj.dataFim)}`
+        });
+      }
     }
   } else {
     for (const sId of servidoresIds) {
@@ -255,6 +267,16 @@ window.salvarEscalaModal = async function(e) {
       if (!appState.escalas) appState.escalas = [];
       appState.escalas.push(novaEscala);
       await syncDocToFirestore('escalas', newEscId, novaEscala);
+
+      // CHECA SE HÁ FÉRIAS/LICENÇA NESTA DATA
+      const feriasObj = (appState.ferias || []).find(f => f.servidorId === sId && dataIso >= f.dataInicio && dataIso <= f.dataFim);
+      if (feriasObj && srv) {
+        conflitosIndividuais.push({
+          nome: srv.nome,
+          motivo: feriasObj.tipo || 'Férias/Licença',
+          periodo: `${formatarDataBr(feriasObj.dataInicio)} a ${formatarDataBr(feriasObj.dataFim)}`
+        });
+      }
     }
   }
 
@@ -266,6 +288,15 @@ window.salvarEscalaModal = async function(e) {
   } else {
     if (typeof window.filtrarTabelaDelInline === 'function') window.filtrarTabelaDelInline();
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
+
+  // ALERTA DE CONFLITO EM LANCE INDIVIDUAL
+  if (conflitosIndividuais.length > 0) {
+    let msg = `⚠️ ALERTA DE CONFLITO DE FÉRIAS/LICENÇA:\n\nO lançamento foi registrado com sucesso, contudo:\n\n`;
+    conflitosIndividuais.forEach(c => {
+      msg += `• ${c.nome} possui registro de ${c.motivo} no período de ${c.periodo}.\n`;
+    });
+    alert(msg);
   }
 };
 
@@ -378,9 +409,7 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-// =========================================================================
 // INJEÇÃO DOM DOS MODAIS
-// =========================================================================
 function criarModalEscalaDOM() {
   const modalHTML = `
     <div id="modal-escala" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
@@ -460,6 +489,4 @@ function criarModalDetalhesTurnoDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-function criarModalGeradorLoteDOM() {
-  // Gerador em lote integrado ao geradorLote.js
-}
+function criarModalGeradorLoteDOM() {}
