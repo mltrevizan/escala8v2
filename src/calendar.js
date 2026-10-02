@@ -31,7 +31,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const sdpFiltroAtual = appState.filtroSdp || 'TODOS';
   const delFiltroAtual = appState.filtroDelegaciaCrf || 'TODAS';
 
-  // Padronização rigorosa de nomes de SDPs
   const padronizarSdpStr = (txt) => {
     if (!txt) return '';
     let norm = txt.trim();
@@ -88,7 +87,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês + Filtros Encadeados -->
+    <!-- Navegação de Mês + Filtros -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
         <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
@@ -140,14 +139,28 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
-    const feriadoDoDia = (feriados || []).find(f => f.data === dateStr);
+    const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+
+    // CHECAGEM REGIONALIZADA DO FERIADO DO DIA
+    const feriadoDoDia = (feriados || []).find(f => {
+      if (f.data !== dateStr) return false;
+      if (scope === 'CRF') return f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL';
+
+      if (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL') return true;
+      if (f.tipo === 'MUNICIPAL') {
+        const ids = f.delegaciasIds || [];
+        const bateuId = ids.includes(selectedDelegaciaId);
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(uId => ids.includes(unfId));
+        return bateuId || bateuUnificado;
+      }
+      return false;
+    });
 
     let escalasDoDia = (appState.escalas || []).filter(e => {
       if (e.data !== dateStr) return false;
       if (e.scope !== scope) return false;
       
       if (scope === 'DELEGACIA') {
-        const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
           return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
@@ -358,7 +371,6 @@ function setupCalendarEvents(containerId, scope) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // Troca de Delegacia Selecionada no topo
   const selectDel = container.querySelector('#select-calendar-delegacia');
   if (selectDel) {
     selectDel.addEventListener('change', (e) => {
@@ -367,7 +379,6 @@ function setupCalendarEvents(containerId, scope) {
     });
   }
 
-  // Botão Mês Anterior
   const btnPrev = container.querySelector('#btn-prev-month');
   if (btnPrev) {
     btnPrev.addEventListener('click', () => {
@@ -381,7 +392,6 @@ function setupCalendarEvents(containerId, scope) {
     });
   }
 
-  // Botão Próximo Mês
   const btnNext = container.querySelector('#btn-next-month');
   if (btnNext) {
     btnNext.addEventListener('click', () => {
@@ -396,7 +406,6 @@ function setupCalendarEvents(containerId, scope) {
   }
 }
 
-// TOOLTIP FLUTUANTE DE GRUPO (CRF)
 window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
 
@@ -414,7 +423,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 
     escalas.forEach(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      
       const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
@@ -440,7 +448,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   }
 };
 
-// TOOLTIP FLUTUANTE INDIVIDUAL (DELEGACIA)
 window.mostrarTooltipEscala = function(event, escalaId) {
   if (window.innerWidth < 768) return;
 
