@@ -11,12 +11,12 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <title>8ª CRF - Sistema de Escalas v2</title>
+  <title>8ª CRF - Sistema de Escalas v2 | PCPR</title>
   
-  <!-- FONTE INTER (GOOGLE FONTS) -->
+  <!-- FONTE OFICIAL PCPR (EXO 2) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- TAILWIND CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -25,48 +25,26 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            sans: ['"Exo 2"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            pcpr: {
+              gold: '#BEA55A',
+              goldDark: '#AF9340',
+              black: '#000000',
+              darkGray: '#57585A',
+              lightGray: '#D1D3D4',
+              red: '#E2001A',
+              blue: '#006AB3'
+            }
           }
         }
       }
     }
   </script>
 
-  <!-- REGRAS TIPOGRÁFICAS DE PADRONIZAÇÃO -->
-  <style>
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
-    .cal-v1-day-num {
-      font-size: 11px !important;
-      line-height: 13px !important;
-      font-weight: 800 !important;
-    }
-    .cal-v1-header-title {
-      font-size: 8.5px !important;
-      line-height: 10px !important;
-      font-weight: 800 !important;
-      letter-spacing: 0.04em !important;
-    }
-    .cal-v1-header-time {
-      font-size: 7.5px !important;
-      line-height: 9px !important;
-      font-weight: 600 !important;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    }
-    .cal-v1-srv-name {
-      font-size: 9px !important;
-      line-height: 11.5px !important;
-      font-weight: 600 !important;
-    }
-    .cal-v1-tag-extra {
-      font-size: 6.5px !important;
-      line-height: 8px !important;
-      font-weight: 900 !important;
-      padding: 1px 3px !important;
-    }
-  </style>
+  <!-- CSS CUSTOMIZADO COM REGRAS TIPOGRÁFICAS E PALETA PCPR -->
+  <link rel="stylesheet" href="./src/styles.css?v=6.0.0">
 
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -91,26 +69,25 @@
 
   <div class="max-w-7xl mx-auto w-full space-y-4">
     
-   <!-- Header Principal com Logótipo PCPR -->
-<header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-  <div class="flex items-center gap-3">
-    <!-- Logótipo PCPR -->
-    <img src="./logo-pcpr.png" alt="Logótipo PCPR" class="h-10 sm:h-12 w-auto object-contain">
-    
-    <div>
-      <h1 class="text-xl font-black tracking-tight text-slate-900">8ª CRF - Sistema de Escalas v2</h1>
-      <p class="text-xs font-medium text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
-    </div>
-  </div>
-  
-  <div id="app-status">
-    <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
-  </div>
-</header>
+    <!-- Header Principal com Logo Institucional da PCPR -->
+    <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border-b-4 border-pcpr-gold border-x border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Imagem da Logo da PCPR -->
+        <img src="./60de091078db3-conjuntologoPCPRcorHORIZ.jpg" alt="Logo PCPR" class="h-10 sm:h-12 w-auto object-contain rounded-md">
+        
+        <div>
+          <h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">8ª CRF - Sistema de Escalas v2</h1>
+          <p class="text-xs font-semibold text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
+        </div>
+      </div>
+      <div id="app-status">
+        <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
+      </div>
+    </header>
 
     <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
-      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm cursor-pointer">
+      <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-black text-white shadow-sm cursor-pointer">
         <span>📅</span> Escala CRF
       </button>
       <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
@@ -120,7 +97,7 @@
         <span>⚙️</span> Gestão CRF
       </button>
       <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
-        <span>⚙️️</span> Gestão por Delegacias
+        <span>⚙</span> Gestão por Delegacias
       </button>
       <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 text-slate-600 hover:bg-slate-100 cursor-pointer">
         <span>🎉</span> Feriados
@@ -172,7 +149,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v4.7.0) -->
-  <script type="module" src="./src/app.js?v=4.7.0"></script>
+  <!-- Script Principal ES6 (v6.0.0) -->
+  <script type="module" src="./src/app.js?v=6.0.0"></script>
 </body>
 </html>
