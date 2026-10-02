@@ -607,7 +607,7 @@ window.ocultarTooltip = function() {
 };
 
 // =========================================================================
-// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO
+// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO (SINTAXE CORRIGIDA)
 // =========================================================================
 window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
   let modal = document.getElementById('modal-detalhes-plantao');
@@ -636,6 +636,17 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
       const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
 
+      // Monta os botões separadamente para evitar conflitos de aspas no HTML
+      let btnDelHtml = '';
+      if (isDel && showBtnDel) {
+        btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
+      }
+
+      let btnApjHtml = '';
+      if (!isDel && showBtnApj) {
+        btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">➕/🔄 Incluir / Trocar APJ</button>';
+      }
+
       return `
         <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 font-sans space-y-2">
           <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
@@ -652,17 +663,8 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
             </div>
 
             <div class="flex gap-1">
-              ${isDel && showBtnDel ? `
-                <button onclick="window.abrirModalTrocarDelegado('${esc.id}')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">
-                  🔄 Trocar Delegado
-                </button>
-              ` : ''}
-
-              {!isDel && showBtnApj ? `
-                <button onclick="window.abrirModalIncluirTrocarAPJ('${esc.id}')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">
-                  ➕/🔄 Incluir / Trocar APJ
-                </button>
-              ` : ''}
+              ${btnDelHtml}
+              ${btnApjHtml}
             </div>
           </div>
         </div>
