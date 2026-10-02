@@ -4,7 +4,7 @@ import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 
 let geradorState = {
-  modo: 'INDIVIDUAL', // 'INDIVIDUAL' ou 'EQUIPE'
+  modo: 'INDIVIDUAL',
   policiaisSelecionados: [],
   equipes: [
     { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
@@ -29,14 +29,12 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   document.getElementById('ger-scope').value = scopeTarget;
 
-  // Popula o select de Delegacias de Destino
   const selectDel = document.getElementById('ger-delegacia');
   let delOptions = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${d.id === appState.selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
   if (selectDel) selectDel.innerHTML = delOptions;
 
-  // Popula filtro de Lotação na busca
   const selectFiltroDel = document.getElementById('ger-filtro-del');
   let filtroDelOpts = `<option value="TODAS">Todas as Unidades</option>`;
   (appState.delegacias || []).forEach(d => {
@@ -44,7 +42,6 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   });
   if (selectFiltroDel) selectFiltroDel.innerHTML = filtroDelOpts;
 
-  // Popula filtro de Cargos
   const selectFiltroCargo = document.getElementById('ger-filtro-cargo');
   const cargosSet = new Set(['APJ', 'DELEGADO']);
   (appState.servidores || []).forEach(s => {
@@ -56,15 +53,12 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   });
   if (selectFiltroCargo) selectFiltroCargo.innerHTML = filtroCargoOpts;
 
-  // Datas Padrão
   const { currentYear, currentMonth } = appState;
   const ultimoDia = new Date(currentYear, currentMonth + 1, 0).getDate();
   document.getElementById('ger-data-inicio').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
   document.getElementById('ger-data-fim').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
 
   const idDelInicial = selectDel?.value || appState.selectedDelegaciaId;
-  
-  // CARREGA A CONFIGURAÇÃO MEMORIZADA DA DELEGACIA E SINCRONIZA O FILTRO
   window.carregarConfiguracaoMemorizadaDelegacia(idDelInicial);
 
   modal.classList.remove('hidden');
@@ -74,7 +68,6 @@ window.fecharModalGeradorLote = function() {
   document.getElementById('modal-gerador-lote')?.classList.add('hidden');
 };
 
-// RECUPERA A CONFIGURAÇÃO MEMORIZADA E AJUSTA O FILTRO DE BUSCA PARA A UNIDADE SELECIONADA
 window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
   const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
 
@@ -89,7 +82,7 @@ window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
         ],
     equipeAtivaIdx: 0,
     filtroTexto: '',
-    filtroDelegacia: delegaciaId || 'TODAS', // 1. SINCRONIZA AUTOMATICAMENTE O FILTRO COM A DELEGACIA DE DESTINO
+    filtroDelegacia: delegaciaId || 'TODAS',
     filtroCargo: 'TODOS'
   };
 
@@ -457,6 +450,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
+// EXECUÇÃO DO GERADOR COM CHECAGEM REGIONALIZADA DE FERIADOS
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -492,7 +486,7 @@ window.executarGeradorLote = async function(e) {
     return;
   }
 
-  // 1. Salva configuração memorizada na delegacia
+  // 1. MEMORIZA CONFIGURAÇÃO NA DELEGACIA
   if (delObj) {
     delObj.geradorConfig = {
       modo: geradorState.modo,
@@ -502,15 +496,29 @@ window.executarGeradorLote = async function(e) {
     await syncDocToFirestore('delegacias', delObj.id, delObj);
   }
 
+  // 2. CHECAGEM DE DIAS VÁLIDOS COM VALIDAÇÃO DE ESCOPO DE FERIADOS
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
     const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
     const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6;
-    const isFeriado = (appState.feriados || []).some(f => f.data === dtStr);
 
-    if (regraDias === 'FDS_FERIADOS') return isWeekend || isFeriado;
-    if (regraDias === 'DIAS_UTEIS') return !isWeekend && !isFeriado;
+    // CONSULTA SE HÁ FERIADO VÁLIDO PARA A UNIDADE OU PLANTÃO UNIFICADO
+    const isFeriadoValido = (appState.feriados || []).some(f => {
+      if (f.data !== dtStr) return false;
+      if (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL') return true;
+
+      if (f.tipo === 'MUNICIPAL') {
+        const idsAtingidos = f.delegaciasIds || [];
+        const bateuLocal = idsAtingidos.includes(delegaciaId);
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(unifId => idsAtingidos.includes(unifId));
+        return bateuLocal || bateuUnificado;
+      }
+      return false;
+    });
+
+    if (regraDias === 'FDS_FERIADOS') return isWeekend || isFeriadoValido;
+    if (regraDias === 'DIAS_UTEIS') return !isWeekend && !isFeriadoValido;
     return true;
   });
 
@@ -521,7 +529,7 @@ window.executarGeradorLote = async function(e) {
 
   let inseridosCount = 0;
   let filaIndex = 0;
-  const conflitosDetectados = []; // Estrutura: { servidorNome, data, tipoModalidade }
+  const conflitosDetectados = [];
 
   for (const dtIso of diasValidos) {
     const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
@@ -547,7 +555,6 @@ window.executarGeradorLote = async function(e) {
         await syncDocToFirestore('escalas', newEscId, novaEscala);
         inseridosCount++;
 
-        // Checagem de conflito com Férias/Licença
         verificarECatalogarConflito(sId, dataSubsequent, tipoModalidade, conflitosDetectados);
       }
     } else {
@@ -573,7 +580,6 @@ window.executarGeradorLote = async function(e) {
           await syncDocToFirestore('escalas', newEscId, novaEscala);
           inseridosCount++;
 
-          // Checagem de conflito com Férias/Licença
           verificarECatalogarConflito(sId, dataSubsequent, tipoModalidade, conflitosDetectados);
         }
       }
@@ -582,7 +588,6 @@ window.executarGeradorLote = async function(e) {
 
   window.fecharModalGeradorLote();
 
-  // Re-renderiza abas
   if (scope === 'CRF') {
     if (typeof window.filtrarTabelaCrfInline === 'function') window.filtrarTabelaCrfInline();
     renderCalendarGrid('calendar-crf-container', 'CRF');
@@ -591,11 +596,9 @@ window.executarGeradorLote = async function(e) {
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   }
 
-  // EXIBE MENSAGEM COM ALERTA DE CONFLITOS (SE HOUVER)
   if (conflitosDetectados.length > 0) {
     let msgConflito = `⚠️ ATENÇÃO: Escala gerada (${inseridosCount} lançamentos), porém foram identificados ${conflitosDetectados.length} plantões marcados durante períodos de FÉRIAS/LICENÇA:\n\n`;
     
-    // Agrupa conflitos por policial
     const agrupado = {};
     conflitosDetectados.forEach(c => {
       if (!agrupado[c.servidorNome]) agrupado[c.servidorNome] = [];
@@ -612,7 +615,6 @@ window.executarGeradorLote = async function(e) {
   }
 };
 
-// AUXILIAR DE VERIFICAÇÃO DE CONFLITO
 function verificarECatalogarConflito(servidorId, dataIso, tipoModalidade, listaConflitos) {
   const srv = (appState.servidores || []).find(s => s.id === servidorId);
   if (!srv) return;
@@ -631,13 +633,6 @@ function verificarECatalogarConflito(servidorId, dataIso, tipoModalidade, listaC
   }
 }
 
-function formatarDataBr(dataIso) {
-  if (!dataIso) return '-';
-  const parts = dataIso.split('-');
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
-}
-
-// GERA ARRAY DE DATAS SEQUENCIAIS PARA TURNOS DE MÚLTIPLOS DIAS (EX: 2 OU 3 DIAS)
 function gerarDatasMultiplasContinuas(dataInicialIso, diasDuracao) {
   const result = [];
   const parts = dataInicialIso.split('-').map(Number);
@@ -666,6 +661,12 @@ function gerarArrayDatasISO(startStr, endStr) {
     curr.setDate(curr.getDate() + 1);
   }
   return arr;
+}
+
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
 function criarModalGeradorLoteDOM() {
