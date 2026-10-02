@@ -450,7 +450,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
-// EXECUÇÃO DO GERADOR COM CHECAGEM REGIONALIZADA DE FERIADOS
+// EXECUÇÃO CORRIGIDA DO GERADOR EM LOTE
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -496,14 +496,13 @@ window.executarGeradorLote = async function(e) {
     await syncDocToFirestore('delegacias', delObj.id, delObj);
   }
 
-  // 2. CHECAGEM DE DIAS VÁLIDOS COM VALIDAÇÃO DE ESCOPO DE FERIADOS
+  // 2. FILTRA OS DIAS VÁLIDOS NO INTERVALO
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
     const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
     const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6;
 
-    // CONSULTA SE HÁ FERIADO VÁLIDO PARA A UNIDADE OU PLANTÃO UNIFICADO
     const isFeriadoValido = (appState.feriados || []).some(f => {
       if (f.data !== dtStr) return false;
       if (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL') return true;
@@ -531,7 +530,10 @@ window.executarGeradorLote = async function(e) {
   let filaIndex = 0;
   const conflitosDetectados = [];
 
-  for (const dtIso of diasValidos) {
+  // CORREÇÃO CRÍTICA DO SALTO DE DIAS: O LAÇO AVANÇA CONFORME A DURAÇÃO DO TURNO
+  let idxDia = 0;
+  while (idxDia < diasValidos.length) {
+    const dtIso = diasValidos[idxDia];
     const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
 
     if (geradorState.modo === 'INDIVIDUAL') {
@@ -584,6 +586,9 @@ window.executarGeradorLote = async function(e) {
         }
       }
     }
+
+    // SALTA O NÚMERO DE DIAS DO TURNO PARA A PRÓXIMA EQUIPE/POLICIAL
+    idxDia += duracaoDiasTurno;
   }
 
   window.fecharModalGeradorLote();
