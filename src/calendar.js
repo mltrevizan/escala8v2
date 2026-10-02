@@ -1,5 +1,6 @@
 // src/calendar.js
 import { appState, normalizeText } from './state.js';
+import { hasPermission } from './permissions.js';
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -198,7 +199,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       : 'border-t border-l border-slate-200/80';
 
     html += `
-      <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
+      <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto cursor-pointer"
+           onclick="window.abrirModalDetalhesPlantao('${dateStr}', '${scope}')">
         <div class="flex items-center justify-between mb-1 px-0.5">
           <div class="flex items-center gap-1">
             <span class="cal-v1-day-num ${isHoje ? 'text-black font-black' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
@@ -253,9 +255,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // ESTILOS:
-          // PLANTÃO LOCAL: DOURADO SUAVE (PADRÃO DIURNO)
-          // SOBREAVISO & EXTRAJORNADA: GRAFITE INSTITUCIONAL COM NOMES EM BRANCO (PADRÃO NOTURNO DA CRF)
           let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
@@ -271,18 +270,16 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
-            // NOMES EM BRANCO NO SOBREAVISO/EXTRA E ESCUROS NO PLANTÃO
             const corTexto = (isSobreaviso || isExtra) ? 'text-white font-semibold' : 'text-slate-900';
 
             return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
           }).join('');
 
           html += `
-            <div onclick="window.abrirModalDetalhesTurno('Escala Local', '${primeiraEsc.data}', '${idsString}')"
+            <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('Escala Local', '${primeiraEsc.data}', '${idsString}')"
                  onmouseenter="window.mostrarTooltipGrupo(event, '${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
-              <!-- APENAS A VIATURA PERMANECE EM DOURADO PCPR SOBRE FUNDO PRETO -->
               ${primeiraEsc.vtr ? `<div class="text-[8px] bg-black text-[#BEA55A] border border-[#BEA55A]/40 font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
               ${nomesHtml}
               <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${(isSobreaviso || isExtra) ? 'border-white/20 text-slate-300' : 'border-black/10 text-slate-700'} pt-0.5">
@@ -374,7 +371,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   const headerColorClass = isNoturno ? 'border-white/20 text-slate-300' : 'border-[#BEA55A]/50 text-[#5A4716]';
 
   return `
-    <div onclick="window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}')"
+    <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}')"
          onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
          class="p-1 rounded-md border ${bgStyle} space-y-0.5 cursor-pointer hover:brightness-95 hover:shadow-sm transition">
@@ -414,7 +411,8 @@ function setupCalendarEvents(containerId, scope) {
 
   const btnPrev = container.querySelector('#btn-prev-month');
   if (btnPrev) {
-    btnPrev.addEventListener('click', () => {
+    btnPrev.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (appState.currentMonth === 0) {
         appState.currentMonth = 11;
         appState.currentYear--;
@@ -427,7 +425,8 @@ function setupCalendarEvents(containerId, scope) {
 
   const btnNext = container.querySelector('#btn-next-month');
   if (btnNext) {
-    btnNext.addEventListener('click', () => {
+    btnNext.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (appState.currentMonth === 11) {
         appState.currentMonth = 0;
         appState.currentYear++;
@@ -445,6 +444,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   try {
     const ids = idsString.split(',');
     const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
+    const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
 
     let content = `
       <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
@@ -460,6 +460,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+      const telExibicao = podeVerTelefone ? (srv?.telefone || '-') : '🔒 [Acesso Restrito]';
 
       content += `
         <div class="pt-1 border-t border-slate-100 space-y-0.5">
@@ -469,7 +470,7 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
           </div>
           <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
           <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
-          <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
+          <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${telExibicao}</div>
         </div>
       `;
     });
@@ -494,6 +495,8 @@ window.mostrarTooltipEscala = function(event, escalaId) {
     const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
 
     const isSobreaviso = esc.tipo === 'SOBREAVISO';
+    const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
+    const telExibicao = podeVerTelefone ? (srv?.telefone || '-') : '🔒 [Acesso Restrito]';
 
     const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, delEscala);
 
@@ -508,7 +511,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
         <div class="text-[10px] text-slate-600"><b>Unidade do Plantão:</b> ${delEscala ? delEscala.nome : 'Unidade Local'}</div>
         <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
         <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
-        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${srv?.telefone || '-'}</div>
+        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${telExibicao}</div>
       </div>
     `;
 
@@ -602,3 +605,115 @@ window.ocultarTooltip = function() {
     tooltip.classList.add('opacity-0');
   }
 };
+
+// =========================================================================
+// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO
+// =========================================================================
+window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
+  let modal = document.getElementById('modal-detalhes-plantao');
+  if (!modal) {
+    criarModalDetalhesPlantaoDOM();
+    modal = document.getElementById('modal-detalhes-plantao');
+  }
+
+  const containerConteudo = document.getElementById('modal-detalhes-conteudo');
+  if (!containerConteudo) return;
+
+  const escalasDoDia = (appState.escalas || []).filter(e => e.data === dataIso && e.scope === scope);
+  const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
+  const showBtnApj = hasPermission('SHOW_BTN_INCLUIR_TROCAR_APJ');
+  const showBtnDel = hasPermission('SHOW_BTN_TROCAR_DELEGADO');
+
+  if (escalasDoDia.length === 0) {
+    containerConteudo.innerHTML = `
+      <div class="p-6 text-center text-slate-400 italic font-sans text-xs">
+        Nenhum plantão ou sobreaviso registrado para esta data (${formatarDataBr(dataIso)}).
+      </div>
+    `;
+  } else {
+    let cardsHtml = escalasDoDia.map(esc => {
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+      const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
+
+      return `
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 font-sans space-y-2">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+            <span class="text-[10px] uppercase font-extrabold ${isDel ? 'text-[#5A4716]' : 'text-slate-500'}">
+              ${isDel ? 'Delegado Responsável' : 'APJ / Agente Integrante'}
+            </span>
+            <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+          </div>
+
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="font-bold text-slate-900 text-xs block">${srv ? srv.nome : 'Policial Não Informado'}</span>
+              <span class="text-[11px] text-slate-600 font-mono">📞 ${telExibicao}</span>
+            </div>
+
+            <div class="flex gap-1">
+              ${isDel && showBtnDel ? `
+                <button onclick="window.abrirModalTrocarDelegado('${esc.id}')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">
+                  🔄 Trocar Delegado
+                </button>
+              ` : ''}
+
+              {!isDel && showBtnApj ? `
+                <button onclick="window.abrirModalIncluirTrocarAPJ('${esc.id}')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">
+                  ➕/🔄 Incluir / Trocar APJ
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    containerConteudo.innerHTML = `<div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">${cardsHtml}</div>`;
+  }
+
+  modal.classList.remove('hidden');
+};
+
+window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
+  const ids = idsString.split(',');
+  const primeiraEsc = (appState.escalas || []).find(e => ids.includes(e.id));
+  if (primeiraEsc) {
+    window.abrirModalDetalhesPlantao(primeiraEsc.data, primeiraEsc.scope || 'CRF');
+  }
+};
+
+window.fecharModalDetalhesPlantao = function() {
+  document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
+};
+
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
+}
+
+function criarModalDetalhesPlantaoDOM() {
+  const modalHTML = `
+    <div id="modal-detalhes-plantao" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 flex flex-col border-t-4 border-pcpr-gold">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">📅</span>
+            <h3 class="font-bold text-slate-900 text-sm">Detalhes da Escala de Plantão</h3>
+          </div>
+          <button type="button" onclick="window.fecharModalDetalhesPlantao()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <div id="modal-detalhes-conteudo"></div>
+
+        <div class="pt-2 border-t flex justify-end shrink-0">
+          <button type="button" onclick="window.fecharModalDetalhesPlantao()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
