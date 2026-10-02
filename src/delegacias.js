@@ -8,6 +8,15 @@ let delegaciasFiltroState = {
   sdp: 'TODAS'
 };
 
+// FUNÇÃO PARA SANITIZAR E REMOVER CARACTERES ESTRANHOS (\x0B, ert{}, etc.)
+function limparSujeiraHorario(str) {
+  if (!str) return '08:00 às 08:00';
+  return str
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove caracteres de controle ASCII
+    .replace(/ert\{\}/gi, '')              // Remove expressão ert{}
+    .trim();
+}
+
 export function renderDelegaciasCards(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -21,7 +30,7 @@ export function renderDelegaciasCards(containerId) {
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalGerenciarSdps()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ⚙️️ Gerenciar SDPs
+            ⚙ Gerenciar SDPs
           </button>
           <button onclick="window.abrirModalDelegacia()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Nova Delegacia
@@ -132,13 +141,15 @@ window.renderizarListaTroncoGalhos = function() {
         const s = del.sobreavisoConfig || {};
         const pIntervalo = p.intervalo || '24h';
         const pRegime = p.regime || 'ININTERRUPTA';
-        const pUteis = p.uteis || '08:00 às 08:00';
-        const pNaoUteis = p.naoUteis || '08:00 às 08:00';
+        
+        // APLICA SANITIZAÇÃO DE TEXTO NOS HORÁRIOS
+        const pUteis = limparSujeiraHorario(p.uteis || del.horarioUteis);
+        const pNaoUteis = limparSujeiraHorario(p.naoUteis || del.horarioNaoUteis);
 
         const sIntervalo = s.intervalo || '24h';
         const sRegime = s.regime || 'INTERMITENTE';
-        const sUteis = s.uteis || '18:00 às 08:00';
-        const sNaoUteis = s.naoUteis || '08:00 às 08:00';
+        const sUteis = limparSujeiraHorario(s.uteis || '18:00 às 08:00');
+        const sNaoUteis = limparSujeiraHorario(s.naoUteis || '08:00 às 08:00');
 
         return `
           <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
@@ -242,14 +253,14 @@ window.abrirModalDelegacia = function(delId = null) {
       const p = del.plantaoConfig || {};
       selPRegime.value = p.regime || 'ININTERRUPTA';
       selPIntervalo.value = p.intervalo || '24h';
-      inputPUteis.value = p.uteis || del.horarioUteis || '08:00 às 08:00';
-      inputPNaoUteis.value = p.naoUteis || del.horarioNaoUteis || '08:00 às 08:00';
+      inputPUteis.value = limparSujeiraHorario(p.uteis || del.horarioUteis);
+      inputPNaoUteis.value = limparSujeiraHorario(p.naoUteis || del.horarioNaoUteis);
 
       const s = del.sobreavisoConfig || {};
       selSRegime.value = s.regime || 'INTERMITENTE';
       selSIntervalo.value = s.intervalo || '24h';
-      inputSUteis.value = s.uteis || '18:00 às 08:00';
-      inputSNaoUteis.value = s.naoUteis || '08:00 às 08:00';
+      inputSUteis.value = limparSujeiraHorario(s.uteis || '18:00 às 08:00');
+      inputSNaoUteis.value = limparSujeiraHorario(s.naoUteis || '08:00 às 08:00');
     }
   } else {
     inputId.value = '';
@@ -283,15 +294,15 @@ window.salvarDelegaciaModal = async function(e) {
   const plantaoConfig = {
     regime: document.getElementById('del-p-regime').value,
     intervalo: document.getElementById('del-p-intervalo').value,
-    uteis: document.getElementById('del-p-uteis').value.toUpperCase().trim(),
-    naoUteis: document.getElementById('del-p-nao-uteis').value.toUpperCase().trim()
+    uteis: limparSujeiraHorario(document.getElementById('del-p-uteis').value.toUpperCase()),
+    naoUteis: limparSujeiraHorario(document.getElementById('del-p-nao-uteis').value.toUpperCase())
   };
 
   const sobreavisoConfig = {
     regime: document.getElementById('del-s-regime').value,
     intervalo: document.getElementById('del-s-intervalo').value,
-    uteis: document.getElementById('del-s-uteis').value.toUpperCase().trim(),
-    naoUteis: document.getElementById('del-s-nao-uteis').value.toUpperCase().trim()
+    uteis: limparSujeiraHorario(document.getElementById('del-s-uteis').value.toUpperCase()),
+    naoUteis: limparSujeiraHorario(document.getElementById('del-s-nao-uteis').value.toUpperCase())
   };
 
   const targetId = id || ('del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
