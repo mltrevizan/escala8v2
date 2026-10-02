@@ -6,6 +6,18 @@ let loginSearchState = {
 };
 
 /**
+ * Normaliza e-mails ou converte logins curtos (ex: "admin") para e-mail padrão do Firebase Auth
+ */
+function obterEmailAutenticacao(srv) {
+  if (!srv) return '';
+  if (srv.email && srv.email.includes('@')) {
+    return srv.email.toLowerCase().trim();
+  }
+  const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
+  return `${loginBase}@policiacivil.pr.gov.br`;
+}
+
+/**
  * Inicializa os observadores do Firebase Auth e renderiza o botão/modal de login
  */
 export function initAuthModule() {
@@ -17,17 +29,18 @@ export function initAuthModule() {
   // Observador de estado da sessão do Firebase Auth
   firebase.auth().onAuthStateChanged(async (user) => {
     if (user) {
-      // Procura o perfil correspondente na coleção de servidores pelo e-mail
-      const srv = (appState.servidores || []).find(s => 
-        (s.email || '').toLowerCase() === user.email.toLowerCase()
-      );
+      // Procura o perfil correspondente na coleção de servidores pelo e-mail ou login
+      const srv = (appState.servidores || []).find(s => {
+        const emailSrv = obterEmailAutenticacao(s);
+        return emailSrv === user.email.toLowerCase();
+      });
 
       appState.currentUser = {
         uid: user.uid,
         email: user.email,
-        nome: srv ? srv.nome : (user.displayName || user.email.split('@')[0].toUpperCase()),
-        cargo: srv ? srv.cargo : 'VISUALIZADOR',
-        perfil: srv ? srv.perfil : 'Visualizador',
+        nome: srv ? srv.nome : (user.displayName || 'ADMINISTRADOR DO SISTEMA'),
+        cargo: srv ? srv.cargo : 'DELEGADO',
+        perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
         delegaciaId: srv ? srv.delegaciaId : null,
         subdivisao: srv ? srv.subdivisao : '8ª SDP'
       };
@@ -51,16 +64,17 @@ export function renderUserStatusHeader() {
   const user = appState.currentUser;
 
   if (user) {
+    const perfilStr = user.perfil || 'Visualizador';
     let badgePerfilClass = 'bg-slate-100 text-slate-800 border-slate-300';
-    if (user.perfil === 'Administrador') badgePerfilClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
-    else if (user.perfil === 'Delegado') badgePerfilClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
-    else if (user.perfil === 'Coordenador') badgePerfilClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
+    if (perfilStr.toUpperCase() === 'ADMINISTRADOR') badgePerfilClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
+    else if (perfilStr.toUpperCase() === 'DELEGADO') badgePerfilClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
+    else if (perfilStr.toUpperCase() === 'COORDENADOR') badgePerfilClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
     container.innerHTML = `
       <div class="flex items-center gap-2 font-sans">
         <div class="text-right hidden sm:block">
           <span class="block text-xs font-bold text-slate-900">${user.nome}</span>
-          <span class="text-[9.5px] px-1.5 py-0.2 rounded border ${badgePerfilClass}">${user.perfil}</span>
+          <span class="text-[9.5px] px-1.5 py-0.2 rounded border ${badgePerfilClass}">${perfilStr}</span>
         </div>
         <button onclick="window.fazerLogoutApp()" class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1">
           🚪 Sair
@@ -128,7 +142,8 @@ window.filtrarPolicialLogin = function(termo) {
   const servidoresMatcheados = (appState.servidores || []).filter(srv => {
     const nomeNorm = (srv.nome || '').toLowerCase();
     const cargoNorm = (srv.cargo || '').toLowerCase();
-    return nomeNorm.includes(busca) || cargoNorm.includes(busca);
+    const loginNorm = (srv.login || '').toLowerCase();
+    return nomeNorm.includes(busca) || cargoNorm.includes(busca) || loginNorm.includes(busca);
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   if (servidoresMatcheados.length === 0) {
@@ -138,16 +153,17 @@ window.filtrarPolicialLogin = function(termo) {
 
   containerSugestoes.innerHTML = servidoresMatcheados.slice(0, 6).map(srv => {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
-    const emailGerado = srv.email || `${normalizeText(srv.nome).replace(/\s+/g, '.')}@policiacivil.pr.gov.br`;
+    const emailCalculado = obterEmailAutenticacao(srv);
+    const nivelExibicao = srv.nivelAcesso || srv.perfil || 'APJ';
 
     return `
-      <div onclick="window.selecionarPolicialLogin('${srv.id}', '${srv.nome.replace(/'/g, "\\'")}', '${emailGerado}', '${srv.cargo || 'APJ'}')" 
-           class="p-2 hover:bg-indigo-50 border-b border-slate-100 cursor-pointer transition flex items-center justify-between">
+      <div onclick="window.selecionarPolicialLogin('${srv.id}', '${srv.nome.replace(/'/g, "\\'")}', '${emailCalculado}', '${srv.cargo || 'APJ'}')" 
+           class="p-2 hover:bg-indigo-50 border-b border-slate-100 cursor-pointer transition flex items-center justify-between font-sans">
         <div>
           <span class="font-bold text-slate-900 block text-xs">${srv.nome}</span>
           <span class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • ${del ? del.nome : (srv.delegaciaNome || '8ª SDP')}</span>
         </div>
-        <span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${srv.perfil || 'APJ'}</span>
+        <span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${nivelExibicao}</span>
       </div>
     `;
   }).join('');
@@ -170,7 +186,7 @@ window.selecionarPolicialLogin = function(id, nome, email, cargo) {
   if (containerSugestoes) containerSugestoes.innerHTML = '';
 
   if (badgeSel && textoBadge) {
-    textoBadge.innerText = `Policial Selecionado: ${nome} (${cargo})`;
+    textoBadge.innerText = `Selecionado: ${nome} (${cargo})`;
     badgeSel.classList.remove('hidden');
   }
 };
@@ -196,12 +212,12 @@ window.executarLoginFirebase = async function(e) {
     msgErro?.classList.add('hidden');
     await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
-    alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Policial'}!`);
+    alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Administrador'}!`);
   } catch (err) {
     console.error("Erro no login:", err);
     if (msgErro) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        msgErro.innerText = "Palavra-passe incorreta ou utilizador não cadastrado no Auth.";
+        msgErro.innerText = "Palavra-passe incorreta ou utilizador ainda não cadastrado no Firebase Auth.";
       } else {
         msgErro.innerText = `Erro de Autenticação: ${err.message}`;
       }
@@ -235,10 +251,10 @@ function criarModalLoginDOM() {
 
           <input type="hidden" id="login-email-hidden">
 
-          <!-- Digitação Reativa por Nome de Policial -->
+          <!-- Digitação Reativa por Nome ou Login de Policial -->
           <div class="relative">
-            <label class="block font-bold text-slate-700 mb-1">Identifique-se pelo seu Nome:</label>
-            <input type="text" id="login-nome-busca" oninput="window.filtrarPolicialLogin(this.value)" placeholder="🔍 Digite as primeiras letras do seu nome..." autocomplete="off" class="w-full border rounded-xl p-2.5 bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <label class="block font-bold text-slate-700 mb-1">Identifique-se pelo seu Nome ou Login:</label>
+            <input type="text" id="login-nome-busca" oninput="window.filtrarPolicialLogin(this.value)" placeholder="🔍 Digite 'ADMIN' ou as primeiras letras do seu nome..." autocomplete="off" class="w-full border rounded-xl p-2.5 bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
             
             <!-- Lista Flutuante de Sugestões -->
             <div id="login-sugestoes-lista" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto z-20"></div>
