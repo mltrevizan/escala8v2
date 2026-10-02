@@ -31,8 +31,8 @@ export function renderGestaoCrfModule(containerId) {
           <p class="text-[11px] text-slate-500">Controle de lançamentos, turnos, equipes e substituições (${mesExtenso})</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button onclick="window.abrirModalNovoLancamento('CRF')" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ➕ Novo Lançamento
+          <button onclick="window.abrirModalLancamentoCrf()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Novo Lançamento CRF
           </button>
           <button onclick="window.abrirModalVincularApjPontual()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             🔗 Vincular APJ
@@ -178,7 +178,7 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS (COM FILTRO REATIVO RESTAURADO)
+// 2. MÓDULO GESTÃO POR DELEGACIAS
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -199,8 +199,8 @@ export function renderGestaoDelegaciasModule(containerId) {
           <p class="text-[11px] text-slate-500">Controle dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button onclick="window.abrirModalNovoLancamento('DELEGACIA')" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ➕ Novo Lançamento
+          <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Novo Lançamento Local
           </button>
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar em Lote
@@ -321,16 +321,16 @@ window.mudarUnidadeGestaoDel = function(id) {
 };
 
 // =========================================================================
-// 3. ESTRUTURA DO MODAL "NOVO LANÇAMENTO AVULSO" (FUNCIONAMENTO GLOBAL)
+// 3. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO CRF
 // =========================================================================
-window.abrirModalNovoLancamento = function(scope = 'CRF') {
-  let modal = document.getElementById('modal-novo-lancamento');
+window.abrirModalLancamentoCrf = function() {
+  let modal = document.getElementById('modal-lancamento-crf');
   if (!modal) {
-    criarModalNovoLancamentoDOM();
-    modal = document.getElementById('modal-novo-lancamento');
+    criarModalLancamentoCrfDOM();
+    modal = document.getElementById('modal-lancamento-crf');
   }
 
-  const selectSrv = document.getElementById('nl-servidor-id');
+  const selectSrv = document.getElementById('ml-crf-servidor-id');
   let optsSrv = `<option value="">Selecione o Policial...</option>`;
   (appState.servidores || [])
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
@@ -339,41 +339,235 @@ window.abrirModalNovoLancamento = function(scope = 'CRF') {
     });
   if (selectSrv) selectSrv.innerHTML = optsSrv;
 
-  const selectDel = document.getElementById('nl-delegacia-id');
-  let optsDel = `<option value="">Selecione a Unidade...</option>`;
-  (appState.delegacias || [])
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-    .forEach(d => {
-      optsDel += `<option value="${d.id}">${d.nome}</option>`;
-    });
-  if (selectDel) selectDel.innerHTML = optsDel;
+  document.getElementById('ml-crf-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('ml-crf-tipo').value = 'PLANTÃO';
+  document.getElementById('ml-crf-turno').value = '24h';
+  document.getElementById('ml-crf-origem-nome').value = '';
 
-  document.getElementById('nl-scope').value = scope;
-  document.getElementById('nl-data').value = new Date().toISOString().split('T')[0];
-  document.getElementById('nl-tipo').value = 'PLANTÃO';
-  document.getElementById('nl-turno').value = '24h';
-  document.getElementById('nl-vtr').value = '';
+  window.aoMudarServidorCrf('');
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalLancamentoCrf = function() {
+  document.getElementById('modal-lancamento-crf')?.classList.add('hidden');
+};
+
+window.aoMudarServidorCrf = function(srvId) {
+  const srv = (appState.servidores || []).find(s => s.id === srvId);
+  const campoOrigem = document.getElementById('ml-crf-origem-nome');
+  const blocoDelVinculado = document.getElementById('ml-crf-bloco-delegado');
+
+  if (srv) {
+    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    if (campoOrigem) campoOrigem.value = del ? del.nome : (srv.delegaciaNome || 'Central CRF');
+
+    const isApj = !(srv.cargo || '').toUpperCase().includes('DELEGADO');
+    if (blocoDelVinculado) {
+      if (isApj) {
+        blocoDelVinculado.classList.remove('hidden');
+        window.atualizarDelegadosDisponiveisCrf();
+      } else {
+        blocoDelVinculado.classList.add('hidden');
+      }
+    }
+  } else {
+    if (campoOrigem) campoOrigem.value = '';
+    if (blocoDelVinculado) blocoDelVinculado.classList.add('hidden');
+  }
+};
+
+window.atualizarDelegadosDisponiveisCrf = function() {
+  const selectDel = document.getElementById('ml-crf-delegado-vinculado');
+  if (!selectDel) return;
+
+  const dataSel = document.getElementById('ml-crf-data')?.value;
+  const turnoSel = document.getElementById('ml-crf-turno')?.value;
+
+  // Busca Delegados já escalados no mesmo dia e turno para a CRF
+  const escalasDelegados = (appState.escalas || []).filter(e => {
+    if (e.scope !== 'CRF' || e.data !== dataSel || e.turno !== turnoSel) return false;
+    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    return srv && (srv.cargo || '').toUpperCase().includes('DELEGADO');
+  });
+
+  let opts = `<option value="">Nenhum vínculo permanente (Avulso)</option>`;
+  escalasDelegados.forEach(e => {
+    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    if (srv) {
+      opts += `<option value="${srv.id}">DEL. ${srv.nome}</option>`;
+    }
+  });
+
+  selectDel.innerHTML = opts;
+};
+
+window.salvarLancamentoCrfModal = async function(e) {
+  e.preventDefault();
+
+  const data = document.getElementById('ml-crf-data').value;
+  const servidorId = document.getElementById('ml-crf-servidor-id').value;
+  const tipo = document.getElementById('ml-crf-tipo').value;
+  const turno = document.getElementById('ml-crf-turno').value;
+  const delegadoVinculadoId = document.getElementById('ml-crf-delegado-vinculado')?.value || null;
+
+  if (!servidorId || !data) {
+    alert("Selecione o policial e a data antes de salvar.");
+    return;
+  }
+
+  const srv = (appState.servidores || []).find(s => s.id === servidorId);
+  const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+  const novaEsc = {
+    id: newEscId,
+    data: data,
+    servidorId: servidorId,
+    delegaciaId: srv ? srv.delegaciaId : '',
+    scope: 'CRF',
+    tipo: tipo,
+    turno: turno,
+    delegadoVinculadoId: delegadoVinculadoId
+  };
+
+  if (!appState.escalas) appState.escalas = [];
+  appState.escalas.push(novaEsc);
+  await syncDocToFirestore('escalas', newEscId, novaEsc);
+
+  alert("Lançamento na Central CRF cadastrado com sucesso!");
+  window.fecharModalLancamentoCrf();
+
+  renderGestaoCrfModule('gestao-crf-container');
+  renderCalendarGrid('calendar-crf-container', 'CRF');
+};
+
+function criarModalLancamentoCrfDOM() {
+  const modalHTML = `
+    <div id="modal-lancamento-crf" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">🏛️ Novo Lançamento na Central CRF</h3>
+          <button type="button" onclick="window.fecharModalLancamentoCrf()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarLancamentoCrfModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Data do Plantão CRF:</label>
+            <input type="date" id="ml-crf-data" required onchange="window.atualizarDelegadosDisponiveisCrf()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
+            <select id="ml-crf-servidor-id" required onchange="window.aoMudarServidorCrf(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-500 mb-1">Lotação de Origem (Automática):</label>
+            <input type="text" id="ml-crf-origem-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-500 font-medium">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
+              <select id="ml-crf-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="PLANTÃO">PLANTÃO (Regular)</option>
+                <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Turno CRF:</label>
+              <select id="ml-crf-turno" onchange="window.atualizarDelegadosDisponiveisCrf()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="24h">24h completo</option>
+                <option value="12h (D)">12h (D) - Diurno</option>
+                <option value="12h (N)">12h (N) - Noturno</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="ml-crf-bloco-delegado" class="hidden p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-200">
+            <label class="block font-bold text-indigo-950 mb-1">Vincular a Delegado do Turno (Opcional):</label>
+            <select id="ml-crf-delegado-vinculado" class="w-full border rounded-lg p-1.5 bg-white font-bold text-slate-800"></select>
+          </div>
+
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="window.fecharModalLancamentoCrf()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar na CRF</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// =========================================================================
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
+// =========================================================================
+window.abrirModalLancamentoDelegacia = function() {
+  let modal = document.getElementById('modal-lancamento-delegacia');
+  if (!modal) {
+    criarModalLancamentoDelegaciaDOM();
+    modal = document.getElementById('modal-lancamento-delegacia');
+  }
+
+  const { selectedDelegaciaId } = appState;
+  const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+
+  const inputDelNome = document.getElementById('ml-del-unidade-nome');
+  if (inputDelNome) inputDelNome.value = delObj ? delObj.nome : 'Unidade Selecionada';
+
+  // Filtra policiais pertencentes a essa unidade no topo da lista
+  const selectSrv = document.getElementById('ml-del-servidor-id');
+  let optsSrv = `<option value="">Selecione o Policial...</option>`;
+
+  const servidoresUnidade = [];
+  const demaisServidores = [];
+
+  (appState.servidores || []).forEach(s => {
+    if (s.delegaciaId === selectedDelegaciaId) servidoresUnidade.push(s);
+    else demaisServidores.push(s);
+  });
+
+  servidoresUnidade.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  demaisServidores.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  if (servidoresUnidade.length > 0) {
+    optsSrv += `<optgroup label="Efetivo da Unidade">`;
+    servidoresUnidade.forEach(s => { optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`; });
+    optsSrv += `</optgroup>`;
+  }
+
+  if (demaisServidores.length > 0) {
+    optsSrv += `<optgroup label="Demais Unidades">`;
+    demaisServidores.forEach(s => { optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`; });
+    optsSrv += `</optgroup>`;
+  }
+
+  if (selectSrv) selectSrv.innerHTML = optsSrv;
+
+  document.getElementById('ml-del-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('ml-del-tipo').value = 'PLANTÃO';
+  document.getElementById('ml-del-turno').value = '24h';
+  document.getElementById('ml-del-vtr').value = '';
 
   modal.classList.remove('hidden');
 };
 
-window.fecharModalNovoLancamento = function() {
-  document.getElementById('modal-novo-lancamento')?.classList.add('hidden');
+window.fecharModalLancamentoDelegacia = function() {
+  document.getElementById('modal-lancamento-delegacia')?.classList.add('hidden');
 };
 
-window.salvarNovoLancamentoModal = async function(e) {
+window.salvarLancamentoDelegaciaModal = async function(e) {
   e.preventDefault();
 
-  const scope = document.getElementById('nl-scope').value;
-  const data = document.getElementById('nl-data').value;
-  const servidorId = document.getElementById('nl-servidor-id').value;
-  const delegaciaId = document.getElementById('nl-delegacia-id').value;
-  const tipo = document.getElementById('nl-tipo').value;
-  const turno = document.getElementById('nl-turno').value;
-  const vtr = document.getElementById('nl-vtr').value.toUpperCase().trim();
+  const data = document.getElementById('ml-del-data').value;
+  const servidorId = document.getElementById('ml-del-servidor-id').value;
+  const tipo = document.getElementById('ml-del-tipo').value;
+  const turno = document.getElementById('ml-del-turno').value;
+  const vtr = document.getElementById('ml-del-vtr').value.toUpperCase().trim();
 
   if (!servidorId || !data) {
-    alert("Preencha a data e selecione o policial antes de salvar.");
+    alert("Selecione a data e o policial antes de salvar.");
     return;
   }
 
@@ -382,8 +576,8 @@ window.salvarNovoLancamentoModal = async function(e) {
     id: newEscId,
     data: data,
     servidorId: servidorId,
-    delegaciaId: scope === 'DELEGACIA' ? (delegaciaId || appState.selectedDelegaciaId) : delegaciaId,
-    scope: scope,
+    delegaciaId: appState.selectedDelegaciaId,
+    scope: 'DELEGACIA',
     tipo: tipo,
     turno: turno,
     vtr: vtr
@@ -393,73 +587,69 @@ window.salvarNovoLancamentoModal = async function(e) {
   appState.escalas.push(novaEsc);
   await syncDocToFirestore('escalas', newEscId, novaEsc);
 
-  alert("Lançamento cadastrado com sucesso!");
-  window.fecharModalNovoLancamento();
+  alert("Lançamento Local cadastrado com sucesso!");
+  window.fecharModalLancamentoDelegacia();
 
-  if (scope === 'CRF') {
-    renderGestaoCrfModule('gestao-crf-container');
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-  } else {
-    renderGestaoDelegaciasModule('gestao-delegacias-container');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  }
+  renderGestaoDelegaciasModule('gestao-delegacias-container');
+  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
 };
 
-function criarModalNovoLancamentoDOM() {
+function criarModalLancamentoDelegaciaDOM() {
   const modalHTML = `
-    <div id="modal-novo-lancamento" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+    <div id="modal-lancamento-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <h3 class="font-bold text-slate-900 text-sm">➕ Novo Lançamento de Escala</h3>
-          <button type="button" onclick="window.fecharModalNovoLancamento()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+          <h3 class="font-bold text-slate-900 text-sm">🏢 Novo Lançamento na Delegacia</h3>
+          <button type="button" onclick="window.fecharModalLancamentoDelegacia()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
-        <form onsubmit="window.salvarNovoLancamentoModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
-          <input type="hidden" id="nl-scope">
-
+        <form onsubmit="window.salvarLancamentoDelegaciaModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Data do Plantão:</label>
-            <input type="date" id="nl-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+            <label class="block font-bold text-slate-500 mb-1">Unidade Alvo (Fixa):</label>
+            <input type="text" id="ml-del-unidade-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-700 font-bold">
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor:</label>
-            <select id="nl-servidor-id" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+            <label class="block font-bold text-slate-700 mb-1">Data do Plantão Local:</label>
+            <input type="date" id="ml-del-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Unidade / Lotação do Plantão:</label>
-            <select id="nl-delegacia-id" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
+            <select id="ml-del-servidor-id" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
-              <select id="nl-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="PLANTÃO">PLANTÃO</option>
+              <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
+              <select id="ml-del-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="PLANTÃO">PLANTÃO LOCAL</option>
                 <option value="SOBREAVISO">SOBREAVISO</option>
                 <option value="EXTRAJORNADA">EXTRAJORNADA</option>
               </select>
             </div>
 
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Turno:</label>
-              <select id="nl-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="24h">24h</option>
-                <option value="12h (D)">12h (D)</option>
-                <option value="12h (N)">12h (N)</option>
+              <label class="block font-bold text-slate-700 mb-1">Duração do Turno:</label>
+              <select id="ml-del-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="12h">12 Horas</option>
+                <option value="24h">24 Horas (1 Dia)</option>
+                <option value="2 dias">2 Dias</option>
+                <option value="3 dias">3 Dias</option>
+                <option value="4 dias">4 Dias</option>
+                <option value="7 dias">7 Dias (1 Semana)</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Prefix da Viatura (Opicional):</label>
-            <input type="text" id="nl-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011" class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900">
+            <label class="block font-bold text-slate-700 mb-1">Prefix da Viatura - VTR (Opcional):</label>
+            <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011" class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900">
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
-            <button type="button" onclick="window.fecharModalNovoLancamento()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar Lançamento</button>
+            <button type="button" onclick="window.fecharModalLancamentoDelegacia()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar na Delegacia</button>
           </div>
         </form>
       </div>
@@ -594,7 +784,7 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
 };
 
 // =========================================================================
-// 4. FERRAMENTA: VINCULAR APJ PONTUAL
+// 5. FERRAMENTA: VINCULAR APJ PONTUAL
 // =========================================================================
 let vincularApjPontualState = {
   filtroDelegado: '',
