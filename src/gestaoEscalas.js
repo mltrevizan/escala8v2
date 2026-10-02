@@ -5,7 +5,6 @@ import { renderCalendarGrid } from './calendar.js';
 
 let gestaoCrfFiltros = { busca: '', sdp: 'TODAS', delegaciaId: 'TODAS' };
 
-// Sanitização e Conversão Automática de SDP para EXTRAJORNADA
 function normalizarTipoModalidade(tipo) {
   if (!tipo) return 'PLANTÃO';
   const t = tipo.trim().toUpperCase();
@@ -14,7 +13,7 @@ function normalizarTipoModalidade(tipo) {
 }
 
 // =========================================================================
-// 1. MÓDULO GESTÃO CRF (EXPORTADO CORRETAMENTE)
+// 1. MÓDULO GESTÃO CRF
 // =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
@@ -24,7 +23,7 @@ export function renderGestaoCrfModule(containerId) {
   const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   container.innerHTML = `
-    <!-- Topo Gerencial com Ações -->
+    <!-- Topo Gerencial com Ações Padronizadas PCPR -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -32,22 +31,22 @@ export function renderGestaoCrfModule(containerId) {
           <p class="text-[11px] text-slate-500">Controle de lançamentos, turnos, equipes e substituições (${mesExtenso})</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button onclick="window.abrirModalNovoLancamento('CRF')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.abrirModalNovoLancamento('CRF')" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Lançamento
           </button>
-          <button onclick="window.abrirModalVincularApjPontual()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.abrirModalVincularApjPontual()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             🔗 Vincular APJ
           </button>
           <button onclick="window.exportarEscalaCrfCsv('CRF')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📤 Exportar CSV
           </button>
-          <button onclick="window.importarEscalaCrfCsv('CRF')" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.importarEscalaCrfCsv('CRF')" class="px-3 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📥 Importar CSV
           </button>
         </div>
       </div>
 
-      <!-- Barra de Filtros -->
+      <!-- Filtros -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
         <div>
           <input type="text" id="gest-crf-busca" oninput="window.filtrarTabelaGestaoCrf()" placeholder="🔍 Filtrar por nome do policial..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
@@ -61,7 +60,7 @@ export function renderGestaoCrfModule(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Gerencial -->
+    <!-- Tabela -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -166,10 +165,10 @@ window.renderTabelaGestaoCrfCorpo = function() {
           </span>
         </td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalDetalhesTurno('Gestão CRF', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.abrirModalDetalhesTurno('Gestão CRF', '${esc.data}', '${esc.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
             ✏️ Editar
           </button>
-          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'CRF')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'CRF')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
             🗑 Excluir
           </button>
         </td>
@@ -179,7 +178,7 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS (EXPORTADO CORRETAMENTE)
+// 2. MÓDULO GESTÃO POR DELEGACIAS
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -200,16 +199,16 @@ export function renderGestaoDelegaciasModule(containerId) {
           <p class="text-[11px] text-slate-500">Controle dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button onclick="window.abrirModalNovoLancamento('DELEGACIA')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.abrirModalNovoLancamento('DELEGACIA')" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Lançamento
           </button>
-          <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar em Lote
           </button>
           <button onclick="window.exportarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📤 Exportar CSV
           </button>
-          <button onclick="window.importarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <button onclick="window.importarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📥 Importar CSV
           </button>
         </div>
@@ -295,10 +294,10 @@ window.renderTabelaGestaoDelCorpo = function() {
           </span>
         </td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalDetalhesTurno('Gestão Delegacia', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.abrirModalDetalhesTurno('Gestão Delegacia', '${esc.data}', '${esc.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
             ✏️ Editar
           </button>
-          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
             🗑 Excluir
           </button>
         </td>
@@ -327,9 +326,6 @@ window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
   }
 };
 
-// =========================================================================
-// EXPORTAÇÃO E IMPORTAÇÃO DE ARQUIVO CSV
-// =========================================================================
 window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
   const { currentYear, currentMonth, selectedDelegaciaId } = appState;
 
@@ -438,7 +434,7 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
 };
 
 // =========================================================================
-// 3. FERRAMENTA: VINCULAR APJ PONTUAL
+// 3. FERRAMENTA: VINCULAR APJ PONTUAL (MODAL AJUSTADO)
 // =========================================================================
 let vincularApjPontualState = {
   filtroDelegado: '',
@@ -565,7 +561,7 @@ window.renderizarListaPlantoesApenasDelegados = function() {
             <select id="vinc-select-apj-${idx}" class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-white">
               ${selectOptions}
             </select>
-            <button type="button" onclick="window.confirmarVinculoApjPontual('${item.data}', '${item.turno}', 'vinc-select-apj-${idx}')" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer shrink-0">
+            <button type="button" onclick="window.confirmarVinculoApjPontual('${item.data}', '${item.turno}', 'vinc-select-apj-${idx}')" class="px-3.5 py-1.5 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer shrink-0">
               Vincular
             </button>
           </div>
@@ -626,11 +622,11 @@ function criarModalVincularApjPontualDOM() {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 shrink-0">
           <div>
             <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Filtro Delegado:</label>
-            <input type="text" id="vinc-filtro-delegado-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do Delegado..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <input type="text" id="vinc-filtro-delegado-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do Delegado..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
           <div>
             <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Filtro APJ:</label>
-            <input type="text" id="vinc-filtro-apj-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do APJ..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <input type="text" id="vinc-filtro-apj-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do APJ..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
         </div>
 
