@@ -29,20 +29,17 @@ export function renderDelegaciasCards(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtro e Digitação -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
         <div class="sm:col-span-2">
           <input type="text" id="filtro-del-busca" oninput="window.atualizarFiltrosDelegaciasList()" placeholder="🔍 Filtrar por nome da delegacia ou SDP..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
         </div>
         <div>
           <select id="filtro-del-sdp" onchange="window.atualizarFiltrosDelegaciasList()" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
-            <!-- Popula dinamicamente -->
           </select>
         </div>
       </div>
     </div>
 
-    <!-- Lista Estruturada Tronco e Galhos -->
     <div id="lista-delegacias-tronco" class="p-4 space-y-6 font-sans"></div>
   `;
 
