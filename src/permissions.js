@@ -26,6 +26,27 @@ export function canManageDelegacia(targetDelegaciaId) {
   return false;
 }
 
+/**
+ * Avalia se o telefone pode ser exibido.
+ * Se o utilizador for VISUALIZADOR (não logado), exibe APENAS para: Ontem, Hoje e Amanhã.
+ */
+export function canViewPhoneForDate(dataIso) {
+  const role = getCurrentUserRole();
+  if (role !== 'VISUALIZADOR') return true;
+
+  if (!dataIso) return false;
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const [ano, mes, dia] = dataIso.split('-').map(Number);
+  const dtEscala = new Date(ano, mes - 1, dia);
+  dtEscala.setHours(0, 0, 0, 0);
+
+  const diffDias = Math.round((dtEscala - hoje) / (1000 * 60 * 60 * 24));
+  return diffDias >= -1 && diffDias <= 1; // -1 (Ontem), 0 (Hoje), +1 (Amanhã)
+}
+
 export function hasPermission(action, contextData = null) {
   const role = getCurrentUserRole();
 
@@ -84,9 +105,6 @@ export function hasPermission(action, contextData = null) {
     case 'SHOW_BTN_TROCAR_DELEGADO':
       return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
 
-    case 'VIEW_PHONE_NUMBERS':
-      return role !== 'VISUALIZADOR';
-
     default:
       return false;
   }
@@ -118,7 +136,7 @@ export function isProtectedAdminAccount(targetServidor) {
 }
 
 /**
- * Controla a exibição das abas e redireciona se estiver em área restrita deslogado
+ * Aplica as restrições na interface gráfica (DOM) em tempo real
  */
 export function applyUIPermissions() {
   const role = getCurrentUserRole();
@@ -130,12 +148,16 @@ export function applyUIPermissions() {
   const btnServidores = document.getElementById('tab-btn-servidores');
   const btnDelegacias = document.getElementById('tab-btn-unidades');
   const btnFerias = document.getElementById('tab-btn-ferias');
+  const btnFeriados = document.getElementById('tab-btn-feriados');
 
   if (btnGestaoCrf) btnGestaoCrf.style.display = hasPermission('VIEW_GESTAO_CRF') ? '' : 'none';
   if (btnGestaoDel) btnGestaoDel.style.display = hasPermission('VIEW_GESTAO_DELEGACIAS') ? '' : 'none';
   if (btnServidores) btnServidores.style.display = hasPermission('VIEW_SERVIDORES') ? '' : 'none';
   if (btnDelegacias) btnDelegacias.style.display = hasPermission('VIEW_UNIDADES') ? '' : 'none';
   if (btnFerias) btnFerias.style.display = isLogged ? '' : 'none';
+  
+  // Oculta a aba Feriados para o público geral (apenas utilizadores logados acedem)
+  if (btnFeriados) btnFeriados.style.display = isLogged ? '' : 'none';
 
   if (['DELEGADO', 'SUPERINTENDENTE'].includes(role) && userDelId) {
     const selectDelGestao = document.getElementById('gestao-del-select-unidade');
@@ -146,8 +168,7 @@ export function applyUIPermissions() {
     }
   }
 
-  // Se deslogar ou não tiver permissão para a aba ativa, envia obrigatoriamente para a aba 'crf'
-  if (!isLogged && ['gestao-crf', 'gestao-del', 'servidores', 'unidades', 'ferias'].includes(appState.activeTab)) {
+  if (!isLogged && ['gestao-crf', 'gestao-del', 'servidores', 'unidades', 'ferias', 'feriados'].includes(appState.activeTab)) {
     if (window.switchTab) window.switchTab('crf');
   } else if (role === 'APJ' && ['gestao-crf', 'gestao-del'].includes(appState.activeTab)) {
     if (window.switchTab) window.switchTab('crf');
