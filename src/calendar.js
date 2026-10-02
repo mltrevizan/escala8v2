@@ -227,7 +227,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
       } else {
-        // AGRUPAMENTO INTELIGENTE POR TIPO E VTR NA ESCALA DE DELEGACIA
         const gruposDelegacia = {};
         escalasDoDia.forEach(esc => {
           const key = `${esc.tipo || 'PLANTÃO'}_${esc.vtr || ''}_${esc.turno || '24h'}`;
