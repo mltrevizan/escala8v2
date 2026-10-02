@@ -22,7 +22,13 @@ body {
 .cal-v1-srv-name { font-size: 9px !important; line-height: 11.5px !important; font-weight: 600 !important; }
 .cal-v1-tag-extra { font-size: 6.5px !important; line-height: 8px !important; font-weight: 900 !important; padding: 1px 3px !important; }
 
-/* Estilização Ativa de Abas PCPR */
+/* Estilização Dinâmica de Abas (Sem sombra na inativa) */
+.tab-btn {
+  background-color: transparent;
+  color: #475569;
+  border-bottom: 3px solid transparent;
+}
+
 .tab-btn.active {
   background-color: var(--pcpr-black) !important;
   color: #FFFFFF !important;
