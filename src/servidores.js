@@ -2,20 +2,22 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
-// Estado local de filtros e ordenação da tabela de servidores
 const servidoresState = {
   busca: '',
   sdp: 'TODAS',
   delegaciaId: 'TODAS',
   cargo: 'TODOS',
   perfil: 'TODOS',
-  sortColuna: 'NOME', // 'NOME', 'CARGO', 'DELEGACIA', 'SDP', 'PERFIL'
-  sortDirecao: 'ASC'  // 'ASC' ou 'DESC'
+  sortColuna: 'NOME',
+  sortDirecao: 'ASC'
 };
 
 export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
+
+  // Garante a adequação dos perfis iniciais em massa se ainda estiverem genéricos
+  normalizarPerfisServidoresEmMassa();
 
   const html = `
     <!-- Cabeçalho de Controle e Ações -->
@@ -30,7 +32,7 @@ export function renderServidoresTable(containerId) {
         </button>
       </div>
 
-      <!-- Barra de Filtros Múltiplos e Busca por Digitação -->
+      <!-- Barra de Filtros Múltiplos -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida:</label>
@@ -38,23 +40,20 @@ export function renderServidoresTable(containerId) {
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️️ Subdivisão (SDP):</label>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛 Subdivisão (SDP):</label>
           <select id="filtro-srv-sdp" onchange="window.aoMudarFiltroSdpServidores(this.value)" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <!-- Popula dinamicamente -->
           </select>
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Delegacia / Unidade:</label>
           <select id="filtro-srv-del" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <!-- Popula dinamicamente -->
           </select>
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">👮 Cargo:</label>
           <select id="filtro-srv-cargo" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <!-- Popula dinamicamente -->
           </select>
         </div>
 
@@ -62,9 +61,12 @@ export function renderServidoresTable(containerId) {
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔑 Perfil de Acesso:</label>
           <select id="filtro-srv-perfil" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
             <option value="TODOS">Todos os Perfis</option>
-            <option value="ADMINISTRADOR">Administrador</option>
-            <option value="GESTOR">Gestor de Unidade</option>
-            <option value="VISUALIZADOR">Visualizador / Público</option>
+            <option value="Visualizador">Visualizador (Público)</option>
+            <option value="APJ">APJ</option>
+            <option value="Superintendente">Superintendente</option>
+            <option value="Delegado">Delegado</option>
+            <option value="Coordenador">Coordenador</option>
+            <option value="Administrador">Administrador</option>
           </select>
         </div>
       </div>
@@ -74,7 +76,7 @@ export function renderServidoresTable(containerId) {
         <span id="total-servidores-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-0.5 rounded-md">
           Exibindo 0 Servidores
         </span>
-        <span class="text-[10px] text-slate-400 italic">Dica: clique no cabeçalho das colunas da tabela para reordenar (A-Z)</span>
+        <span class="text-[10px] text-slate-400 italic">Dica: clique no cabeçalho das colunas para reordenar (A-Z)</span>
       </div>
     </div>
 
@@ -96,7 +98,7 @@ export function renderServidoresTable(containerId) {
               Subdivisão (SDP) <span id="sort-icon-SDP"></span>
             </th>
             <th onclick="window.ordenarServidoresPorColuna('PERFIL')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
-              Perfil <span id="sort-icon-PERFIL"></span>
+              Perfil de Acesso <span id="sort-icon-PERFIL"></span>
             </th>
             <th class="p-3">Telefone</th>
             <th class="p-3 text-right">Ações</th>
@@ -112,8 +114,24 @@ export function renderServidoresTable(containerId) {
   window.renderTabelaServidoresCorpo();
 }
 
+function normalizarPerfisServidoresEmMassa() {
+  (appState.servidores || []).forEach(srv => {
+    const nomeNorm = normalizeText(srv.nome || '');
+    const cargoNorm = normalizeText(srv.cargo || '');
+
+    if (nomeNorm === 'administrador do sistema' || nomeNorm === 'admin') {
+      srv.perfil = 'Administrador';
+    } else if (!srv.perfil || srv.perfil.toUpperCase() === 'VISUALIZADOR' || srv.perfil.toUpperCase() === 'GESTOR') {
+      if (cargoNorm.includes('delegado')) {
+        srv.perfil = 'Delegado';
+      } else {
+        srv.perfil = 'APJ';
+      }
+    }
+  });
+}
+
 window.popularFiltrosIniciaisServidores = function() {
-  // Popula SDPs
   const selectSdp = document.getElementById('filtro-srv-sdp');
   if (selectSdp) {
     const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
@@ -127,7 +145,6 @@ window.popularFiltrosIniciaisServidores = function() {
     selectSdp.innerHTML = opts;
   }
 
-  // Popula Cargos
   const selectCargo = document.getElementById('filtro-srv-cargo');
   if (selectCargo) {
     const setCargos = new Set(['APJ', 'DELEGADO', 'INVESTIGADOR', 'ESCRIVÃO', 'AGENTE DE POLÍCIA']);
@@ -191,7 +208,6 @@ window.ordenarServidoresPorColuna = function(coluna) {
     servidoresState.sortDirecao = 'ASC';
   }
 
-  // Atualiza ícones dos cabeçalhos
   ['NOME', 'CARGO', 'DELEGACIA', 'SDP', 'PERFIL'].forEach(col => {
     const iconEl = document.getElementById(`sort-icon-${col}`);
     if (iconEl) {
@@ -212,12 +228,10 @@ window.renderTabelaServidoresCorpo = function() {
 
   const { busca, sdp, delegaciaId, cargo, perfil, sortColuna, sortDirecao } = servidoresState;
 
-  // 1. FILTRAGEM MULTIVARIÁVEL
   let servidoresFiltrados = [...(appState.servidores || [])].filter(srv => {
     const n = normalizeText(srv.nome || '');
     if (n === 'administrador do sistema' || n === 'admin') return false;
 
-    // Filtro por Busca Textual
     if (busca) {
       const nomeSrv = (srv.nome || '').toLowerCase();
       const cargoSrv = (srv.cargo || '').toLowerCase();
@@ -230,33 +244,27 @@ window.renderTabelaServidoresCorpo = function() {
       }
     }
 
-    // Filtro por SDP
     if (sdp !== 'TODAS') {
       const delObj = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
       const sdpSrv = (delObj?.subdivisao || srv.subdivisao || '').toUpperCase();
       if (sdpSrv !== sdp) return false;
     }
 
-    // Filtro por Delegacia
     if (delegaciaId !== 'TODAS') {
       if (srv.delegaciaId !== delegaciaId) return false;
     }
 
-    // Filtro por Cargo
     if (cargo !== 'TODOS') {
       if ((srv.cargo || '').toUpperCase() !== cargo) return false;
     }
 
-    // Filtro por Perfil
     if (perfil !== 'TODOS') {
-      const perfilSrv = (srv.perfil || 'VISUALIZADOR').toUpperCase();
-      if (perfilSrv !== perfil) return false;
+      if ((srv.perfil || 'APJ') !== perfil) return false;
     }
 
     return true;
   });
 
-  // 2. ORDENAÇÃO DINÂMICA
   servidoresFiltrados.sort((a, b) => {
     const delA = (appState.delegacias || []).find(d => d.id === a.delegaciaId);
     const delB = (appState.delegacias || []).find(d => d.id === b.delegaciaId);
@@ -276,15 +284,14 @@ window.renderTabelaServidoresCorpo = function() {
       valA = delA?.subdivisao || a.subdivisao || '';
       valB = delB?.subdivisao || b.subdivisao || '';
     } else if (sortColuna === 'PERFIL') {
-      valA = a.perfil || 'VISUALIZADOR';
-      valB = b.perfil || 'VISUALIZADOR';
+      valA = a.perfil || 'APJ';
+      valB = b.perfil || 'APJ';
     }
 
     const res = valA.localeCompare(valB, undefined, { numeric: true });
     return sortDirecao === 'ASC' ? res : -res;
   });
 
-  // Atualiza contador
   const totalEl = document.getElementById('total-servidores-count');
   if (totalEl) totalEl.innerText = `Exibindo ${servidoresFiltrados.length} Servidores`;
 
@@ -295,26 +302,25 @@ window.renderTabelaServidoresCorpo = function() {
 
   tbody.innerHTML = servidoresFiltrados.map(srv => {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
-    const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
-    const perfilSrv = srv.perfil || 'VISUALIZADOR';
+    const perfilSrv = srv.perfil || 'APJ';
 
     let badgePerfilClass = 'bg-slate-100 text-slate-700 border-slate-300';
-    if (perfilSrv === 'ADMINISTRADOR') badgePerfilClass = 'bg-rose-100 text-rose-900 border-rose-300 font-black';
-    else if (perfilSrv === 'GESTOR') badgePerfilClass = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold';
+    if (perfilSrv === 'Administrador') badgePerfilClass = 'bg-rose-100 text-rose-900 border-rose-300 font-black';
+    else if (perfilSrv === 'Coordenador') badgePerfilClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
+    else if (perfilSrv === 'Superintendente') badgePerfilClass = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold';
+    else if (perfilSrv === 'Delegado') badgePerfilClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+    else if (perfilSrv === 'APJ') badgePerfilClass = 'bg-sky-100 text-sky-900 border-sky-300 font-semibold';
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
         <td class="p-3 font-bold text-slate-800">
-          <div class="flex items-center gap-2">
-            <span>${srv.nome}</span>
-            ${isDel ? '<span class="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] rounded">DEL</span>' : ''}
-          </div>
+          <span>${srv.nome}</span>
         </td>
         <td class="p-3 font-semibold text-slate-700">${srv.cargo || 'APJ'}</td>
         <td class="p-3 text-slate-600 font-medium">${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</td>
         <td class="p-3 font-mono font-bold text-slate-700">${del?.subdivisao || srv.subdivisao || '8ª SDP'}</td>
         <td class="p-3">
-          <span class="px-2 py-0.5 rounded text-[9px] uppercase border ${badgePerfilClass}">
+          <span class="px-2 py-0.5 rounded text-[10px] border ${badgePerfilClass}">
             ${perfilSrv}
           </span>
         </td>
@@ -332,9 +338,6 @@ window.renderTabelaServidoresCorpo = function() {
   }).join('');
 };
 
-// =========================================================================
-// MODAL DE CADASTRO / EDIÇÃO DE SERVIDOR
-// =========================================================================
 window.abrirModalServidor = function(srvId = null) {
   let modal = document.getElementById('modal-servidor');
   if (!modal) {
@@ -363,7 +366,7 @@ window.abrirModalServidor = function(srvId = null) {
       inputId.value = srv.id;
       inputNome.value = srv.nome || '';
       selectCargo.value = srv.cargo || 'APJ';
-      selectPerfil.value = srv.perfil || 'VISUALIZADOR';
+      selectPerfil.value = srv.perfil || 'APJ';
       selectDel.value = srv.delegaciaId || '';
       inputTelefone.value = srv.telefone || '';
     }
@@ -371,7 +374,7 @@ window.abrirModalServidor = function(srvId = null) {
     inputId.value = '';
     inputNome.value = '';
     selectCargo.value = 'APJ';
-    selectPerfil.value = 'VISUALIZADOR';
+    selectPerfil.value = 'APJ';
     selectDel.value = '';
     inputTelefone.value = '';
   }
@@ -390,7 +393,7 @@ window.aplicarMascaraTelefone = function(input) {
   if (value.length > 6) {
     value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
   } else if (value.length > 2) {
-    value = `(${value.slice(0, 2)}) ${value.slice(2)}`;
+    value = `(${value.slice(0, 2)})${value.slice(2)}`;
   } else if (value.length > 0) {
     value = `(${value}`;
   }
@@ -409,7 +412,6 @@ window.salvarServidorModal = async function(e) {
   const telefone = document.getElementById('srv-telefone').value.trim();
 
   const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
-
   const targetId = id || ('srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
 
   let srvObj = (appState.servidores || []).find(s => s.id === targetId) || { id: targetId };
@@ -475,9 +477,12 @@ function criarModalServidorDOM() {
             <div>
               <label class="block font-bold text-slate-700 mb-1">Perfil de Acesso:</label>
               <select id="srv-perfil" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="VISUALIZADOR">VISUALIZADOR (Público)</option>
-                <option value="GESTOR">GESTOR (Edita Escalas)</option>
-                <option value="ADMINISTRADOR">ADMINISTRADOR (Acesso Total)</option>
+                <option value="Visualizador">Visualizador (Público)</option>
+                <option value="APJ">APJ</option>
+                <option value="Superintendente">Superintendente</option>
+                <option value="Delegado">Delegado</option>
+                <option value="Coordenador">Coordenador</option>
+                <option value="Administrador">Administrador</option>
               </select>
             </div>
           </div>
