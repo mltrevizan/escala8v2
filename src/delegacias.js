@@ -17,11 +17,11 @@ export function renderDelegaciasCards(containerId) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Hierarquia de SDPs e Delegacias</h2>
-          <p class="text-[11px] text-slate-500">Gestão de Subdivisões (Tronco) e Unidades Vinculadas (Galhos)</p>
+          <p class="text-[11px] text-slate-500">Gestão de Subdivisões (SDPs) e Unidades Vinculadas</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalGerenciarSdps()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ⚙️ Gerenciar SDPs
+            ⚙️️ Gerenciar SDPs
           </button>
           <button onclick="window.abrirModalDelegacia()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Nova Delegacia
@@ -172,7 +172,7 @@ window.renderizarListaTroncoGalhos = function() {
       <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div class="p-3 bg-slate-800 text-white flex items-center justify-between font-bold text-xs uppercase tracking-wider">
           <div class="flex items-center gap-2">
-            <span>🏛️ TRONCO: ${sdpNome}</span>
+            <span>🏛️ SUBDIVISÃO: ${sdpNome}</span>
             <span class="px-2 py-0.5 bg-slate-700 text-slate-200 font-extrabold text-[10px] rounded-full">${qtdUnidades} Unidades</span>
           </div>
         </div>
@@ -448,7 +448,7 @@ function criarModalDelegaciaDOM() {
     <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <h3 class="font-bold text-slate-900 text-sm">Cadastro de Delegacia (Galho)</h3>
+          <h3 class="font-bold text-slate-900 text-sm">Cadastro de Delegacia</h3>
           <button type="button" onclick="window.fecharModalDelegacia()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
@@ -457,7 +457,7 @@ function criarModalDelegaciaDOM() {
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Subdivisão / Tronco (SDP):</label>
+              <label class="block font-bold text-slate-700 mb-1">Subdivisão (SDP):</label>
               <select id="del-sdp" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase"></select>
             </div>
             <div class="sm:col-span-2">
