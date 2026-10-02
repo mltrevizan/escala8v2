@@ -11,100 +11,119 @@ let vinculoState = {
   buscaTextual: '',
   sdp: 'TODAS',
   delegaciaId: 'TODAS',
-  sortColuna: 'PRIORIDADE', // 'PRIORIDADE', 'NOME', 'CARGO', 'DELEGACIA', 'SDP'
+  sortColuna: 'PRIORIDADE',
   sortDirecao: 'ASC',
   membrosSelecionados: []
 };
 
+// =========================================================================
+// 1. MÓDULO COMPLETO: GESTÃO CRF (RESTAURADO)
+// =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { currentYear, currentMonth, filtroSdpGestaoCrf, filtroDelGestaoCrf } = appState;
+  const { currentYear, currentMonth } = appState;
   const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-  // Lista os Delegados escalados no mês para a CRF
-  const escalasDelegados = (appState.escalas || []).filter(e => {
+  // Escalas da CRF no mês
+  const escalasCrf = (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF') return false;
     const [ano, mes] = e.data.split('-').map(Number);
-    if (ano !== currentYear || (mes - 1) !== currentMonth) return false;
-
-    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
-    return srv && (srv.cargo || '').toUpperCase().includes('DELEGADO');
+    return ano === currentYear && (mes - 1) === currentMonth;
   }).sort((a, b) => a.data.localeCompare(b.data));
 
-  let htmlLinhas = escalasDelegados.map(esc => {
+  let htmlLinhas = escalasCrf.map(esc => {
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
     const delOrigem = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+    const isDel = (srv?.cargo || '').toUpperCase().includes('DELEGADO');
 
-    // Identifica se há APJs vinculados no mesmo dia/turno/esc do delegado
-    const vinculosExistentes = (appState.escalas || []).filter(e => 
-      e.scope === 'CRF' && 
-      e.data === esc.data && 
-      e.turno === esc.turno && 
-      e.delegadoVinculadoId === esc.servidorId
-    );
+    // Busca vinculações se for um Delegado
+    let blocoVinculo = '';
+    if (isDel) {
+      const vinculos = (appState.escalas || []).filter(e => 
+        e.scope === 'CRF' && 
+        e.data === esc.data && 
+        e.turno === esc.turno && 
+        e.delegadoVinculadoId === esc.servidorId
+      );
 
-    const nomesApjsVinculados = vinculosExistentes.map(v => {
-      const s = (appState.servidores || []).find(pol => pol.id === v.servidorId);
-      return s ? s.nome : 'Policial';
-    }).join(', ');
+      blocoVinculo = `
+        <div class="mt-1 flex items-center gap-1.5">
+          <span class="text-[9.5px] ${vinculos.length > 0 ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300'} border font-bold px-1.5 py-0.2 rounded">
+            ${vinculos.length > 0 ? `👥 ${vinculos.length} APJs` : '⚠️ Sem equipe'}
+          </span>
+          <button type="button" onclick="window.abrirModalVincularApjs('${esc.id}')" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 cursor-pointer transition">
+            🔗 Vincular APJs
+          </button>
+        </div>
+      `;
+    }
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
         <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
-        <td class="p-3 font-bold text-slate-900">${srv ? srv.nome : 'Delegado'}</td>
+        <td class="p-3 font-bold text-slate-900">
+          <div>
+            <span>${srv ? srv.nome : 'Policial'}</span>
+            ${blocoVinculo}
+          </div>
+        </td>
+        <td class="p-3 font-semibold text-slate-700">${srv ? srv.cargo : 'APJ'}</td>
         <td class="p-3 text-slate-600 font-medium">${delOrigem ? delOrigem.nome : (srv?.delegaciaNome || '-')}</td>
         <td class="p-3 font-mono font-bold text-slate-700">${esc.turno || '24h'}</td>
         <td class="p-3">
-          ${vinculosExistentes.length > 0 ? `
-            <div class="space-y-0.5">
-              <span class="text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold px-1.5 py-0.5 rounded block w-fit">
-                👥 ${vinculosExistentes.length} APJs Vinculados
-              </span>
-              <span class="text-[10px] text-slate-500 italic block truncate max-w-xs" title="${nomesApjsVinculados}">
-                ${nomesApjsVinculados}
-              </span>
-            </div>
-          ` : `
-            <span class="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded">
-              ⚠️ Sem equipe de apoio
-            </span>
-          `}
+          <span class="px-2 py-0.5 text-[10px] font-bold rounded ${esc.tipo === 'EXTRAJORNADA' ? 'bg-purple-100 text-purple-900 border border-purple-300' : 'bg-sky-100 text-sky-900 border border-sky-300'}">
+            ${esc.tipo || 'PLANTÃO'}
+          </span>
         </td>
-        <td class="p-3 text-right">
-          <button onclick="window.abrirModalVincularApjs('${esc.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1 ml-auto">
-            🔗 Vincular Equipe / APJs
+        <td class="p-3 text-right space-x-1">
+          <button onclick="window.abrirModalDetalhesTurno('Gestão CRF', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+            ✏️ Editar
+          </button>
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'CRF')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+            🗑 Excluir
           </button>
         </td>
       </tr>
     `;
   }).join('');
 
-  if (escalasDelegados.length === 0) {
-    htmlLinhas = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nenhum Delegado escalado no mês de ${mesExtenso} para a Central CRF.</td></tr>`;
+  if (escalasCrf.length === 0) {
+    htmlLinhas = `<tr><td colspan="7" class="p-6 text-center text-slate-400 italic">Nenhum lançamento de escala na CRF registrado para ${mesExtenso}.</td></tr>`;
   }
 
   container.innerHTML = `
+    <!-- Topo Gerencial -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="font-bold text-sm text-slate-800">Gestão e Vinculação de Equipes CRF</h2>
-          <p class="text-[11px] text-slate-500">Acompanhamento dos plantões de Delegados e montagem de equipes de apoio (${mesExtenso})</p>
+          <h2 class="font-bold text-sm text-slate-800">Gestão Geral de Escalas da CRF</h2>
+          <p class="text-[11px] text-slate-500">Controle de lançamentos, turnos, equipes e substituições (${mesExtenso})</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="window.abrirModalGeradorLote('CRF')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ⚡ Gerar Escala em Lote
+          </button>
+          <button onclick="window.abrirModalNovoLancamento('CRF')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Novo Lançamento Avulso
+          </button>
         </div>
       </div>
     </div>
 
+    <!-- Tabela Gerencial -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
             <th class="p-3">Data</th>
-            <th class="p-3">Delegado Plantonista</th>
+            <th class="p-3">Policial Escalado</th>
+            <th class="p-3">Cargo</th>
             <th class="p-3">Lotação de Origem</th>
             <th class="p-3">Turno</th>
-            <th class="p-3">Equipe de Apoio (APJs)</th>
-            <th class="p-3 text-right">Ação</th>
+            <th class="p-3">Modalidade</th>
+            <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">${htmlLinhas}</tbody>
@@ -113,14 +132,132 @@ export function renderGestaoCrfModule(containerId) {
   `;
 }
 
+// =========================================================================
+// 2. MÓDULO COMPLETO: GESTÃO POR DELEGACIAS (RESTAURADO)
+// =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  container.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs font-bold">Módulo de Gestão por Delegacias operando via calendário interativo.</div>`;
+
+  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
+  const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+
+  let optsDelegacias = (appState.delegacias || []).map(d => 
+    `<option value="${d.id}" ${d.id === selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
+  ).join('');
+
+  // Escalas da Delegacia no mês
+  const escalasDel = (appState.escalas || []).filter(e => {
+    if (e.scope !== 'DELEGACIA') return false;
+    if (e.delegaciaId !== selectedDelegaciaId) return false;
+    const [ano, mes] = e.data.split('-').map(Number);
+    return ano === currentYear && (mes - 1) === currentMonth;
+  }).sort((a, b) => a.data.localeCompare(b.data));
+
+  let htmlLinhas = escalasDel.map(esc => {
+    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+
+    let badgeClass = 'bg-sky-100 text-sky-900 border-sky-300';
+    if (esc.tipo === 'SOBREAVISO') badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300';
+    if (esc.tipo === 'EXTRAJORNADA') badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+        <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
+        <td class="p-3 font-bold text-slate-900">${srv ? srv.nome : 'Policial'}</td>
+        <td class="p-3 font-semibold text-slate-700">${srv ? srv.cargo : 'APJ'}</td>
+        <td class="p-3 font-mono text-indigo-950 font-bold">${esc.vtr ? `🚘 ${esc.vtr}` : '-'}</td>
+        <td class="p-3 font-mono font-bold text-slate-700">${esc.turno || '24h'}</td>
+        <td class="p-3">
+          <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${badgeClass}">
+            ${esc.tipo || 'PLANTÃO'}
+          </span>
+        </td>
+        <td class="p-3 text-right space-x-1">
+          <button onclick="window.abrirModalDetalhesTurno('Gestão Delegacia', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+            ✏️ Editar
+          </button>
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+            🗑 Excluir
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (escalasDel.length === 0) {
+    htmlLinhas = `<tr><td colspan="7" class="p-6 text-center text-slate-400 italic">Nenhum lançamento de escala registrado em ${delObj ? delObj.nome : 'Unidade'} para ${mesExtenso}.</td></tr>`;
+  }
+
+  container.innerHTML = `
+    <!-- Topo Gerencial -->
+    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
+          <p class="text-[11px] text-slate-500">Controle e edição dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ⚡ Gerar Escala em Lote
+          </button>
+          <button onclick="window.abrirModalNovoLancamento('DELEGACIA')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Novo Lançamento Avulso
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-200 flex items-center gap-2">
+        <label class="text-xs font-bold text-slate-700">Selecione a Unidade:</label>
+        <select id="gestao-del-select-unidade" onchange="window.mudarUnidadeGestaoDel(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-xl p-2 shadow-xs">
+          ${optsDelegacias}
+        </select>
+      </div>
+    </div>
+
+    <!-- Tabela Gerencial -->
+    <div class="overflow-x-auto font-sans">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+            <th class="p-3">Data</th>
+            <th class="p-3">Policial Escalado</th>
+            <th class="p-3">Cargo</th>
+            <th class="p-3">Viatura (VTR)</th>
+            <th class="p-3">Turno</th>
+            <th class="p-3">Modalidade</th>
+            <th class="p-3 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">${htmlLinhas}</tbody>
+      </table>
+    </div>
+  `;
 }
 
+window.mudarUnidadeGestaoDel = function(id) {
+  appState.selectedDelegaciaId = id;
+  renderGestaoDelegaciasModule('gestao-delegacias-container');
+};
+
+window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
+  if (!confirm("Deseja realmente remover este lançamento de escala?")) return;
+
+  appState.escalas = (appState.escalas || []).filter(e => e.id !== id);
+  await syncDocToFirestore('escalas', id, null, true);
+
+  if (scopeTarget === 'CRF') {
+    renderGestaoCrfModule('gestao-crf-container');
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+  } else {
+    renderGestaoDelegaciasModule('gestao-delegacias-container');
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
+};
+
 // =========================================================================
-// MODAL DE VINCULAÇÃO DE APJS AO DELEGADO COM AUTOCOMPLETE E PRIORIZAÇÃO
+// 3. FERRAMENTA DE VINCULAÇÃO DE APJS AO DELEGADO COM AUTOCOMPLETE E PRIORIZAÇÃO
 // =========================================================================
 window.abrirModalVincularApjs = function(escalaDelegadoId) {
   let modal = document.getElementById('modal-vincular-apjs');
@@ -144,7 +281,6 @@ window.abrirModalVincularApjs = function(escalaDelegadoId) {
   vinculoState.sortColuna = 'PRIORIDADE';
   vinculoState.sortDirecao = 'ASC';
 
-  // Carrega APJs já vinculados a este plantão
   const vinculadosJa = (appState.escalas || []).filter(e => 
     e.scope === 'CRF' && 
     e.data === escDelegado.data && 
@@ -153,7 +289,6 @@ window.abrirModalVincularApjs = function(escalaDelegadoId) {
   );
   vinculoState.membrosSelecionados = vinculadosJa.map(e => e.servidorId);
 
-  // Preenche dados do topo do modal
   const infoEl = document.getElementById('vinc-info-delegado');
   if (infoEl) {
     infoEl.innerHTML = `
@@ -255,7 +390,6 @@ window.renderizarListaApjsModal = function() {
   const delegadoId = delegadoObj ? delegadoObj.id : null;
   const delDelegadoId = delegadoObj ? delegadoObj.delegaciaId : null;
 
-  // 1. Calcula histórico de vínculos anteriores com este Delegado
   const apjsHistoricoIds = new Set();
   (appState.escalas || []).forEach(e => {
     if (e.scope === 'CRF' && e.delegadoVinculadoId === delegadoId && e.servidorId !== delegadoId) {
@@ -263,7 +397,6 @@ window.renderizarListaApjsModal = function() {
     }
   });
 
-  // 2. Filtra Policiais (Apenas não-Delegados)
   let apjsFiltrados = [...(appState.servidores || [])].filter(srv => {
     const cargoU = (srv.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
@@ -271,7 +404,6 @@ window.renderizarListaApjsModal = function() {
     const nomeN = normalizeText(srv.nome || '');
     if (nomeN === 'administrador do sistema' || nomeN === 'admin') return false;
 
-    // Filtro por Busca Textual
     if (buscaTextual) {
       const nomePol = (srv.nome || '').toLowerCase();
       const cargoPol = (srv.cargo || '').toLowerCase();
@@ -281,14 +413,12 @@ window.renderizarListaApjsModal = function() {
       }
     }
 
-    // Filtro por SDP
     if (sdp !== 'TODAS') {
       const delObj = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
       const sdpSrv = (delObj?.subdivisao || srv.subdivisao || '').toUpperCase();
       if (sdpSrv !== sdp) return false;
     }
 
-    // Filtro por Delegacia
     if (delegaciaId !== 'TODAS') {
       if (srv.delegaciaId !== delegaciaId) return false;
     }
@@ -296,16 +426,13 @@ window.renderizarListaApjsModal = function() {
     return true;
   });
 
-  // 3. Ordenação com Prioridade Inteligente
   apjsFiltrados.sort((a, b) => {
     const isSelA = membrosSelecionados.includes(a.id);
     const isSelB = membrosSelecionados.includes(b.id);
 
-    // Selecionados sempre em primeiro lugar
     if (isSelA && !isSelB) return -1;
     if (!isSelA && isSelB) return 1;
 
-    // Prioridade por Grupo se a coluna for 'PRIORIDADE'
     if (sortColuna === 'PRIORIDADE') {
       const histA = apjsHistoricoIds.has(a.id) ? 1 : 0;
       const histB = apjsHistoricoIds.has(b.id) ? 1 : 0;
@@ -386,12 +513,10 @@ window.toggleApjVinculoModal = function(srvId, isChecked) {
   window.renderizarListaApjsModal();
 };
 
-// AUTOCOMPLETE DE EQUIPE ANTERIOR
 window.sugerirAutocompleteEquipeAnterior = function() {
   const delegadoId = vinculoState.delegadoObj ? vinculoState.delegadoObj.id : null;
   if (!delegadoId) return;
 
-  // Busca a última escala do mesmo delegado que teve APJs vinculados
   const escalasPassadasComEquipe = (appState.escalas || []).filter(e => 
     e.scope === 'CRF' && 
     e.delegadoVinculadoId === delegadoId && 
@@ -426,7 +551,6 @@ window.salvarVinculacaoApjsModal = async function(e) {
 
   if (!delegadoId) return;
 
-  // 1. Remove APJs vinculados anteriormente neste mesmo dia/turno para este delegado
   const escalasExistentes = (appState.escalas || []).filter(e => 
     e.scope === 'CRF' && 
     e.data === dataPlantao && 
@@ -439,7 +563,6 @@ window.salvarVinculacaoApjsModal = async function(e) {
     await syncDocToFirestore('escalas', esc.id, null, true);
   }
 
-  // 2. Insere os novos APJs vinculados
   let inseridos = 0;
   for (const apjId of membrosSelecionados) {
     const srvApj = (appState.servidores || []).find(s => s.id === apjId);
@@ -487,7 +610,6 @@ function criarModalVincularApjsDOM() {
         <div id="vinc-info-delegado"></div>
 
         <form onsubmit="window.salvarVinculacaoApjsModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1 flex flex-col">
-          <!-- Filtros de Busca -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0">
             <div>
               <input type="text" id="vinc-busca-srv" oninput="window.atualizarFiltrosModalVinculacao()" placeholder="🔍 Filtrar nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
@@ -500,13 +622,11 @@ function criarModalVincularApjsDOM() {
             </div>
           </div>
 
-          <!-- Contador -->
           <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 shrink-0">
             <span id="vinc-contador-sel" class="font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">0 APJs Selecionados</span>
             <span class="text-[10px] text-slate-400 italic">Clique nos cabeçalhos para reordenar a lista</span>
           </div>
 
-          <!-- Tabela com Ordenação Clicável -->
           <div class="overflow-x-auto border border-slate-200 rounded-xl flex-1 max-h-64 overflow-y-auto">
             <table class="w-full text-left text-xs border-collapse font-sans">
               <thead class="sticky top-0 bg-slate-100 z-10 select-none">
