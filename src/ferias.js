@@ -1,74 +1,74 @@
 // src/ferias.js
 import { appState, normalizeText } from './state.js';
-import { syncDocToFirestore, fetchCollection } from './db.js';
+import { syncDocToFirestore } from './db.js';
 
-export async function renderFeriasModule(containerId) {
+export function renderFeriasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  if (!appState.ferias || appState.ferias.length === 0) {
-    try {
-      const doBanco = await fetchCollection('ferias');
-      appState.ferias = doBanco || [];
-    } catch (e) {
-      console.error("Erro ao carregar férias:", e);
-      appState.ferias = appState.ferias || [];
-    }
-  }
+  let srvOptions = `<option value="">Selecione o Servidor...</option>`;
+  [...(appState.servidores || [])]
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+    .forEach(s => {
+      srvOptions += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`;
+    });
 
-  let html = `
+  const html = `
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="font-bold text-sm text-slate-800">Gestão de Férias e Licenças</h2>
-          <p class="text-[11px] text-slate-500">Controle de afastamentos regulamentares, licenças especiais e médicas do efetivo</p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <button onclick="window.abrirModalFerias()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ➕ Novo Lançamento de Férias
-          </button>
-          <button onclick="window.exportarFeriasCSV()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            📊 Exportar CSV
-          </button>
+          <h2 class="font-bold text-sm text-slate-800">Módulo de Férias e Licenças</h2>
+          <p class="text-[11px] text-slate-500">Cadastro de afastamentos e monitoramento de conflitos de escala</p>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Rápida (Nome / Cargo):</label>
-          <input type="text" id="filtro-ferias-busca" oninput="window.filtrarTabelaFeriasInline()" placeholder="Digite para filtrar..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏷️ Tipo de Afastamento:</label>
-          <select id="filtro-ferias-tipo" onchange="window.filtrarTabelaFeriasInline()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-bold text-slate-800">
-            <option value="TODOS">Todos os Tipos</option>
-            <option value="FERIAS">Férias Regulamentares</option>
-            <option value="LICENCA_ESPECIAL">Licença Especial</option>
-            <option value="LICENCA_MEDICA">Licença Médica</option>
-            <option value="FOLGA">Folga Compensatória</option>
+      <!-- Formulário de Cadastro -->
+      <form onsubmit="window.salvarFerias(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 bg-white p-3 rounded-xl border border-slate-200 shadow-xs text-xs">
+        <div class="md:col-span-2">
+          <label class="block font-bold text-slate-700 mb-1">Policial / Servidor:</label>
+          <select id="ferias-servidor-id" required class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
+            ${srvOptions}
           </select>
         </div>
 
-        <div class="flex items-end justify-end">
-          <span id="total-ferias-count" class="text-xs font-bold text-slate-700 bg-slate-200/80 px-3 py-2 rounded-lg border font-mono w-full sm:w-auto text-center">
-            Exibindo 0 Afastamentos
-          </span>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Tipo de Afastamento:</label>
+          <select id="ferias-tipo" required class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
+            <option value="Férias">Férias</option>
+            <option value="Licença Prêmio">Licença Prêmio</option>
+            <option value="Licença Médica">Licença Médica</option>
+            <option value="Folga Compensatória">Folga Compensatória</option>
+            <option value="Outros">Outros</option>
+          </select>
         </div>
-      </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
+          <input type="date" id="ferias-data-inicio" required class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Data Fim:</label>
+          <input type="date" id="ferias-data-fim" required class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
+        </div>
+
+        <div class="md:col-span-5 flex justify-end pt-1">
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition">
+            ➕ Cadastrar Afastamento
+          </button>
+        </div>
+      </form>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs border-collapse font-sans">
+    <!-- Tabela de Registros com Auditoria de Conflitos -->
+    <div class="overflow-x-auto font-sans">
+      <table class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
             <th class="p-3">Servidor / Policial</th>
-            <th class="p-3">Lotação / Unidade</th>
-            <th class="p-3">Tipo de Afastamento</th>
-            <th class="p-3">Período (Início ➔ Fim)</th>
-            <th class="p-3">Duração</th>
-            <th class="p-3">Observações / Portaria</th>
+            <th class="p-3">Cargo</th>
+            <th class="p-3">Afastamento</th>
+            <th class="p-3">Período</th>
             <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
@@ -78,299 +78,112 @@ export async function renderFeriasModule(containerId) {
   `;
 
   container.innerHTML = html;
-  window.filtrarTabelaFeriasInline();
+  renderTabelaFerias();
 }
 
-window.filtrarTabelaFeriasInline = function() {
+function renderTabelaFerias() {
   const tbody = document.getElementById('tabela-ferias-corpo');
   if (!tbody) return;
 
-  const busca = document.getElementById('filtro-ferias-busca')?.value?.toLowerCase() || '';
-  const tipoFiltro = document.getElementById('filtro-ferias-tipo')?.value || 'TODOS';
+  const listaFerias = appState.ferias || [];
 
-  const listaFiltrada = (appState.ferias || []).filter(f => {
-    const srv = (appState.servidores || []).find(s => s.id === f.servidorId);
-    
-    if (busca) {
-      const nomeSrv = (srv?.nome || '').toLowerCase();
-      const cargoSrv = (srv?.cargo || '').toLowerCase();
-      if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca)) return false;
-    }
-
-    if (tipoFiltro !== 'TODOS' && f.tipo !== tipoFiltro) return false;
-
-    return true;
-  });
-
-  listaFiltrada.sort((a, b) => (b.dataInicio || '').localeCompare(a.dataInicio || ''));
-
-  const countEl = document.getElementById('total-ferias-count');
-  if (countEl) countEl.innerText = `Exibindo ${listaFiltrada.length} Afastamentos`;
-
-  if (listaFiltrada.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="7" class="p-6 text-center text-slate-500 italic">
-          Nenhum registro de férias ou licença localizado.
-        </td>
-      </tr>
-    `;
+  if (listaFerias.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 italic">Nenhum período de férias ou licença cadastrado.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = listaFiltrada.map(f => {
-    const srv = (appState.servidores || []).find(s => s.id === f.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+  tbody.innerHTML = listaFerias.map(fer => {
+    const srv = (appState.servidores || []).find(s => s.id === fer.servidorId);
+    
+    // AUDITORIA: BUSCA SE HÁ PLANTÕES/SOBREAVISOS MARCADOS DURANTE ESTE AFASTAMENTO
+    const escalasEmConflito = (appState.escalas || []).filter(e => {
+      return e.servidorId === fer.servidorId && e.data >= fer.dataInicio && e.data <= fer.dataFim;
+    });
 
-    const dias = calcularDiferencaDias(f.dataInicio, f.dataFim);
-
-    let badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-300';
-    let rotuloTipo = 'FÉRIAS REGULAMENTARES';
-
-    if (f.tipo === 'LICENCA_ESPECIAL') {
-      badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
-      rotuloTipo = 'LICENÇA ESPECIAL';
-    } else if (f.tipo === 'LICENCA_MEDICA') {
-      badgeClass = 'bg-rose-100 text-rose-900 border-rose-300';
-      rotuloTipo = 'LICENÇA MÉDICA';
-    } else if (f.tipo === 'FOLGA') {
-      badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
-      rotuloTipo = 'FOLGA COMPENSATÓRIA';
-    }
+    const temConflito = escalasEmConflito.length > 0;
+    const idsConflitoStr = escalasEmConflito.map(e => e.id).join(',');
 
     return `
-      <tr class="hover:bg-slate-50 transition">
-        <td class="p-3 font-bold text-slate-900">${srv ? srv.nome : 'Não Localizado'} <span class="text-[10px] text-slate-500 block font-normal">${srv?.cargo || 'APJ'}</span></td>
-        <td class="p-3 text-slate-700 font-medium">${del ? del.nome : (srv?.delegaciaNome || '-')}</td>
-        <td class="p-3">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
-            ${rotuloTipo}
-          </span>
+      <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+        <td class="p-3 font-bold text-slate-800">
+          <div class="flex items-center gap-2">
+            <span>${srv?.nome || 'Servidor Não Encontrado'}</span>
+            ${temConflito ? `
+              <button type="button" onclick="window.exibirDetalhesConflitoFerias('${srv?.nome}', '${idsConflitoStr}')" 
+                      class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-extrabold text-[10px] rounded-full shadow-xs cursor-pointer flex items-center gap-1 transition">
+                <span>⚠️</span> ${escalasEmConflito.length} Plantão(ões) Marcado(s)
+              </button>
+            ` : ''}
+          </div>
         </td>
-        <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(f.dataInicio)} ➔ ${formatarDataBr(f.dataFim)}</td>
-        <td class="p-3 font-mono text-slate-700 font-bold">${dias} dias</td>
-        <td class="p-3 text-slate-500 italic max-w-xs truncate">${f.observacao || '-'}</td>
-        <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalFerias('${f.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs transition cursor-pointer">
-            Editar
-          </button>
-          <button onclick="window.excluirFerias('${f.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs transition cursor-pointer">
-            Excluir
-          </button>
+        <td class="p-3 text-slate-600 font-medium">${srv?.cargo || 'APJ'}</td>
+        <td class="p-3 font-bold text-indigo-900">${fer.tipo || 'Férias'}</td>
+        <td class="p-3 font-mono text-slate-700">${formatarDataBr(fer.dataInicio)} à ${formatarDataBr(fer.dataFim)}</td>
+        <td class="p-3 text-right">
+          <button onclick="window.excluirFerias('${fer.id}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10px] shadow-xs cursor-pointer">Excluir</button>
         </td>
       </tr>
     `;
   }).join('');
-};
+}
 
-window.abrirModalFerias = function(feriasId = null) {
-  const modalAntigo = document.getElementById('modal-ferias');
-  if (modalAntigo) modalAntigo.remove();
-
-  criarModalFeriasDOM();
-  const modal = document.getElementById('modal-ferias');
-
-  const inputId = document.getElementById('modal-fer-id');
-  const selectSrv = document.getElementById('modal-fer-servidor');
-  const selectTipo = document.getElementById('modal-fer-tipo');
-  const inputInicio = document.getElementById('modal-fer-inicio');
-  const inputFim = document.getElementById('modal-fer-fim');
-  const inputObs = document.getElementById('modal-fer-obs');
-
-  const listaSrv = (appState.servidores || [])
-    .filter(s => {
-      const n = normalizeText(s.nome || '');
-      return n !== 'administrador do sistema' && n !== 'admin';
-    })
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-
-  let srvOptions = listaSrv.map(s => `<option value="${s.id}">${s.nome} (${s.cargo})</option>`).join('');
-  if (selectSrv) selectSrv.innerHTML = srvOptions;
-
-  if (feriasId) {
-    const f = (appState.ferias || []).find(x => x.id === feriasId);
-    if (f) {
-      inputId.value = f.id;
-      selectSrv.value = f.servidorId;
-      selectTipo.value = f.tipo || 'FERIAS';
-      inputInicio.value = f.dataInicio;
-      inputFim.value = f.dataFim;
-      inputObs.value = f.observacao || '';
-    }
-  } else {
-    inputId.value = '';
-    selectTipo.value = 'FERIAS';
-    inputInicio.value = '';
-    inputFim.value = '';
-    inputObs.value = '';
-  }
-
-  modal.classList.remove('hidden');
-};
-
-window.fecharModalFerias = function() {
-  document.getElementById('modal-ferias')?.classList.add('hidden');
-};
-
-window.salvarFeriasModal = async function(e) {
+window.salvarFerias = async function(e) {
   e.preventDefault();
 
-  const id = document.getElementById('modal-fer-id').value;
-  const servidorId = document.getElementById('modal-fer-servidor').value;
-  const tipo = document.getElementById('modal-fer-tipo').value;
-  const dataInicio = document.getElementById('modal-fer-inicio').value;
-  const dataFim = document.getElementById('modal-fer-fim').value;
-  const observacao = document.getElementById('modal-fer-obs').value.trim();
-
-  if (!servidorId || !dataInicio || !dataFim) {
-    alert("Preencha todos os campos obrigatórios.");
-    return;
-  }
+  const servidorId = document.getElementById('ferias-servidor-id').value;
+  const tipo = document.getElementById('ferias-tipo').value;
+  const dataInicio = document.getElementById('ferias-data-inicio').value;
+  const dataFim = document.getElementById('ferias-data-fim').value;
 
   if (dataFim < dataInicio) {
-    alert("A data final não pode ser anterior à data de início.");
+    alert("A data final não pode ser anterior à data inicial.");
     return;
   }
 
-  if (id) {
-    const f = (appState.ferias || []).find(x => x.id === id);
-    if (f) {
-      f.servidorId = servidorId;
-      f.tipo = tipo;
-      f.dataInicio = dataInicio;
-      f.dataFim = dataFim;
-      f.observacao = observacao;
+  const newFerId = 'fer_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
-      await syncDocToFirestore('ferias', f.id, f);
-    }
-  } else {
-    const newId = 'fer_' + Date.now();
-    const novoRegistro = {
-      id: newId,
-      servidorId,
-      tipo,
-      dataInicio,
-      dataFim,
-      observacao,
-      criadoEm: new Date().toISOString()
-    };
+  const novoAfastamento = {
+    id: newFerId,
+    servidorId: servidorId,
+    tipo: tipo,
+    dataInicio: dataInicio,
+    dataFim: dataFim
+  };
 
-    if (!appState.ferias) appState.ferias = [];
-    appState.ferias.push(novoRegistro);
+  if (!appState.ferias) appState.ferias = [];
+  appState.ferias.push(novoAfastamento);
 
-    await syncDocToFirestore('ferias', newId, novoRegistro);
-  }
+  await syncDocToFirestore('ferias', newFerId, novoAfastamento);
 
-  window.fecharModalFerias();
-  renderFeriasModule('ferias-container');
+  alert("Afastamento cadastrado com sucesso!");
+  renderTabelaFerias();
 };
 
-window.excluirFerias = async function(feriasId) {
-  if (!confirm("Deseja realmente EXCLUIR este registro de afastamento?")) return;
+window.excluirFerias = async function(id) {
+  if (!confirm("Deseja realmente remover este registro de afastamento?")) return;
 
-  appState.ferias = appState.ferias.filter(f => f.id !== feriasId);
-  await syncDocToFirestore('ferias', feriasId, null, true);
+  appState.ferias = (appState.ferias || []).filter(f => f.id !== id);
+  await syncDocToFirestore('ferias', id, null, true);
 
-  renderFeriasModule('ferias-container');
+  renderTabelaFerias();
 };
 
-window.exportarFeriasCSV = function() {
-  const lista = appState.ferias || [];
-  if (lista.length === 0) {
-    alert("Nenhum registro de férias/licença cadastrado para exportar.");
-    return;
-  }
+window.exibirDetalhesConflitoFerias = function(nomeServidor, idsEscalasStr) {
+  const ids = idsEscalasStr.split(',').filter(Boolean);
+  const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
 
-  let csvContent = "NOME;CARGO;LOTACAO;TIPO;DATA_INICIO;DATA_FIM;DIAS;OBSERVACAO\n";
+  let detalheMsg = `⚠️ DATAS EM CONFLITO DE AFASTAMENTO\n\nPolicial: ${nomeServidor}\n\nEste servidor possui os seguintes lançamentos agendados durante seu afastamento:\n\n`;
 
-  lista.forEach(f => {
-    const srv = (appState.servidores || []).find(s => s.id === f.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
-
-    const nome = srv?.nome || 'NÃO LOCALIZADO';
-    const cargo = srv?.cargo || 'APJ';
-    const lotacao = del?.nome || srv?.delegaciaNome || '';
-    const dias = calcularDiferencaDias(f.dataInicio, f.dataFim);
-
-    csvContent += `${nome};${cargo};${lotacao};${f.tipo};${f.dataInicio};${f.dataFim};${dias};"${f.observacao || ''}"\n`;
+  escalas.forEach(esc => {
+    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    detalheMsg += `• Data: ${formatarDataBr(esc.data)} | Tipo: ${esc.tipo || 'PLANTÃO'} | Unidade: ${del ? del.nome : 'Unidade Local'}\n`;
   });
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", `ferias_licencas_${new Date().toISOString().split('T')[0]}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  alert(detalheMsg);
 };
-
-function calcularDiferencaDias(d1Str, d2Str) {
-  if (!d1Str || !d2Str) return 0;
-  const d1 = new Date(d1Str + 'T00:00:00');
-  const d2 = new Date(d2Str + 'T00:00:00');
-  const diffTime = Math.abs(d2 - d1);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-}
 
 function formatarDataBr(dataIso) {
   if (!dataIso) return '-';
   const parts = dataIso.split('-');
-  if (parts.length < 3) return dataIso;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function criarModalFeriasDOM() {
-  const modalHTML = `
-    <div id="modal-ferias" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
-        <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">Lançamento de Férias / Licença</h3>
-          <button type="button" onclick="window.fecharModalFerias()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
-        </div>
-
-        <form onsubmit="window.salvarFeriasModal(event)" class="space-y-3 text-xs">
-          <input type="hidden" id="modal-fer-id">
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Servidor / Policial:</label>
-            <select id="modal-fer-servidor" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Tipo de Afastamento:</label>
-            <select id="modal-fer-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-              <option value="FERIAS">Férias Regulamentares</option>
-              <option value="LICENCA_ESPECIAL">Licença Especial</option>
-              <option value="LICENCA_MEDICA">Licença Médica</option>
-              <option value="FOLGA">Folga Compensatória</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Data Inicial:</label>
-              <input type="date" id="modal-fer-inicio" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Data Final:</label>
-              <input type="date" id="modal-fer-fim" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Observações / Número da Portaria:</label>
-            <input type="text" id="modal-fer-obs" placeholder="Ex: Portaria nº 045/2026" class="w-full border rounded-xl p-2 bg-slate-50 font-medium">
-          </div>
-
-          <div class="pt-3 border-t flex justify-end gap-2">
-            <button type="button" onclick="window.fecharModalFerias()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Afastamento</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
