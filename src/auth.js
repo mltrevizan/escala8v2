@@ -6,9 +6,6 @@ let loginSearchState = {
   servidorSelecionado: null
 };
 
-/**
- * Normaliza e-mails ou converte logins curtos (ex: "admin") para e-mail padrão do Firebase Auth
- */
 function obterEmailAutenticacao(srv) {
   if (!srv) return '';
   if (srv.email && srv.email.includes('@')) {
@@ -18,9 +15,6 @@ function obterEmailAutenticacao(srv) {
   return `${loginBase}@policiacivil.pr.gov.br`;
 }
 
-/**
- * Inicializa os observadores do Firebase Auth e renderiza o botão/modal de login
- */
 export function initAuthModule() {
   if (!window.firebase || !firebase.auth) {
     console.error("Firebase Auth não carregado no index.html");
@@ -54,9 +48,6 @@ export function initAuthModule() {
   renderUserStatusHeader();
 }
 
-/**
- * Renderiza o botão/badge de usuário logado no topo direito do Header
- */
 export function renderUserStatusHeader() {
   const container = document.getElementById('app-status');
   if (!container) return;
@@ -90,7 +81,6 @@ export function renderUserStatusHeader() {
   }
 }
 
-// Handlers globais do Modal de Login
 window.abrirModalLoginApp = function() {
   let modal = document.getElementById('modal-login-app');
   if (!modal) {
@@ -120,9 +110,6 @@ window.fecharModalLoginApp = function() {
   document.getElementById('modal-login-app')?.classList.add('hidden');
 };
 
-/**
- * Filtra a lista de servidores em tempo real letra a letra
- */
 window.filtrarPolicialLogin = function(termo) {
   const containerSugestoes = document.getElementById('login-sugestoes-lista');
   const badgeSel = document.getElementById('login-badge-servidor-sel');
@@ -151,7 +138,6 @@ window.filtrarPolicialLogin = function(termo) {
     return;
   }
 
-  // Criação segura de elementos da DOM sem usar aspas em template strings do onclick
   containerSugestoes.innerHTML = '';
   servidoresMatcheados.slice(0, 6).forEach(srv => {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
@@ -176,9 +162,6 @@ window.filtrarPolicialLogin = function(termo) {
   });
 };
 
-/**
- * Confirma a seleção do policial ao clicar
- */
 window.selecionarPolicialLogin = function(id, nome, email, cargo) {
   loginSearchState.servidorSelecionado = { id, nome, email, cargo };
 
@@ -217,9 +200,16 @@ window.executarLoginFirebase = async function(e) {
 
   try {
     msgErro?.classList.add('hidden');
-    await firebase.auth().signInWithEmailAndPassword(email, password);
+    const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
-    alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Usuário'}!`);
+
+    // EXIGE ALTERAÇÃO DE SENHA SE AINDA USAR A SENHA PADRÃO
+    if (password === 'Central123') {
+      window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
+    } else {
+      alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Usuário'}!`);
+    }
+
   } catch (err) {
     console.error("Erro no login:", err);
     if (msgErro) {
@@ -233,9 +223,6 @@ window.executarLoginFirebase = async function(e) {
   }
 };
 
-/**
- * Encerrar a Sessão
- */
 window.fazerLogoutApp = async function() {
   if (confirm("Deseja realmente encerrar a sessão?")) {
     await firebase.auth().signOut();
@@ -246,6 +233,71 @@ window.fazerLogoutApp = async function() {
     
     if (window.switchTab) {
       window.switchTab('crf');
+    }
+  }
+};
+
+// =========================================================================
+// MODAL DE TROCA OBRIGATÓRIA DE SENHA PADRÃO
+// =========================================================================
+let userParaTrocaSenha = null;
+
+window.abrirModalTrocarSenhaObrigatoria = function(user) {
+  userParaTrocaSenha = user;
+  let modal = document.getElementById('modal-trocar-senha-obrigatoria');
+  if (!modal) {
+    criarModalTrocarSenhaDOM();
+    modal = document.getElementById('modal-trocar-senha-obrigatoria');
+  }
+
+  document.getElementById('pwd-nova').value = '';
+  document.getElementById('pwd-confirma').value = '';
+  document.getElementById('pwd-erro-msg')?.classList.add('hidden');
+
+  modal.classList.remove('hidden');
+};
+
+window.salvarNovaSenhaObrigatoria = async function(e) {
+  e.preventDefault();
+  const nova = document.getElementById('pwd-nova').value;
+  const confirma = document.getElementById('pwd-confirma').value;
+  const msgErro = document.getElementById('pwd-erro-msg');
+
+  if (nova.length < 6) {
+    if (msgErro) {
+      msgErro.innerText = "A nova senha deve ter no mínimo 6 caracteres.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (nova === 'Central123') {
+    if (msgErro) {
+      msgErro.innerText = "Você deve escolher uma senha diferente da senha padrão Central123.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (nova !== confirma) {
+    if (msgErro) {
+      msgErro.innerText = "A confirmação de senha não confere com a nova senha.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
+
+  try {
+    const user = userParaTrocaSenha || firebase.auth().currentUser;
+    await user.updatePassword(nova);
+
+    alert("Senha alterada com sucesso! Utilize a sua nova senha nos próximos acessos.");
+    document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
+  } catch (err) {
+    console.error("Erro ao alterar senha:", err);
+    if (msgErro) {
+      msgErro.innerText = `Erro ao atualizar senha: ${err.message}`;
+      msgErro.classList.remove('hidden');
     }
   }
 };
@@ -281,12 +333,50 @@ function criarModalLoginDOM() {
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Senha:</label>
-            <input type="password" id="login-password" required placeholder="••••••••" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <!-- PLACEHOLDER ADICIONADO EM CINZA CLARO -->
+            <input type="password" id="login-password" required placeholder="Senha padrão: Central123" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="window.fecharModalLoginApp()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
             <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Entrar no Sistema</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function criarModalTrocarSenhaDOM() {
+  const modalHTML = `
+    <div id="modal-trocar-senha-obrigatoria" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 flex flex-col border-t-4 border-amber-500">
+        <div class="border-b pb-3 shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⚠️</span>
+            <h3 class="font-bold text-slate-900 text-sm">Alteração Obrigatória de Senha</h3>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Por questões de segurança, cadastre uma nova senha pessoal para substituir a senha padrão inicial.</p>
+        </div>
+
+        <form onsubmit="window.salvarNovaSenhaObrigatoria(event)" class="space-y-3 text-xs">
+          <div id="pwd-erro-msg" class="hidden p-2 bg-red-100 text-red-800 border border-red-200 font-bold rounded-lg text-[11px] text-center"></div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nova Senha Pessoal:</label>
+            <input type="password" id="pwd-nova" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Confirme a Nova Senha:</label>
+            <input type="password" id="pwd-confirma" required minlength="6" placeholder="Repita a nova senha" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+          </div>
+
+          <div class="pt-3 border-t flex justify-end shrink-0">
+            <button type="submit" class="w-full py-2.5 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer text-center">
+              💾 Cadastrar Nova Senha
+            </button>
           </div>
         </form>
       </div>
