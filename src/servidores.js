@@ -30,6 +30,7 @@ export function renderServidoresTable(containerId) {
         </button>
       </div>
 
+      <!-- Barra de Filtros -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida:</label>
@@ -268,9 +269,9 @@ window.renderTabelaServidoresCorpo = function() {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const perfilSrv = srv.perfil || 'APJ';
 
-    // CORES OFICIAIS PCPR PARA BADGES DE PERFIL
+    // BADGES COM A PALETA INSTITUCIONAL PCPR
     let badgePerfilClass = 'bg-slate-100 text-slate-700 border-slate-300';
-    if (perfilSrv === 'Administrador') badgePerfilClass = 'bg-black text-pcpr-gold border-pcpr-gold font-extrabold';
+    if (perfilSrv === 'Administrador') badgePerfilClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
     else if (perfilSrv === 'Coordenador') badgePerfilClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
     else if (perfilSrv === 'Superintendente') badgePerfilClass = 'bg-[#006AB3] text-white border-sky-600 font-bold';
     else if (perfilSrv === 'Delegado') badgePerfilClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
