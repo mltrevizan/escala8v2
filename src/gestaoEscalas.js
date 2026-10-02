@@ -1,555 +1,542 @@
 // src/gestaoEscalas.js
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
+import { renderCalendarGrid } from './calendar.js';
 
-// Estado local de filtros para não poluir ou depender do calendário global
-const gestaoState = {
-  crf: {
-    ano: new Date().getFullYear(),
-    mes: new Date().getMonth() + 1, // 1-12
-    busca: '',
-    ordenacao: 'DATA_ASC', // 'DATA_ASC', 'DATA_DESC', 'NOME_ASC', 'NOME_DESC'
-  },
-  delegacia: {
-    ano: new Date().getFullYear(),
-    mes: new Date().getMonth() + 1,
-    busca: '',
-    delegaciaId: 'TODAS',
-    ordenacao: 'DATA_ASC'
-  }
+let vinculoState = {
+  escalaDelegadoId: null,
+  delegadoObj: null,
+  dataPlantao: null,
+  turnoPlantao: null,
+  buscaTextual: '',
+  sdp: 'TODAS',
+  delegaciaId: 'TODAS',
+  sortColuna: 'PRIORIDADE', // 'PRIORIDADE', 'NOME', 'CARGO', 'DELEGACIA', 'SDP'
+  sortDirecao: 'ASC',
+  membrosSelecionados: []
 };
 
-export function renderGestaoEscalasModule(containerId) {
-  renderGestaoCrfModule(containerId);
-}
-
-// =========================================================================
-// 1. GESTÃO DE ESCALAS CRF
-// =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const monthOptions = getMonthSelectOptions(gestaoState.crf.mes);
-  const yearOptions = getYearSelectOptions(gestaoState.crf.ano);
-
-  let html = `
-    <!-- Cabeçalho de Controle CRF -->
-    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas CRF</h2>
-          <p class="text-[11px] text-slate-500">Visão gerencial global com filtros e ordenação autônomos</p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <button onclick="window.abrirModalEscala(null, null, 'CRF')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ➕ Novo Plantão CRF
-          </button>
-          <button onclick="window.abrirModalGeradorLote('CRF')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ⚡ Gerar em Lote
-          </button>
-          <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV</span>
-            <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'CRF')">
-          </label>
-          <button onclick="window.exportarEscalasCSV('CRF')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            📊 Exportar CSV
-          </button>
-        </div>
-      </div>
-
-      <!-- Barra de Filtros Próprios CRF -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-200">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">📅 Mês:</label>
-          <select id="filtro-crf-mes" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${monthOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">📆 Ano:</label>
-          <select id="filtro-crf-ano" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${yearOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Policial/Lotação:</label>
-          <input type="text" id="filtro-crf-busca" oninput="window.atualizarFiltrosCrf()" placeholder="Digite nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔀 Ordenar Por:</label>
-          <select id="filtro-crf-ordem" onchange="window.atualizarFiltrosCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <option value="DATA_ASC">Data (Mais antiga ➔ Recente)</option>
-            <option value="DATA_DESC">Data (Mais recente ➔ Antiga)</option>
-            <option value="NOME_ASC">Nome Policial (A ➔ Z)</option>
-            <option value="NOME_DESC">Nome Policial (Z ➔ A)</option>
-          </select>
-        </div>
-
-        <div class="flex items-end justify-between sm:justify-end gap-2">
-          <button onclick="window.excluirLançamentosFiltrados('CRF')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer w-full sm:w-auto">
-            🗑️ Excluir Filtrados
-          </button>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between text-xs text-slate-500 font-mono pt-1">
-        <span id="total-crf-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-1 rounded-md">
-          Total CRF: 0 Lançamentos
-        </span>
-      </div>
-    </div>
-
-    <!-- Tabela Gerencial CRF -->
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs border-collapse font-sans">
-        <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
-            <th class="p-3">Data</th>
-            <th class="p-3">Policial / Servidor</th>
-            <th class="p-3">Unidade / Lotação de Origem</th>
-            <th class="p-3">Tipo</th>
-            <th class="p-3">Turno</th>
-            <th class="p-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody id="tabela-crf-corpo" class="divide-y divide-slate-200"></tbody>
-      </table>
-    </div>
-  `;
-
-  container.innerHTML = html;
-  window.filtrarTabelaCrfInline();
-}
-
-window.atualizarFiltrosCrf = function() {
-  gestaoState.crf.mes = Number(document.getElementById('filtro-crf-mes')?.value || gestaoState.crf.mes);
-  gestaoState.crf.ano = Number(document.getElementById('filtro-crf-ano')?.value || gestaoState.crf.ano);
-  gestaoState.crf.busca = document.getElementById('filtro-crf-busca')?.value?.toLowerCase() || '';
-  gestaoState.crf.ordenacao = document.getElementById('filtro-crf-ordem')?.value || 'DATA_ASC';
-
-  window.filtrarTabelaCrfInline();
-};
-
-window.filtrarTabelaCrfInline = function() {
-  const tbody = document.getElementById('tabela-crf-corpo');
-  if (!tbody) return;
-
-  const { mes, ano, busca, ordenacao } = gestaoState.crf;
-
-  let escalasFiltradas = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    if (esc.scope !== 'CRF') return false;
-
-    const [a, m] = esc.data.split('-').map(Number);
-    if (a !== ano || m !== mes) return false;
-
-    if (busca) {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
-      const nomeSrv = (srv?.nome || '').toLowerCase();
-      const cargoSrv = (srv?.cargo || '').toLowerCase();
-      const nomeDel = (del?.nome || srv?.delegaciaNome || '').toLowerCase();
-
-      if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca) && !nomeDel.includes(busca)) return false;
-    }
-    return true;
-  });
-
-  // Ordenação
-  escalasFiltradas = aplicarOrdenacao(escalasFiltradas, ordenacao);
-
-  const totalEl = document.getElementById('total-crf-count');
-  if (totalEl) totalEl.innerText = `Exibindo ${escalasFiltradas.length} Lançamentos na CRF`;
-
-  tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
-};
-
-// =========================================================================
-// 2. GESTÃO DE ESCALAS POR DELEGACIAS
-// =========================================================================
-export function renderGestaoDelegaciasModule(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  const monthOptions = getMonthSelectOptions(gestaoState.delegacia.mes);
-  const yearOptions = getYearSelectOptions(gestaoState.delegacia.ano);
-
-  let delegaciasOptions = `<option value="TODAS">Todas as Delegacias</option>`;
-  (appState.delegacias || []).forEach(d => {
-    delegaciasOptions += `<option value="${d.id}" ${gestaoState.delegacia.delegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`;
-  });
-
-  let html = `
-    <!-- Cabeçalho de Controle Delegacias -->
-    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
-          <p class="text-[11px] text-slate-500">Auditoria e controle unificado de plantões locais e sobreavisos</p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <button onclick="window.abrirModalEscala(null, null, 'DELEGACIA')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ➕ Novo Plantão Local
-          </button>
-          <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ⚡ Gerar em Lote
-          </button>
-          <label class="cursor-pointer bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs flex items-center gap-1">
-            <span>📥 Importar CSV</span>
-            <input type="file" accept=".csv" class="hidden" onchange="window.importarEscalasCSV(event, 'DELEGACIA')">
-          </label>
-          <button onclick="window.exportarEscalasCSV('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            📊 Exportar CSV
-          </button>
-        </div>
-      </div>
-
-      <!-- Barra de Filtros Próprios Delegacia -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-200">
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🏢 Delegacia / Unidade:</label>
-          <select id="filtro-del-unidade" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${delegaciasOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">📅 Mês:</label>
-          <select id="filtro-del-mes" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${monthOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">📆 Ano:</label>
-          <select id="filtro-del-ano" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${yearOptions}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔍 Busca Policial:</label>
-          <input type="text" id="filtro-del-busca" oninput="window.atualizarFiltrosDel()" placeholder="Digite nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-1">🔀 Ordenação:</label>
-          <select id="filtro-del-ordem" onchange="window.atualizarFiltrosDel()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <option value="DATA_ASC">Data (Mais antiga ➔ Recente)</option>
-            <option value="DATA_DESC">Data (Mais recente ➔ Antiga)</option>
-            <option value="NOME_ASC">Nome Policial (A ➔ Z)</option>
-            <option value="NOME_DESC">Nome Policial (Z ➔ A)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between text-xs text-slate-500 font-mono pt-1">
-        <span id="total-del-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-1 rounded-md">
-          Exibindo 0 Lançamentos
-        </span>
-        <button onclick="window.excluirLançamentosFiltrados('DELEGACIA')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer">
-          🗑️ Excluir Filtrados
-        </button>
-      </div>
-    </div>
-
-    <!-- Tabela Gerencial Delegacias -->
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs border-collapse font-sans">
-        <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider">
-            <th class="p-3">Data</th>
-            <th class="p-3">Policial / Servidor</th>
-            <th class="p-3">Unidade de Plantão</th>
-            <th class="p-3">Tipo</th>
-            <th class="p-3">Turno</th>
-            <th class="p-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody id="tabela-del-corpo" class="divide-y divide-slate-200"></tbody>
-      </table>
-    </div>
-  `;
-
-  container.innerHTML = html;
-  window.filtrarTabelaDelInline();
-}
-
-window.atualizarFiltrosDel = function() {
-  gestaoState.delegacia.delegaciaId = document.getElementById('filtro-del-unidade')?.value || 'TODAS';
-  gestaoState.delegacia.mes = Number(document.getElementById('filtro-del-mes')?.value || gestaoState.delegacia.mes);
-  gestaoState.delegacia.ano = Number(document.getElementById('filtro-del-ano')?.value || gestaoState.delegacia.ano);
-  gestaoState.delegacia.busca = document.getElementById('filtro-del-busca')?.value?.toLowerCase() || '';
-  gestaoState.delegacia.ordenacao = document.getElementById('filtro-del-ordem')?.value || 'DATA_ASC';
-
-  window.filtrarTabelaDelInline();
-};
-
-window.filtrarTabelaDelInline = function() {
-  const tbody = document.getElementById('tabela-del-corpo');
-  if (!tbody) return;
-
-  const { mes, ano, busca, delegaciaId, ordenacao } = gestaoState.delegacia;
-
-  let escalasFiltradas = (appState.escalas || []).filter(esc => {
-    if (!esc.data) return false;
-    if (esc.scope !== 'DELEGACIA') return false;
-
-    const [a, m] = esc.data.split('-').map(Number);
-    if (a !== ano || m !== mes) return false;
-
-    if (delegaciaId !== 'TODAS') {
-      const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
-      const bateuId = esc.delegaciaId === delegaciaId;
-      const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(esc.delegaciaId);
-      if (!bateuId && !bateuUnificado) return false;
-    }
-
-    if (busca) {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const nomeSrv = (srv?.nome || '').toLowerCase();
-      const cargoSrv = (srv?.cargo || '').toLowerCase();
-      if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca)) return false;
-    }
-    return true;
-  });
-
-  escalasFiltradas = aplicarOrdenacao(escalasFiltradas, ordenacao);
-
-  const totalEl = document.getElementById('total-del-count');
-  if (totalEl) totalEl.innerText = `Exibindo ${escalasFiltradas.length} Lançamentos na Unidade`;
-
-  tbody.innerHTML = renderLinhasTabela(escalasFiltradas);
-};
-
-// =========================================================================
-// 3. AÇÃO DE EXCLUSÃO DINÂMICA BASEADA NOS REGISTROS EXIBIDOS
-// =========================================================================
-window.excluirLançamentosFiltrados = async function(scope) {
-  let listaParaExcluir = [];
-
-  if (scope === 'CRF') {
-    const { mes, ano, busca } = gestaoState.crf;
-    listaParaExcluir = (appState.escalas || []).filter(esc => {
-      if (!esc.data || esc.scope !== 'CRF') return false;
-      const [a, m] = esc.data.split('-').map(Number);
-      if (a !== ano || m !== mes) return false;
-
-      if (busca) {
-        const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-        const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
-        const nomeSrv = (srv?.nome || '').toLowerCase();
-        const cargoSrv = (srv?.cargo || '').toLowerCase();
-        const nomeDel = (del?.nome || srv?.delegaciaNome || '').toLowerCase();
-        if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca) && !nomeDel.includes(busca)) return false;
-      }
-      return true;
-    });
-  } else {
-    const { mes, ano, busca, delegaciaId } = gestaoState.delegacia;
-    listaParaExcluir = (appState.escalas || []).filter(esc => {
-      if (!esc.data || esc.scope !== 'DELEGACIA') return false;
-      const [a, m] = esc.data.split('-').map(Number);
-      if (a !== ano || m !== mes) return false;
-
-      if (delegaciaId !== 'TODAS') {
-        const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
-        const bateuId = esc.delegaciaId === delegaciaId;
-        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(esc.delegaciaId);
-        if (!bateuId && !bateuUnificado) return false;
-      }
-
-      if (busca) {
-        const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-        const nomeSrv = (srv?.nome || '').toLowerCase();
-        const cargoSrv = (srv?.cargo || '').toLowerCase();
-        if (!nomeSrv.includes(busca) && !cargoSrv.includes(busca)) return false;
-      }
-      return true;
-    });
-  }
-
-  if (listaParaExcluir.length === 0) {
-    alert("Nenhum lançamento está visível no momento para ser excluído.");
-    return;
-  }
-
-  const confirmacao = confirm(`ATENÇÃO!\n\nVocê está prestes a EXCLUIR OS ${listaParaExcluir.length} LANÇAMENTOS atualmente visíveis na tela.\n\nEsta ação é irreversível. Deseja continuar?`);
-  if (!confirmacao) return;
-
-  for (const esc of listaParaExcluir) {
-    appState.escalas = appState.escalas.filter(e => e.id !== esc.id);
-    await syncDocToFirestore('escalas', esc.id, null, true);
-  }
-
-  alert(`Sucesso! ${listaParaExcluir.length} registros foram excluídos do sistema.`);
-
-  if (scope === 'CRF') window.filtrarTabelaCrfInline();
-  else window.filtrarTabelaDelInline();
-};
-
-// =========================================================================
-// AUXILIARES DE FORMATAÇÃO E ORDENAÇÃO
-// =========================================================================
-function aplicarOrdenacao(lista, criterio) {
-  return [...lista].sort((a, b) => {
-    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
-    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
-
-    if (criterio === 'DATA_ASC') return (a.data || '').localeCompare(b.data || '');
-    if (criterio === 'DATA_DESC') return (b.data || '').localeCompare(a.data || '');
-    if (criterio === 'NOME_ASC') return (srvA?.nome || '').localeCompare(srvB?.nome || '');
-    if (criterio === 'NOME_DESC') return (srvB?.nome || '').localeCompare(srvA?.nome || '');
-
-    return 0;
-  });
-}
-
-function getMonthSelectOptions(selectedMonth) {
-  const meses = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-  ];
-  return meses.map((nome, idx) => 
-    `<option value="${idx + 1}" ${selectedMonth === (idx + 1) ? 'selected' : ''}>${nome}</option>`
-  ).join('');
-}
-
-function getYearSelectOptions(selectedYear) {
-  const anoAtual = new Date().getFullYear();
-  const anos = [anoAtual - 1, anoAtual, anoAtual + 1, anoAtual + 2];
-  return anos.map(ano => 
-    `<option value="${ano}" ${selectedYear === ano ? 'selected' : ''}>${ano}</option>`
-  ).join('');
-}
-
-function renderLinhasTabela(listaEscalas) {
-  if (listaEscalas.length === 0) {
-    return `
-      <tr>
-        <td colspan="6" class="p-6 text-center text-slate-500 italic">
-          Nenhum plantão localizado para os filtros selecionados.
-        </td>
-      </tr>
-    `;
-  }
-
-  return listaEscalas.map(esc => {
-    const servidor = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const delegaciaServidor = (appState.delegacias || []).find(d => d.id === servidor?.delegaciaId);
-    const delegaciaEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-
-    const nomeServidor = servidor ? `${servidor.nome} (${servidor.cargo})` : 'Não Localizado';
-    
-    let nomeUnidadeExibida = 'CRF Geral';
-    if (esc.scope === 'CRF') {
-      nomeUnidadeExibida = delegaciaServidor ? delegaciaServidor.nome : (servidor?.delegaciaNome || 'Central CRF');
-    } else {
-      nomeUnidadeExibida = delegaciaEscala ? delegaciaEscala.nome : 'Unidade Local';
-    }
-
-    const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
-    const isSobreaviso = esc.tipo === 'SOBREAVISO';
-
-    let badgeClass = 'bg-sky-100 text-sky-900 border-sky-300 font-bold';
-    if (isExtra) badgeClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
-    else if (isSobreaviso) badgeClass = 'bg-amber-100 text-amber-950 border-amber-300 font-bold';
-
-    const tipoExibicao = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || 'REGULAR'));
+  const { currentYear, currentMonth, filtroSdpGestaoCrf, filtroDelGestaoCrf } = appState;
+  const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+  // Lista os Delegados escalados no mês para a CRF
+  const escalasDelegados = (appState.escalas || []).filter(e => {
+    if (e.scope !== 'CRF') return false;
+    const [ano, mes] = e.data.split('-').map(Number);
+    if (ano !== currentYear || (mes - 1) !== currentMonth) return false;
+
+    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    return srv && (srv.cargo || '').toUpperCase().includes('DELEGADO');
+  }).sort((a, b) => a.data.localeCompare(b.data));
+
+  let htmlLinhas = escalasDelegados.map(esc => {
+    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const delOrigem = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+
+    // Identifica se há APJs vinculados no mesmo dia/turno/esc do delegado
+    const vinculosExistentes = (appState.escalas || []).filter(e => 
+      e.scope === 'CRF' && 
+      e.data === esc.data && 
+      e.turno === esc.turno && 
+      e.delegadoVinculadoId === esc.servidorId
+    );
+
+    const nomesApjsVinculados = vinculosExistentes.map(v => {
+      const s = (appState.servidores || []).find(pol => pol.id === v.servidorId);
+      return s ? s.nome : 'Policial';
+    }).join(', ');
 
     return `
-      <tr class="hover:bg-slate-50 transition">
+      <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
         <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(esc.data)}</td>
-        <td class="p-3 font-semibold text-slate-800">${nomeServidor}</td>
-        <td class="p-3 text-slate-600 font-medium">${nomeUnidadeExibida}</td>
+        <td class="p-3 font-bold text-slate-900">${srv ? srv.nome : 'Delegado'}</td>
+        <td class="p-3 text-slate-600 font-medium">${delOrigem ? delOrigem.nome : (srv?.delegaciaNome || '-')}</td>
+        <td class="p-3 font-mono font-bold text-slate-700">${esc.turno || '24h'}</td>
         <td class="p-3">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}">
-            ${tipoExibicao}
-          </span>
+          ${vinculosExistentes.length > 0 ? `
+            <div class="space-y-0.5">
+              <span class="text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold px-1.5 py-0.5 rounded block w-fit">
+                👥 ${vinculosExistentes.length} APJs Vinculados
+              </span>
+              <span class="text-[10px] text-slate-500 italic block truncate max-w-xs" title="${nomesApjsVinculados}">
+                ${nomesApjsVinculados}
+              </span>
+            </div>
+          ` : `
+            <span class="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded">
+              ⚠️ Sem equipe de apoio
+            </span>
+          `}
         </td>
-        <td class="p-3 font-mono text-slate-600">${esc.turno || '24h'}</td>
-        <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalEscala(null, '${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer">
-            Editar
-          </button>
-          <button onclick="window.excluirEscalaIndividual('${esc.id}', '${esc.scope}')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer">
-            Excluir
+        <td class="p-3 text-right">
+          <button onclick="window.abrirModalVincularApjs('${esc.id}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1 ml-auto">
+            🔗 Vincular Equipe / APJs
           </button>
         </td>
       </tr>
     `;
   }).join('');
+
+  if (escalasDelegados.length === 0) {
+    htmlLinhas = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nenhum Delegado escalado no mês de ${mesExtenso} para a Central CRF.</td></tr>`;
+  }
+
+  container.innerHTML = `
+    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-sm text-slate-800">Gestão e Vinculação de Equipes CRF</h2>
+          <p class="text-[11px] text-slate-500">Acompanhamento dos plantões de Delegados e montagem de equipes de apoio (${mesExtenso})</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto font-sans">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+            <th class="p-3">Data</th>
+            <th class="p-3">Delegado Plantonista</th>
+            <th class="p-3">Lotação de Origem</th>
+            <th class="p-3">Turno</th>
+            <th class="p-3">Equipe de Apoio (APJs)</th>
+            <th class="p-3 text-right">Ação</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">${htmlLinhas}</tbody>
+      </table>
+    </div>
+  `;
 }
+
+export function renderGestaoDelegaciasModule(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs font-bold">Módulo de Gestão por Delegacias operando via calendário interativo.</div>`;
+}
+
+// =========================================================================
+// MODAL DE VINCULAÇÃO DE APJS AO DELEGADO COM AUTOCOMPLETE E PRIORIZAÇÃO
+// =========================================================================
+window.abrirModalVincularApjs = function(escalaDelegadoId) {
+  let modal = document.getElementById('modal-vincular-apjs');
+  if (!modal) {
+    criarModalVincularApjsDOM();
+    modal = document.getElementById('modal-vincular-apjs');
+  }
+
+  const escDelegado = (appState.escalas || []).find(e => e.id === escalaDelegadoId);
+  if (!escDelegado) return;
+
+  const delegadoSrv = (appState.servidores || []).find(s => s.id === escDelegado.servidorId);
+
+  vinculoState.escalaDelegadoId = escalaDelegadoId;
+  vinculoState.delegadoObj = delegadoSrv;
+  vinculoState.dataPlantao = escDelegado.data;
+  vinculoState.turnoPlantao = escDelegado.turno;
+  vinculoState.buscaTextual = '';
+  vinculoState.sdp = 'TODAS';
+  vinculoState.delegaciaId = 'TODAS';
+  vinculoState.sortColuna = 'PRIORIDADE';
+  vinculoState.sortDirecao = 'ASC';
+
+  // Carrega APJs já vinculados a este plantão
+  const vinculadosJa = (appState.escalas || []).filter(e => 
+    e.scope === 'CRF' && 
+    e.data === escDelegado.data && 
+    e.turno === escDelegado.turno && 
+    e.delegadoVinculadoId === escDelegado.servidorId
+  );
+  vinculoState.membrosSelecionados = vinculadosJa.map(e => e.servidorId);
+
+  // Preenche dados do topo do modal
+  const infoEl = document.getElementById('vinc-info-delegado');
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+        <div>
+          <span class="font-black text-indigo-950 block text-sm">👮 DEL. ${delegadoSrv ? delegadoSrv.nome : 'Plantonista'}</span>
+          <span class="text-slate-600 font-mono text-[11px]"><b>Data:</b> ${formatarDataBr(escDelegado.data)} | <b>Turno:</b> ${escDelegado.turno || '24h'}</span>
+        </div>
+        <button type="button" onclick="window.sugerirAutocompleteEquipeAnterior()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1 shrink-0">
+          ✨ Repetir Última Equipe Vinculada
+        </button>
+      </div>
+    `;
+  }
+
+  window.popularFiltrosModalVinculacao();
+  window.renderizarListaApjsModal();
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalVincularApjs = function() {
+  document.getElementById('modal-vincular-apjs')?.classList.add('hidden');
+};
+
+window.popularFiltrosModalVinculacao = function() {
+  const selectSdp = document.getElementById('vinc-filtro-sdp');
+  if (selectSdp) {
+    const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+    (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+
+    let opts = `<option value="TODAS">Todas as SDPs</option>`;
+    [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
+      opts += `<option value="${s}">${s}</option>`;
+    });
+    selectSdp.innerHTML = opts;
+  }
+
+  window.atualizarOptionsDelegaciasVinculacao();
+};
+
+window.aoMudarSdpModalVinculacao = function(sdpSel) {
+  vinculoState.sdp = sdpSel;
+  vinculoState.delegaciaId = 'TODAS';
+  window.atualizarOptionsDelegaciasVinculacao();
+  window.renderizarListaApjsModal();
+};
+
+window.atualizarOptionsDelegaciasVinculacao = function() {
+  const selectDel = document.getElementById('vinc-filtro-del');
+  if (!selectDel) return;
+
+  let dels = appState.delegacias || [];
+  if (vinculoState.sdp !== 'TODAS') {
+    dels = dels.filter(d => (d.subdivisao || '').toUpperCase() === vinculoState.sdp);
+  }
+
+  let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+  dels.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+    opts += `<option value="${d.id}">${d.nome}</option>`;
+  });
+  selectDel.innerHTML = opts;
+};
+
+window.atualizarFiltrosModalVinculacao = function() {
+  vinculoState.buscaTextual = document.getElementById('vinc-busca-srv')?.value?.toLowerCase() || '';
+  vinculoState.sdp = document.getElementById('vinc-filtro-sdp')?.value || 'TODAS';
+  vinculoState.delegaciaId = document.getElementById('vinc-filtro-del')?.value || 'TODAS';
+
+  window.renderizarListaApjsModal();
+};
+
+window.ordenarApjsModalColuna = function(coluna) {
+  if (vinculoState.sortColuna === coluna) {
+    vinculoState.sortDirecao = vinculoState.sortDirecao === 'ASC' ? 'DESC' : 'ASC';
+  } else {
+    vinculoState.sortColuna = coluna;
+    vinculoState.sortDirecao = 'ASC';
+  }
+
+  ['PRIORIDADE', 'NOME', 'CARGO', 'DELEGACIA', 'SDP'].forEach(col => {
+    const el = document.getElementById(`vinc-sort-icon-${col}`);
+    if (el) {
+      if (col === vinculoState.sortColuna) {
+        el.innerText = vinculoState.sortDirecao === 'ASC' ? '⬆️' : '⬇️';
+      } else {
+        el.innerText = '';
+      }
+    }
+  });
+
+  window.renderizarListaApjsModal();
+};
+
+window.renderizarListaApjsModal = function() {
+  const container = document.getElementById('vinc-tabela-corpo');
+  if (!container) return;
+
+  const { delegadoObj, buscaTextual, sdp, delegaciaId, sortColuna, sortDirecao, membrosSelecionados } = vinculoState;
+  const delegadoId = delegadoObj ? delegadoObj.id : null;
+  const delDelegadoId = delegadoObj ? delegadoObj.delegaciaId : null;
+
+  // 1. Calcula histórico de vínculos anteriores com este Delegado
+  const apjsHistoricoIds = new Set();
+  (appState.escalas || []).forEach(e => {
+    if (e.scope === 'CRF' && e.delegadoVinculadoId === delegadoId && e.servidorId !== delegadoId) {
+      apjsHistoricoIds.add(e.servidorId);
+    }
+  });
+
+  // 2. Filtra Policiais (Apenas não-Delegados)
+  let apjsFiltrados = [...(appState.servidores || [])].filter(srv => {
+    const cargoU = (srv.cargo || '').toUpperCase();
+    if (cargoU.includes('DELEGADO')) return false;
+
+    const nomeN = normalizeText(srv.nome || '');
+    if (nomeN === 'administrador do sistema' || nomeN === 'admin') return false;
+
+    // Filtro por Busca Textual
+    if (buscaTextual) {
+      const nomePol = (srv.nome || '').toLowerCase();
+      const cargoPol = (srv.cargo || '').toLowerCase();
+      const telPol = (srv.telefone || '').toLowerCase();
+      if (!nomePol.includes(buscaTextual) && !cargoPol.includes(buscaTextual) && !telPol.includes(buscaTextual)) {
+        return false;
+      }
+    }
+
+    // Filtro por SDP
+    if (sdp !== 'TODAS') {
+      const delObj = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+      const sdpSrv = (delObj?.subdivisao || srv.subdivisao || '').toUpperCase();
+      if (sdpSrv !== sdp) return false;
+    }
+
+    // Filtro por Delegacia
+    if (delegaciaId !== 'TODAS') {
+      if (srv.delegaciaId !== delegaciaId) return false;
+    }
+
+    return true;
+  });
+
+  // 3. Ordenação com Prioridade Inteligente
+  apjsFiltrados.sort((a, b) => {
+    const isSelA = membrosSelecionados.includes(a.id);
+    const isSelB = membrosSelecionados.includes(b.id);
+
+    // Selecionados sempre em primeiro lugar
+    if (isSelA && !isSelB) return -1;
+    if (!isSelA && isSelB) return 1;
+
+    // Prioridade por Grupo se a coluna for 'PRIORIDADE'
+    if (sortColuna === 'PRIORIDADE') {
+      const histA = apjsHistoricoIds.has(a.id) ? 1 : 0;
+      const histB = apjsHistoricoIds.has(b.id) ? 1 : 0;
+
+      const mesmaDelA = (a.delegaciaId === delDelegadoId) ? 1 : 0;
+      const mesmaDelB = (b.delegaciaId === delDelegadoId) ? 1 : 0;
+
+      const pesoA = (histA * 10) + (mesmaDelA * 5);
+      const pesoB = (histB * 10) + (mesmaDelB * 5);
+
+      if (pesoA !== pesoB) return sortDirecao === 'ASC' ? (pesoB - pesoA) : (pesoA - pesoB);
+    }
+
+    const delA = (appState.delegacias || []).find(d => d.id === a.delegaciaId);
+    const delB = (appState.delegacias || []).find(d => d.id === b.delegaciaId);
+
+    let valA = '', valB = '';
+    if (sortColuna === 'NOME') { valA = a.nome || ''; valB = b.nome || ''; }
+    else if (sortColuna === 'CARGO') { valA = a.cargo || ''; valB = b.cargo || ''; }
+    else if (sortColuna === 'DELEGACIA') { valA = delA?.nome || a.delegaciaNome || ''; valB = delB?.nome || b.delegaciaNome || ''; }
+    else if (sortColuna === 'SDP') { valA = delA?.subdivisao || a.subdivisao || ''; valB = delB?.subdivisao || b.subdivisao || ''; }
+
+    const res = valA.localeCompare(valB, undefined, { numeric: true });
+    return sortDirecao === 'ASC' ? res : -res;
+  });
+
+  const contadorEl = document.getElementById('vinc-contador-sel');
+  if (contadorEl) contadorEl.innerText = `${membrosSelecionados.length} APJs Selecionados`;
+
+  if (apjsFiltrados.length === 0) {
+    container.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 italic">Nenhum policial encontrado para os filtros.</td></tr>`;
+    return;
+  }
+
+  container.innerHTML = apjsFiltrados.map(srv => {
+    const isChecked = membrosSelecionados.includes(srv.id);
+    const posIndex = membrosSelecionados.indexOf(srv.id);
+
+    const temHistorico = apjsHistoricoIds.has(srv.id);
+    const mesmaDelegacia = (srv.delegaciaId === delDelegadoId);
+    const delObj = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+
+    let badgeTag = '';
+    if (temHistorico) {
+      badgeTag = `<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-[9px] rounded">✨ Vinculado Anteriormente</span>`;
+    } else if (mesmaDelegacia) {
+      badgeTag = `<span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold text-[9px] rounded">🏢 Mesma Delegacia de Origem</span>`;
+    }
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs ${isChecked ? 'bg-indigo-50/50' : ''}">
+        <td class="p-2.5 text-center">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleApjVinculoModal('${srv.id}', this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer">
+        </td>
+        <td class="p-2.5 font-bold text-slate-800">
+          <div class="flex items-center gap-2">
+            ${isChecked ? `<span class="bg-indigo-600 text-white font-extrabold text-[9px] px-1.5 py-0.5 rounded-full">${posIndex + 1}º</span>` : ''}
+            <span>${srv.nome}</span>
+            ${badgeTag}
+          </div>
+        </td>
+        <td class="p-2.5 font-semibold text-slate-700">${srv.cargo || 'APJ'}</td>
+        <td class="p-2.5 text-slate-600">${delObj ? delObj.nome : (srv.delegaciaNome || '-')}</td>
+        <td class="p-2.5 font-mono text-slate-700">${delObj?.subdivisao || srv.subdivisao || '8ª SDP'}</td>
+      </tr>
+    `;
+  }).join('');
+};
+
+window.toggleApjVinculoModal = function(srvId, isChecked) {
+  if (isChecked) {
+    if (!vinculoState.membrosSelecionados.includes(srvId)) {
+      vinculoState.membrosSelecionados.push(srvId);
+    }
+  } else {
+    vinculoState.membrosSelecionados = vinculoState.membrosSelecionados.filter(id => id !== srvId);
+  }
+  window.renderizarListaApjsModal();
+};
+
+// AUTOCOMPLETE DE EQUIPE ANTERIOR
+window.sugerirAutocompleteEquipeAnterior = function() {
+  const delegadoId = vinculoState.delegadoObj ? vinculoState.delegadoObj.id : null;
+  if (!delegadoId) return;
+
+  // Busca a última escala do mesmo delegado que teve APJs vinculados
+  const escalasPassadasComEquipe = (appState.escalas || []).filter(e => 
+    e.scope === 'CRF' && 
+    e.delegadoVinculadoId === delegadoId && 
+    e.servidorId !== delegadoId &&
+    e.data < vinculoState.dataPlantao
+  ).sort((a, b) => b.data.localeCompare(a.data));
+
+  if (escalasPassadasComEquipe.length === 0) {
+    alert("Nenhuma equipe prévia vinculada a este Delegado foi localizada em plantões anteriores.");
+    return;
+  }
+
+  const ultimaData = escalasPassadasComEquipe[0].data;
+  const apjsUltimaEquipe = (appState.escalas || []).filter(e => 
+    e.scope === 'CRF' && 
+    e.delegadoVinculadoId === delegadoId && 
+    e.data === ultimaData
+  ).map(e => e.servidorId);
+
+  if (apjsUltimaEquipe.length > 0) {
+    vinculoState.membrosSelecionados = [...new Set([...vinculoState.membrosSelecionados, ...apjsUltimaEquipe])];
+    window.renderizarListaApjsModal();
+    alert(`Autocomplete aplicado! ${apjsUltimaEquipe.length} APJs sugeridos a partir da escala do dia ${formatarDataBr(ultimaData)}.`);
+  }
+};
+
+window.salvarVinculacaoApjsModal = async function(e) {
+  e.preventDefault();
+
+  const { dataPlantao, turnoPlantao, delegadoObj, membrosSelecionados } = vinculoState;
+  const delegadoId = delegadoObj ? delegadoObj.id : null;
+
+  if (!delegadoId) return;
+
+  // 1. Remove APJs vinculados anteriormente neste mesmo dia/turno para este delegado
+  const escalasExistentes = (appState.escalas || []).filter(e => 
+    e.scope === 'CRF' && 
+    e.data === dataPlantao && 
+    e.turno === turnoPlantao && 
+    e.delegadoVinculadoId === delegadoId
+  );
+
+  for (const esc of escalasExistentes) {
+    appState.escalas = (appState.escalas || []).filter(x => x.id !== esc.id);
+    await syncDocToFirestore('escalas', esc.id, null, true);
+  }
+
+  // 2. Insere os novos APJs vinculados
+  let inseridos = 0;
+  for (const apjId of membrosSelecionados) {
+    const srvApj = (appState.servidores || []).find(s => s.id === apjId);
+    const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+    const novaEscala = {
+      id: newEscId,
+      data: dataPlantao,
+      servidorId: apjId,
+      delegaciaId: srvApj ? srvApj.delegaciaId : '',
+      scope: 'CRF',
+      tipo: 'PLANTÃO',
+      turno: turnoPlantao,
+      delegadoVinculadoId: delegadoId
+    };
+
+    if (!appState.escalas) appState.escalas = [];
+    appState.escalas.push(novaEscala);
+    await syncDocToFirestore('escalas', newEscId, novaEscala);
+    inseridos++;
+  }
+
+  alert(`Sucesso! Equipe de ${inseridos} APJs vinculada com sucesso ao Delegado.`);
+  window.fecharModalVincularApjs();
+
+  renderGestaoCrfModule('gestao-crf-container');
+  renderCalendarGrid('calendar-crf-container', 'CRF');
+};
 
 function formatarDataBr(dataIso) {
   if (!dataIso) return '-';
   const parts = dataIso.split('-');
-  if (parts.length < 3) return dataIso;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-window.excluirEscalaIndividual = async function(escalaId, scope) {
-  if (!confirm("Deseja realmente remover este lançamento de escala?")) return;
+function criarModalVincularApjsDOM() {
+  const modalHTML = `
+    <div id="modal-vincular-apjs" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">🔗 Vincular Equipe de APJs ao Delegado Plantonista</h3>
+          <button type="button" onclick="window.fecharModalVincularApjs()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
 
-  appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
-  await syncDocToFirestore('escalas', escalaId, null, true);
+        <div id="vinc-info-delegado"></div>
 
-  if (scope === 'CRF') window.filtrarTabelaCrfInline();
-  else window.filtrarTabelaDelInline();
-};
+        <form onsubmit="window.salvarVinculacaoApjsModal(event)" class="space-y-3 text-xs flex-1 overflow-y-auto pr-1 flex flex-col">
+          <!-- Filtros de Busca -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200 shrink-0">
+            <div>
+              <input type="text" id="vinc-busca-srv" oninput="window.atualizarFiltrosModalVinculacao()" placeholder="🔍 Filtrar nome ou cargo..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+            <div>
+              <select id="vinc-filtro-sdp" onchange="window.aoMudarSdpModalVinculacao(this.value)" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-800"></select>
+            </div>
+            <div>
+              <select id="vinc-filtro-del" onchange="window.atualizarFiltrosModalVinculacao()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-800"></select>
+            </div>
+          </div>
 
-window.exportarEscalasCSV = function(scope) {
-  let lista = [];
-  if (scope === 'CRF') {
-    const { mes, ano } = gestaoState.crf;
-    lista = (appState.escalas || []).filter(e => {
-      const [a, m] = e.data.split('-').map(Number);
-      return a === ano && m === mes && e.scope === 'CRF';
-    });
-  } else {
-    const { mes, ano, delegaciaId } = gestaoState.delegacia;
-    lista = (appState.escalas || []).filter(e => {
-      const [a, m] = e.data.split('-').map(Number);
-      const bateuDel = delegaciaId === 'TODAS' || e.delegaciaId === delegaciaId;
-      return a === ano && m === mes && e.scope === 'DELEGACIA' && bateuDel;
-    });
-  }
+          <!-- Contador -->
+          <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 shrink-0">
+            <span id="vinc-contador-sel" class="font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">0 APJs Selecionados</span>
+            <span class="text-[10px] text-slate-400 italic">Clique nos cabeçalhos para reordenar a lista</span>
+          </div>
 
-  if (lista.length === 0) {
-    alert(`Nenhum lançamento encontrado para exportar nos filtros selecionados.`);
-    return;
-  }
+          <!-- Tabela com Ordenação Clicável -->
+          <div class="overflow-x-auto border border-slate-200 rounded-xl flex-1 max-h-64 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse font-sans">
+              <thead class="sticky top-0 bg-slate-100 z-10 select-none">
+                <tr class="text-slate-700 border-b border-slate-200 font-bold uppercase text-[10px]">
+                  <th class="p-2.5 text-center w-10">Sel.</th>
+                  <th onclick="window.ordenarApjsModalColuna('PRIORIDADE')" class="p-2.5 cursor-pointer hover:bg-slate-200 transition">
+                    Policial / Servidor <span id="vinc-sort-icon-PRIORIDADE">⬆️</span>
+                  </th>
+                  <th onclick="window.ordenarApjsModalColuna('CARGO')" class="p-2.5 cursor-pointer hover:bg-slate-200 transition">
+                    Cargo <span id="vinc-sort-icon-CARGO"></span>
+                  </th>
+                  <th onclick="window.ordenarApjsModalColuna('DELEGACIA')" class="p-2.5 cursor-pointer hover:bg-slate-200 transition">
+                    Lotação <span id="vinc-sort-icon-DELEGACIA"></span>
+                  </th>
+                  <th onclick="window.ordenarApjsModalColuna('SDP')" class="p-2.5 cursor-pointer hover:bg-slate-200 transition">
+                    SDP <span id="vinc-sort-icon-SDP"></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="vinc-tabela-corpo" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
 
-  let csvContent = "DATA;PERIODO;EXTRAJORNADA;CARGO;NOME;DELEGACIA;SDP;TELEFONE\n";
-
-  lista.forEach(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-
-    const data = esc.data;
-    const periodo = esc.turno?.includes('(N)') ? 'NOTURNO' : 'DIURNO';
-    const extra = (esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP') ? 'SIM' : 'NAO';
-    const cargo = srv?.cargo || 'APJ';
-    const nome = srv?.nome || 'NÃO LOCALIZADO';
-    const delegacia = del?.nome || srv?.delegaciaNome || '';
-    const sdp = del?.subdivisao || srv?.subdivisao || '8ª SDP';
-    const telefone = srv?.telefone || '';
-
-    csvContent += `${data};${periodo};${extra};${cargo};${nome};${delegacia};${sdp};${telefone}\n`;
-  });
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", `escalas_${scope.toLowerCase()}_gerencial.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="window.fecharModalVincularApjs()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">💾 Salvar Vinculação da Equipe</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
