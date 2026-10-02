@@ -253,18 +253,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // ESTILOS: 
+          // ESTILOS:
           // PLANTÃO LOCAL: DOURADO SUAVE (PADRÃO DIURNO)
-          // SOBREAVISO & EXTRAJORNADA: GRAFITE INSTITUCIONAL (PADRÃO NOTURNO DA CRF)
+          // SOBREAVISO & EXTRAJORNADA: GRAFITE INSTITUCIONAL COM NOMES EM BRANCO (PADRÃO NOTURNO DA CRF)
           let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
-          if (isSobreaviso) {
-            cardStyle = 'bg-black border-[#BEA55A] text-pcpr-gold';
-            rotuloTipo = 'SOBREAVISO';
-          } else if (isExtra) {
+          if (isSobreaviso || isExtra) {
             cardStyle = 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs';
-            rotuloTipo = 'EXTRA';
+            rotuloTipo = isSobreaviso ? 'SOBREAVISO' : 'EXTRA';
           }
 
           const idsString = grupo.map(e => e.id).join(',');
@@ -274,9 +271,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
-            let corTexto = 'text-slate-900';
-            if (isSobreaviso) corTexto = 'text-[#BEA55A]';
-            else if (isExtra) corTexto = 'text-white';
+            // NOMES EM BRANCO NO SOBREAVISO/EXTRA E ESCUROS NO PLANTÃO
+            const corTexto = (isSobreaviso || isExtra) ? 'text-white font-semibold' : 'text-slate-900';
 
             return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
           }).join('');
@@ -286,7 +282,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
                  onmouseenter="window.mostrarTooltipGrupo(event, '${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
-              <!-- NOME DA VIATURA EM DOURADO PCPR -->
+              <!-- APENAS A VIATURA PERMANECE EM DOURADO PCPR SOBRE FUNDO PRETO -->
               ${primeiraEsc.vtr ? `<div class="text-[8px] bg-black text-[#BEA55A] border border-[#BEA55A]/40 font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
               ${nomesHtml}
               <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${(isSobreaviso || isExtra) ? 'border-white/20 text-slate-300' : 'border-black/10 text-slate-700'} pt-0.5">
