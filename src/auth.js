@@ -1,5 +1,6 @@
 // src/auth.js
 import { appState, normalizeText } from './state.js';
+import { applyUIPermissions } from './permissions.js';
 
 let loginSearchState = {
   servidorSelecionado: null
@@ -49,6 +50,7 @@ export function initAuthModule() {
     }
 
     renderUserStatusHeader();
+    applyUIPermissions();
   });
 
   renderUserStatusHeader();
@@ -161,7 +163,7 @@ window.filtrarPolicialLogin = function(termo) {
            class="p-2 hover:bg-indigo-50 border-b border-slate-100 cursor-pointer transition flex items-center justify-between font-sans">
         <div>
           <span class="font-bold text-slate-900 block text-xs">${srv.nome}</span>
-          <span class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • ${del ? del.nome : (srv.delegaciaNome || '8ª SDP')}</span>
+          <span class="text-[10px] text-slate-500">${srv.cargo \vert{}\vert{} 'APJ'} •${del ? del.nome : (srv.delegaciaNome || '8ª SDP')}</span>
         </div>
         <span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${nivelExibicao}</span>
       </div>
@@ -212,12 +214,12 @@ window.executarLoginFirebase = async function(e) {
     msgErro?.classList.add('hidden');
     await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
-    alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Administrador'}!`);
+    alert(`Bem-vindo, ${loginSearchState.servidorSelecionado?.nome || 'Usuário'}!`);
   } catch (err) {
     console.error("Erro no login:", err);
     if (msgErro) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        msgErro.innerText = "Palavra-passe incorreta ou utilizador ainda não cadastrado no Firebase Auth.";
+        msgErro.innerText = "Palavra-passe incorreta ou utilizador não cadastrado no Firebase Auth.";
       } else {
         msgErro.innerText = `Erro de Autenticação: ${err.message}`;
       }
@@ -226,11 +228,20 @@ window.executarLoginFirebase = async function(e) {
   }
 };
 
+/**
+ * Logout limpa a sessão, atualiza header, restringe a UI e joga para a aba 'crf'
+ */
 window.fazerLogoutApp = async function() {
   if (confirm("Deseja realmente encerrar a sessão?")) {
     await firebase.auth().signOut();
     appState.currentUser = null;
+    
     renderUserStatusHeader();
+    applyUIPermissions();
+    
+    if (window.switchTab) {
+      window.switchTab('crf');
+    }
   }
 };
 
@@ -251,16 +262,13 @@ function criarModalLoginDOM() {
 
           <input type="hidden" id="login-email-hidden">
 
-          <!-- Digitação Reativa por Nome ou Login de Policial -->
           <div class="relative">
             <label class="block font-bold text-slate-700 mb-1">Identifique-se pelo seu Nome ou Login:</label>
             <input type="text" id="login-nome-busca" oninput="window.filtrarPolicialLogin(this.value)" placeholder="🔍 Digite 'ADMIN' ou as primeiras letras do seu nome..." autocomplete="off" class="w-full border rounded-xl p-2.5 bg-slate-50 font-bold text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
             
-            <!-- Lista Flutuante de Sugestões -->
             <div id="login-sugestoes-lista" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 shadow-xl rounded-xl max-h-48 overflow-y-auto z-20"></div>
           </div>
 
-          <!-- Badge Confirmando Seleção -->
           <div id="login-badge-servidor-sel" class="hidden p-2 bg-[#F7F3E8] border border-[#BEA55A] rounded-xl text-[#5A4716] font-bold text-xs flex items-center justify-between">
             <span id="login-badge-texto"></span>
             <span class="text-emerald-700">✓</span>
