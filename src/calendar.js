@@ -221,7 +221,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      // PALETA OFICIAL PCPR: DIURNO DOURADO / NOTURNO GRAFITE
       html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716] shadow-xs');
       html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs');
     } else {
@@ -254,15 +253,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // MESMO PADRÃO PCPR: PLANTÃO LOCAL (DOURADO DIURNO), SOBREAVISO (GRAFITE NOTURNO)
+          // MESMA COR PARA SOBREAVISO E EXTRAJORNADA: BLACK & PCPR GOLD
           let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
           if (isSobreaviso) {
-            cardStyle = 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2]';
+            cardStyle = 'bg-black border-[#BEA55A] text-[#BEA55A]';
             rotuloTipo = 'SOBREAVISO';
           } else if (isExtra) {
-            cardStyle = 'bg-purple-100 border-purple-300 text-purple-950';
+            cardStyle = 'bg-black border-[#BEA55A] text-[#BEA55A]';
             rotuloTipo = 'EXTRA';
           }
 
@@ -272,7 +271,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
-            const corTexto = isSobreaviso ? 'text-white' : 'text-slate-900';
+            const corTexto = (isSobreaviso || isExtra) ? 'text-[#BEA55A]' : 'text-slate-900';
             return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
           }).join('');
 
@@ -283,7 +282,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
               ${primeiraEsc.vtr ? `<div class="text-[8px] bg-black text-pcpr-gold font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
               ${nomesHtml}
-              <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${isSobreaviso ? 'border-white/20 text-slate-300' : 'border-black/10 text-slate-700'} pt-0.5">
+              <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${(isSobreaviso || isExtra) ? 'border-pcpr-gold/30 text-pcpr-gold' : 'border-black/10 text-slate-700'} pt-0.5">
                 <span>${primeiraEsc.turno || '24h'}</span>
                 <span class="font-bold uppercase tracking-tight">${rotuloTipo}</span>
               </div>
@@ -352,11 +351,12 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
     const prefixo = isDel ? 'DEL.' : 'APJ';
     const nomeExibicao = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
 
+    // TAG E TEXTO DE EXTRAJORNADA EM COR DOURADA PCPR
     if (isExtra) {
       return `
-        <div class="cal-v1-srv-name text-purple-300 flex items-center justify-between gap-1">
+        <div class="cal-v1-srv-name text-[#BEA55A] font-bold flex items-center justify-between gap-1">
           <span class="truncate">${nomeExibicao}</span>
-          <span class="cal-v1-tag-extra bg-purple-600 text-white rounded shrink-0 shadow-xs">EXTRA</span>
+          <span class="cal-v1-tag-extra bg-black text-[#BEA55A] border border-[#BEA55A] rounded shrink-0 shadow-xs">EXTRA</span>
         </div>
       `;
     }
@@ -461,9 +461,9 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 
       content += `
         <div class="pt-1 border-t border-slate-100 space-y-0.5">
-          <div class="font-bold ${isExtra ? 'text-purple-800' : 'text-slate-800'} text-xs flex items-center justify-between">
+          <div class="font-bold ${isExtra ? 'text-amber-800' : 'text-slate-800'} text-xs flex items-center justify-between">
             <span>${srv?.nome || 'Não informado'}</span>
-            ${isExtra ? '<span class="text-[8px] bg-purple-100 text-purple-800 px-1 rounded font-bold">EXTRA</span>' : ''}
+            ${isExtra ? '<span class="text-[8px] bg-black text-pcpr-gold border border-pcpr-gold px-1 rounded font-bold">EXTRA</span>' : ''}
           </div>
           <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
           <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
@@ -499,7 +499,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
       <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
         <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
           <span>${srv?.nome || 'Não informado'}</span>
-          <span class="text-[8px] ${isSobreaviso ? 'bg-slate-800 text-pcpr-gold' : 'bg-[#F7F3E8] text-[#5A4716] border border-[#BEA55A]'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+          <span class="text-[8px] ${isSobreaviso ? 'bg-black text-pcpr-gold border border-pcpr-gold' : 'bg-[#F7F3E8] text-[#5A4716] border border-[#BEA55A]'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
         </div>
         <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
         <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
