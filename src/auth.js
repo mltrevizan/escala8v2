@@ -27,10 +27,8 @@ export function initAuthModule() {
     return;
   }
 
-  // Observador de estado da sessão do Firebase Auth
   firebase.auth().onAuthStateChanged(async (user) => {
     if (user) {
-      // Procura o perfil correspondente na coleção de servidores pelo e-mail ou login
       const srv = (appState.servidores || []).find(s => {
         const emailSrv = obterEmailAutenticacao(s);
         return emailSrv === user.email.toLowerCase();
@@ -57,7 +55,7 @@ export function initAuthModule() {
 }
 
 /**
- * Renderiza o botão/badge de utilizador logado no topo direito do Header
+ * Renderiza o botão/badge de usuário logado no topo direito do Header
  */
 export function renderUserStatusHeader() {
   const container = document.getElementById('app-status');
@@ -92,7 +90,7 @@ export function renderUserStatusHeader() {
   }
 }
 
-// Global Handlers do Login Modal
+// Handlers globais do Modal de Login
 window.abrirModalLoginApp = function() {
   let modal = document.getElementById('modal-login-app');
   if (!modal) {
@@ -153,26 +151,33 @@ window.filtrarPolicialLogin = function(termo) {
     return;
   }
 
-  containerSugestoes.innerHTML = servidoresMatcheados.slice(0, 6).map(srv => {
+  // Criação segura de elementos da DOM sem usar aspas em template strings do onclick
+  containerSugestoes.innerHTML = '';
+  servidoresMatcheados.slice(0, 6).forEach(srv => {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const emailCalculado = obterEmailAutenticacao(srv);
     const nivelExibicao = srv.nivelAcesso || srv.perfil || 'APJ';
 
-    return `
-      <div onclick="window.selecionarPolicialLogin('${srv.id}', '${srv.nome.replace(/'/g, "\\'")}', '${emailCalculado}', '${srv.cargo || 'APJ'}')" 
-           class="p-2 hover:bg-indigo-50 border-b border-slate-100 cursor-pointer transition flex items-center justify-between font-sans">
-        <div>
-          <span class="font-bold text-slate-900 block text-xs">${srv.nome}</span>
-          <span class="text-[10px] text-slate-500">${srv.cargo \vert{}\vert{} 'APJ'} •${del ? del.nome : (srv.delegaciaNome || '8ª SDP')}</span>
-        </div>
-        <span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${nivelExibicao}</span>
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'p-2 hover:bg-indigo-50 border-b border-slate-100 cursor-pointer transition flex items-center justify-between font-sans';
+    itemDiv.innerHTML = `
+      <div>
+        <span class="font-bold text-slate-900 block text-xs">${srv.nome}</span>
+        <span class="text-[10px] text-slate-500">${srv.cargo || 'APJ'} • ${del ? del.nome : (srv.delegaciaNome || '8ª SDP')}</span>
       </div>
+      <span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">${nivelExibicao}</span>
     `;
-  }).join('');
+
+    itemDiv.onclick = () => {
+      window.selecionarPolicialLogin(srv.id, srv.nome, emailCalculado, srv.cargo || 'APJ');
+    };
+
+    containerSugestoes.appendChild(itemDiv);
+  });
 };
 
 /**
- * Confirma a seleção do policial no clique
+ * Confirma a seleção do policial ao clicar
  */
 window.selecionarPolicialLogin = function(id, nome, email, cargo) {
   loginSearchState.servidorSelecionado = { id, nome, email, cargo };
@@ -219,7 +224,7 @@ window.executarLoginFirebase = async function(e) {
     console.error("Erro no login:", err);
     if (msgErro) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        msgErro.innerText = "Palavra-passe incorreta ou utilizador não cadastrado no Firebase Auth.";
+        msgErro.innerText = "Senha incorreta ou usuário não cadastrado no Firebase Auth.";
       } else {
         msgErro.innerText = `Erro de Autenticação: ${err.message}`;
       }
@@ -229,7 +234,7 @@ window.executarLoginFirebase = async function(e) {
 };
 
 /**
- * Logout limpa a sessão, atualiza header, restringe a UI e joga para a aba 'crf'
+ * Encerrar a Sessão
  */
 window.fazerLogoutApp = async function() {
   if (confirm("Deseja realmente encerrar a sessão?")) {
@@ -275,7 +280,7 @@ function criarModalLoginDOM() {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Palavra-passe:</label>
+            <label class="block font-bold text-slate-700 mb-1">Senha:</label>
             <input type="password" id="login-password" required placeholder="••••••••" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
 
