@@ -141,7 +141,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
     const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
 
-    // CHECAGEM REGIONALIZADA DO FERIADO DO DIA
     const feriadoDoDia = (feriados || []).find(f => {
       if (f.data !== dateStr) return false;
       if (scope === 'CRF') return f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL';
@@ -150,7 +149,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (f.tipo === 'MUNICIPAL') {
         const ids = f.delegaciasIds || [];
         const bateuId = ids.includes(selectedDelegaciaId);
-        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(uId => ids.includes(unfId));
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(unfId => ids.includes(unfId));
         return bateuId || bateuUnificado;
       }
       return false;
@@ -228,14 +227,19 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
       } else {
+        // AGRUPAMENTO INTELIGENTE POR TIPO E VTR NA ESCALA DE DELEGACIA
+        const gruposDelegacia = {};
         escalasDoDia.forEach(esc => {
-          const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-          const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
-          const prefixo = isDel ? 'DEL.' : 'APJ';
-          const nomeCurto = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
+          const key = `${esc.tipo || 'PLANTÃO'}_${esc.vtr || ''}_${esc.turno || '24h'}`;
+          if (!gruposDelegacia[key]) gruposDelegacia[key] = [];
+          gruposDelegacia[key].push(esc);
+        });
 
-          const isSobreaviso = esc.tipo === 'SOBREAVISO';
-          const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
+        Object.keys(gruposDelegacia).forEach(key => {
+          const grupo = gruposDelegacia[key];
+          const primeiraEsc = grupo[0];
+          const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
+          const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
           let cardStyle = 'bg-sky-100/90 border-sky-300 text-sky-950';
           let rotuloTipo = 'PLANTÃO';
@@ -248,14 +252,24 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             rotuloTipo = 'EXTRA';
           }
 
+          const idsString = grupo.map(e => e.id).join(',');
+
+          let nomesHtml = grupo.map(esc => {
+            const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+            const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+            const prefixo = isDel ? 'DEL.' : 'APJ';
+            return `<div class="cal-v1-srv-name truncate block text-slate-900">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
+          }).join('');
+
           html += `
-            <div onclick="window.abrirModalDetalhesTurno('Escala Local', '${esc.data}', '${esc.id}')"
-                 onmouseenter="window.mostrarTooltipEscala(event, '${esc.id}')"
+            <div onclick="window.abrirModalDetalhesTurno('Escala Local', '${primeiraEsc.data}', '${idsString}')"
+                 onmouseenter="window.mostrarTooltipGrupo(event, '${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
-              <span class="cal-v1-srv-name truncate block text-slate-900">${nomeCurto}</span>
+              ${primeiraEsc.vtr ? `<div class="text-[8px] bg-indigo-600 text-white font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
+              ${nomesHtml}
               <div class="text-[7.5px] font-mono text-slate-700 flex items-center justify-between opacity-90 border-t border-black/10 pt-0.5">
-                <span>${esc.turno || '24h'}</span>
+                <span>${primeiraEsc.turno || '24h'}</span>
                 <span class="font-bold uppercase tracking-tight">${rotuloTipo}</span>
               </div>
             </div>
