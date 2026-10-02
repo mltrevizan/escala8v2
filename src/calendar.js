@@ -1,6 +1,6 @@
 // src/calendar.js
 import { appState, normalizeText } from './state.js';
-import { hasPermission } from './permissions.js';
+import { hasPermission, canViewPhoneForDate } from './permissions.js';
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -444,7 +444,10 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   try {
     const ids = idsString.split(',');
     const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
-    const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
+    const primeiraEscala = escalas[0];
+
+    // Permissão de telefone baseada na janela de datas (Ontem, Hoje e Amanhã para não logados)
+    const podeVerTelefone = canViewPhoneForDate(primeiraEscala?.data);
 
     let content = `
       <div class="p-2.5 space-y-1.5 text-left min-w-[220px] font-sans">
@@ -495,7 +498,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
     const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
 
     const isSobreaviso = esc.tipo === 'SOBREAVISO';
-    const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
+    const podeVerTelefone = canViewPhoneForDate(esc.data);
     const telExibicao = podeVerTelefone ? (srv?.telefone || '-') : '🔒 [Acesso Restrito]';
 
     const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, delEscala);
@@ -607,7 +610,7 @@ window.ocultarTooltip = function() {
 };
 
 // =========================================================================
-// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO (SINTAXE CORRIGIDA)
+// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO
 // =========================================================================
 window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
   let modal = document.getElementById('modal-detalhes-plantao');
@@ -620,7 +623,9 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
   if (!containerConteudo) return;
 
   const escalasDoDia = (appState.escalas || []).filter(e => e.data === dataIso && e.scope === scope);
-  const podeVerTelefone = hasPermission('VIEW_PHONE_NUMBERS');
+  
+  // Exibição restrita de telefone: Ontem, Hoje e Amanhã para não autenticados
+  const podeVerTelefone = canViewPhoneForDate(dataIso);
   const showBtnApj = hasPermission('SHOW_BTN_INCLUIR_TROCAR_APJ');
   const showBtnDel = hasPermission('SHOW_BTN_TROCAR_DELEGADO');
 
@@ -636,7 +641,6 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
       const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
 
-      // Monta os botões separadamente para evitar conflitos de aspas no HTML
       let btnDelHtml = '';
       if (isDel && showBtnDel) {
         btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
