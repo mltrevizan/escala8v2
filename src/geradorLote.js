@@ -56,7 +56,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   });
   if (selectFiltroCargo) selectFiltroCargo.innerHTML = filtroCargoOpts;
 
-  // Reset do Estado do Gerador Padrão V1
+  // Reset do Estado
   geradorState = {
     modo: 'INDIVIDUAL',
     policiaisSelecionados: [],
@@ -116,12 +116,23 @@ function renderizarPainelModo() {
   const container = document.getElementById('ger-painel-policiais');
   if (!container) return;
 
+  if (geradorState.modo === 'INDIVIDUAL') {
+    renderizarModoIndividual(container);
+  } else {
+    renderizarModoEquipesV1(container);
+  }
+}
+
+function filtrarServidoresComPersistencia(membrosFixosIds = []) {
   const { filtroTexto, filtroDelegacia, filtroCargo } = geradorState;
 
-  const servidoresFiltrados = [...(appState.servidores || [])]
+  return [...(appState.servidores || [])]
     .filter(s => {
       const n = normalizeText(s.nome || '');
       if (n === 'administrador do sistema' || n === 'admin') return false;
+
+      // GARANTIA: Se já estiver selecionado na equipe/fila, PERMANECE VISÍVEL SEMPRE!
+      if (membrosFixosIds.includes(s.id)) return true;
 
       if (filtroTexto) {
         const bateuNome = (s.nome || '').toLowerCase().includes(filtroTexto);
@@ -142,27 +153,40 @@ function renderizarPainelModo() {
 
       return true;
     })
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+    .sort((a, b) => {
+      // ORDENAÇÃO INTELIGENTE: Selecionados primeiro!
+      const isSelA = membrosFixosIds.includes(a.id);
+      const isSelB = membrosFixosIds.includes(b.id);
 
-  if (geradorState.modo === 'INDIVIDUAL') {
-    renderizarModoIndividual(container, servidoresFiltrados);
-  } else {
-    renderizarModoEquipesV1(container, servidoresFiltrados);
-  }
+      if (isSelA && !isSelB) return -1;
+      if (!isSelA && isSelB) return 1;
+
+      if (isSelA && isSelB) {
+        return membrosFixosIds.indexOf(a.id) - membrosFixosIds.indexOf(b.id);
+      }
+
+      return (a.nome || '').localeCompare(b.nome || '');
+    });
 }
 
-function renderizarModoIndividual(container, servidoresFiltrados) {
+function renderizarModoIndividual(container) {
+  const servidoresFiltrados = filtrarServidoresComPersistencia(geradorState.policiaisSelecionados);
+
   let htmlServidores = servidoresFiltrados.map(srv => {
     const isChecked = geradorState.policiaisSelecionados.includes(srv.id);
+    const posIndex = geradorState.policiaisSelecionados.indexOf(srv.id);
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
 
     return `
-      <label class="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer text-xs select-none">
+      <label class="flex items-center justify-between p-2 rounded-lg border ${isChecked ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 bg-white'} hover:bg-slate-50 transition cursor-pointer text-xs select-none">
         <div class="flex items-center gap-2">
           <input type="checkbox" value="${srv.id}" ${isChecked ? 'checked' : ''} onchange="window.togglePolicialGerador('${srv.id}', this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
           <div>
-            <span class="font-bold text-slate-800">${srv.nome}</span>
+            <span class="font-bold ${isChecked ? 'text-indigo-950' : 'text-slate-800'}">
+              ${isChecked ? `<span class="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded-full mr-1">${posIndex + 1}º</span>` : ''}
+              ${srv.nome}
+            </span>
             <span class="text-[10px] text-slate-500 block">Lotação: ${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</span>
           </div>
         </div>
@@ -171,10 +195,6 @@ function renderizarModoIndividual(container, servidoresFiltrados) {
     `;
   }).join('');
 
-  if (servidoresFiltrados.length === 0) {
-    htmlServidores = `<p class="text-[11px] text-slate-400 italic p-3 text-center">Nenhum policial localizado para os filtros informados.</p>`;
-  }
-
   let htmlFilaOrdenada = geradorState.policiaisSelecionados.map((id, index) => {
     const srv = (appState.servidores || []).find(s => s.id === id);
     return `
@@ -182,7 +202,7 @@ function renderizarModoIndividual(container, servidoresFiltrados) {
         <span class="truncate">${index + 1}º - ${srv?.nome || 'Servidor'}</span>
         <div class="space-x-1 shrink-0">
           <button type="button" onclick="window.moverPolicialFila(${index}, -1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬆️</button>
-          <button type="button" onclick="window.moverPolicialFila(${index}, 1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬇️️</button>
+          <button type="button" onclick="window.moverPolicialFila(${index}, 1)" class="px-1.5 py-0.5 bg-indigo-200 hover:bg-indigo-300 rounded text-[10px] cursor-pointer">⬇️</button>
         </div>
       </div>
     `;
@@ -206,7 +226,7 @@ function renderizarModoIndividual(container, servidoresFiltrados) {
   `;
 }
 
-function renderizarModoEquipesV1(container, servidoresFiltrados) {
+function renderizarModoEquipesV1(container) {
   const { equipes, equipeAtivaIdx } = geradorState;
 
   if (equipeAtivaIdx >= equipes.length) {
@@ -214,15 +234,20 @@ function renderizarModoEquipesV1(container, servidoresFiltrados) {
   }
 
   const equipeAtiva = equipes[geradorState.equipeAtivaIdx];
+  const servidoresFiltrados = filtrarServidoresComPersistencia(equipeAtiva ? equipeAtiva.membros : []);
 
-  // Navegação por Abas de Equipes (Estilo V1)
+  // NAVEGAÇÃO DE ABAS REORDENÁVEIS (REORDENAÇÃO POR POSIÇÃO NAS TAGS)
   let htmlAbas = equipes.map((eqp, idx) => {
     const isSelected = idx === geradorState.equipeAtivaIdx;
     return `
-      <div class="flex items-center gap-1">
-        <button type="button" onclick="window.selecionarAbaEquipe(${idx})" class="px-3 py-1.5 rounded-t-xl font-bold text-xs border-t border-x cursor-pointer transition ${isSelected ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-300'}">
-          👥 ${eqp.nome} (${eqp.membros.length})
+      <div class="flex items-center bg-slate-100 rounded-t-xl border-t border-x ${isSelected ? 'border-indigo-600' : 'border-slate-300'} overflow-hidden">
+        <button type="button" onclick="window.selecionarAbaEquipe(${idx})" class="px-3 py-1.5 font-bold text-xs cursor-pointer transition ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+          ${idx + 1}º: ${eqp.nome} (${eqp.membros.length})
         </button>
+        <div class="flex items-center px-1 bg-black/5 border-l border-slate-200 space-x-0.5">
+          <button type="button" onclick="window.reordenarAbaEquipe(${idx}, -1)" title="Mover para esquerda" class="px-1 text-[9px] hover:bg-slate-300 rounded font-bold cursor-pointer">◀</button>
+          <button type="button" onclick="window.reordenarAbaEquipe(${idx}, 1)" title="Mover para direita" class="px-1 text-[9px] hover:bg-slate-300 rounded font-bold cursor-pointer">▶</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -233,18 +258,22 @@ function renderizarModoEquipesV1(container, servidoresFiltrados) {
     </button>
   `;
 
-  // Lista de policiais da equipe ativa
+  // LISTA COM NOMES SELECCIONADOS PROMOVIDOS AO TOPO COM NUMERAÇÃO
   let htmlPoliciaisEquipe = servidoresFiltrados.map(srv => {
     const isChecked = equipeAtiva.membros.includes(srv.id);
+    const posIndex = equipeAtiva.membros.indexOf(srv.id);
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
 
     return `
-      <label class="flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer text-xs select-none">
+      <label class="flex items-center justify-between p-2 rounded-lg border ${isChecked ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 bg-white'} hover:bg-slate-50 transition cursor-pointer text-xs select-none">
         <div class="flex items-center gap-2">
           <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.toggleMembroEquipeV1('${srv.id}', this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
           <div>
-            <span class="font-bold text-slate-800">${srv.nome}</span>
+            <span class="font-bold ${isChecked ? 'text-indigo-950' : 'text-slate-800'}">
+              ${isChecked ? `<span class="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded-full mr-1">${posIndex + 1}º</span>` : ''}
+              ${srv.nome}
+            </span>
             <span class="text-[10px] text-slate-500 block">Lotação: ${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</span>
           </div>
         </div>
@@ -255,7 +284,7 @@ function renderizarModoEquipesV1(container, servidoresFiltrados) {
 
   container.innerHTML = `
     <div class="space-y-3">
-      <!-- ABAS DE SELEÇÃO DE EQUIPES -->
+      <!-- ABAS DE SELEÇÃO DE EQUIPES COM REORDENAÇÃO -->
       <div class="flex flex-wrap items-center gap-1 border-b border-slate-300 pb-0">
         ${htmlAbas}
       </div>
@@ -278,7 +307,7 @@ function renderizarModoEquipesV1(container, servidoresFiltrados) {
             <label class="font-bold text-slate-700 text-xs">Integrantes da ${equipeAtiva.nome} (${equipeAtiva.membros.length} selecionados):</label>
             ${equipes.length > 1 ? `<button type="button" onclick="window.removerEquipeAtivaV1()" class="text-red-600 hover:text-red-800 font-bold text-[10px] cursor-pointer">🗑️ Excluir esta equipe</button>` : ''}
           </div>
-          <div class="space-y-1.5 max-h-44 overflow-y-auto p-1.5 bg-white rounded-xl border border-slate-200">
+          <div class="space-y-1.5 max-h-48 overflow-y-auto p-1.5 bg-white rounded-xl border border-slate-200">
             ${htmlPoliciaisEquipe}
           </div>
         </div>
@@ -289,6 +318,18 @@ function renderizarModoEquipesV1(container, servidoresFiltrados) {
 
 window.selecionarAbaEquipe = function(idx) {
   geradorState.equipeAtivaIdx = idx;
+  renderizarPainelModo();
+};
+
+window.reordenarAbaEquipe = function(idx, direcao) {
+  const novaPos = idx + direcao;
+  if (novaPos < 0 || novaPos >= geradorState.equipes.length) return;
+
+  const temp = geradorState.equipes[idx];
+  geradorState.equipes[idx] = geradorState.equipes[novaPos];
+  geradorState.equipes[novaPos] = temp;
+
+  geradorState.equipeAtivaIdx = novaPos;
   renderizarPainelModo();
 };
 
@@ -307,6 +348,7 @@ window.adicionarNovaEquipeV1 = function() {
 window.atualizarNomeEquipeV1 = function(nome) {
   if (geradorState.equipes[geradorState.equipeAtivaIdx]) {
     geradorState.equipes[geradorState.equipeAtivaIdx].nome = nome;
+    renderizarPainelModo();
   }
 };
 
@@ -332,6 +374,7 @@ window.toggleMembroEquipeV1 = function(srvId, isChecked) {
   } else {
     eqp.membros = eqp.membros.filter(id => id !== srvId);
   }
+  renderizarPainelModo();
 };
 
 window.togglePolicialGerador = function(id, isChecked) {
@@ -422,6 +465,7 @@ window.executarGeradorLote = async function(e) {
       await syncDocToFirestore('escalas', newEscId, novaEscala);
       inseridosCount++;
     } else {
+      // A ROTAÇÃO DAS EQUIPES SEGUE A ORDEM DAS POSIÇÕES DAS ABAS (POSIÇÃO 0, POSIÇÃO 1, POSIÇÃO 2...)
       const equipeAtiva = geradorState.equipes[filaIndex % geradorState.equipes.length];
       filaIndex++;
 
@@ -435,7 +479,7 @@ window.executarGeradorLote = async function(e) {
           scope: scope,
           tipo: tipoModalidade,
           turno: scope === 'CRF' ? '12h (D)' : '24h',
-          vtr: equipeAtiva.vtr || '' // GRAVA A TAG VTR NA ESCALA
+          vtr: equipeAtiva.vtr || ''
         };
 
         if (!appState.escalas) appState.escalas = [];
@@ -519,7 +563,6 @@ function criarModalGeradorLoteDOM() {
             </div>
           </div>
 
-          <!-- BARRA DE MODOS E FILTROS -->
           <div class="pt-2 border-t space-y-2">
             <div class="flex items-center justify-between">
               <label class="block font-bold text-slate-800">Modo de Distribuição:</label>
@@ -529,7 +572,6 @@ function criarModalGeradorLoteDOM() {
               </div>
             </div>
 
-            <!-- FILTROS INTELLIGENTES DE BUSCA -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200">
               <div>
                 <input type="text" id="ger-busca-srv" oninput="window.atualizarFiltrosListaServidoresGerador()" placeholder="🔍 Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
