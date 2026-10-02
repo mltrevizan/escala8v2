@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-  <!-- TAILWIND CSS -->
+  <!-- TAILWIND CSS COM PALETA OFICIAL PCPR INJETADA -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -43,8 +43,35 @@
     }
   </script>
 
-  <!-- CSS CUSTOMIZADO COM REGRAS TIPOGRÁFICAS E PALETA PCPR -->
-  <link rel="stylesheet" href="./src/styles.css?v=6.0.0">
+  <!-- REGRAS VISUAIS DA PCPR E TIPOGRAFIA DE CALENDÁRIO -->
+  <style>
+    :root {
+      --pcpr-gold: #BEA55A;
+      --pcpr-gold-dark: #AF9340;
+      --pcpr-black: #000000;
+      --pcpr-dark-gray: #57585A;
+    }
+
+    body {
+      font-family: 'Exo 2', -apple-system, BlinkMacSystemFont, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Regras Tipográficas de Escala */
+    .cal-v1-day-num { font-size: 11px !important; line-height: 13px !important; font-weight: 800 !important; }
+    .cal-v1-header-title { font-size: 8.5px !important; line-height: 10px !important; font-weight: 800 !important; letter-spacing: 0.04em !important; }
+    .cal-v1-header-time { font-size: 7.5px !important; line-height: 9px !important; font-weight: 600 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
+    .cal-v1-srv-name { font-size: 9px !important; line-height: 11.5px !important; font-weight: 600 !important; }
+    .cal-v1-tag-extra { font-size: 6.5px !important; line-height: 8px !important; font-weight: 900 !important; padding: 1px 3px !important; }
+
+    /* Estilização Ativa de Abas PCPR */
+    .tab-btn.active {
+      background-color: var(--pcpr-black) !important;
+      color: #FFFFFF !important;
+      border-bottom: 3px solid var(--pcpr-gold) !important;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+    }
+  </style>
 
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -72,8 +99,11 @@
     <!-- Header Principal com Logo Institucional da PCPR -->
     <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border-b-4 border-pcpr-gold border-x border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <!-- Imagem da Logo da PCPR -->
-        <img src="./60de091078db3-conjuntologoPCPRcorHORIZ.jpg" alt="Logo PCPR" class="h-10 sm:h-12 w-auto object-contain rounded-md">
+        <!-- Tenta carregar a imagem da logo com fallback automático se o arquivo mudar de nome -->
+        <img src="./60de091078db3-conjuntologoPCPRcorHORIZ.jpg" 
+             onerror="this.onerror=null; this.src='./logo-pcpr.jpg';" 
+             alt="Logo PCPR" 
+             class="h-10 sm:h-12 w-auto object-contain rounded-md">
         
         <div>
           <h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">8ª CRF - Sistema de Escalas v2</h1>
@@ -149,7 +179,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v6.0.0) -->
-  <script type="module" src="./src/app.js?v=6.0.0"></script>
+  <!-- Script Principal ES6 (v6.1.0) -->
+  <script type="module" src="./src/app.js?v=6.1.0"></script>
 </body>
 </html>
