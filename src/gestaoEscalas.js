@@ -17,7 +17,7 @@ let vinculoState = {
 };
 
 // =========================================================================
-// 1. MÓDULO COMPLETO: GESTÃO CRF (RESTAURADO)
+// 1. MÓDULO GESTÃO CRF (RESTAURADO E SEGURO)
 // =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
@@ -26,7 +26,6 @@ export function renderGestaoCrfModule(containerId) {
   const { currentYear, currentMonth } = appState;
   const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
-  // Escalas da CRF no mês
   const escalasCrf = (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF') return false;
     const [ano, mes] = e.data.split('-').map(Number);
@@ -38,7 +37,6 @@ export function renderGestaoCrfModule(containerId) {
     const delOrigem = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
     const isDel = (srv?.cargo || '').toUpperCase().includes('DELEGADO');
 
-    // Busca vinculações se for um Delegado
     let blocoVinculo = '';
     if (isDel) {
       const vinculos = (appState.escalas || []).filter(e => 
@@ -53,7 +51,7 @@ export function renderGestaoCrfModule(containerId) {
           <span class="text-[9.5px] ${vinculos.length > 0 ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300'} border font-bold px-1.5 py-0.2 rounded">
             ${vinculos.length > 0 ? `👥 ${vinculos.length} APJs` : '⚠️ Sem equipe'}
           </span>
-          <button type="button" onclick="window.abrirModalVincularApjs('${esc.id}')" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 cursor-pointer transition">
+          <button type="button" onclick="window.abrirModalVincularApjs('${esc.id}')" class="text-[10px] bg-pcpr-black text-pcpr-gold hover:bg-slate-800 font-bold px-2 py-0.5 rounded border border-pcpr-gold cursor-pointer transition">
             🔗 Vincular APJs
           </button>
         </div>
@@ -78,10 +76,7 @@ export function renderGestaoCrfModule(containerId) {
           </span>
         </td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalDetalhesTurno('Gestão CRF', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
-            ✏️ Editar
-          </button>
-          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'CRF')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'CRF')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10px] shadow-xs cursor-pointer">
             🗑 Excluir
           </button>
         </td>
@@ -94,7 +89,6 @@ export function renderGestaoCrfModule(containerId) {
   }
 
   container.innerHTML = `
-    <!-- Topo Gerencial -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -105,14 +99,10 @@ export function renderGestaoCrfModule(containerId) {
           <button onclick="window.abrirModalGeradorLote('CRF')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar Escala em Lote
           </button>
-          <button onclick="window.abrirModalNovoLancamento('CRF')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ➕ Novo Lançamento Avulso
-          </button>
         </div>
       </div>
     </div>
 
-    <!-- Tabela Gerencial -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -133,7 +123,7 @@ export function renderGestaoCrfModule(containerId) {
 }
 
 // =========================================================================
-// 2. MÓDULO COMPLETO: GESTÃO POR DELEGACIAS (RESTAURADO)
+// 2. MÓDULO GESTÃO POR DELEGACIAS (RESTAURADO E SEGURO)
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -147,7 +137,6 @@ export function renderGestaoDelegaciasModule(containerId) {
     `<option value="${d.id}" ${d.id === selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
 
-  // Escalas da Delegacia no mês
   const escalasDel = (appState.escalas || []).filter(e => {
     if (e.scope !== 'DELEGACIA') return false;
     if (e.delegaciaId !== selectedDelegaciaId) return false;
@@ -158,7 +147,7 @@ export function renderGestaoDelegaciasModule(containerId) {
   let htmlLinhas = escalasDel.map(esc => {
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
 
-    let badgeClass = 'bg-sky-100 text-sky-900 border-sky-300';
+    let badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
     if (esc.tipo === 'SOBREAVISO') badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300';
     if (esc.tipo === 'EXTRAJORNADA') badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
 
@@ -175,10 +164,7 @@ export function renderGestaoDelegaciasModule(containerId) {
           </span>
         </td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.abrirModalDetalhesTurno('Gestão Delegacia', '${esc.data}', '${esc.id}')" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
-            ✏️ Editar
-          </button>
-          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10px] shadow-xs cursor-pointer">
             🗑 Excluir
           </button>
         </td>
@@ -191,19 +177,15 @@ export function renderGestaoDelegaciasModule(containerId) {
   }
 
   container.innerHTML = `
-    <!-- Topo Gerencial -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
-          <p class="text-[11px] text-slate-500">Controle e edição dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
+          <p class="text-[11px] text-slate-500">Controle dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar Escala em Lote
-          </button>
-          <button onclick="window.abrirModalNovoLancamento('DELEGACIA')" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ➕ Novo Lançamento Avulso
           </button>
         </div>
       </div>
@@ -216,7 +198,6 @@ export function renderGestaoDelegaciasModule(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Gerencial -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -257,7 +238,7 @@ window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
 };
 
 // =========================================================================
-// 3. FERRAMENTA DE VINCULAÇÃO DE APJS AO DELEGADO COM AUTOCOMPLETE E PRIORIZAÇÃO
+// 3. FERRAMENTA DE VINCULAÇÃO DE APJS AO DELEGADO (MODAL ISOLADO)
 // =========================================================================
 window.abrirModalVincularApjs = function(escalaDelegadoId) {
   let modal = document.getElementById('modal-vincular-apjs');
@@ -652,7 +633,7 @@ function criarModalVincularApjsDOM() {
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="window.fecharModalVincularApjs()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">💾 Salvar Vinculação da Equipe</button>
+            <button type="submit" class="px-4 py-2 bg-pcpr-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-xl font-bold shadow-xs cursor-pointer">💾 Salvar Vinculação da Equipe</button>
           </div>
         </form>
       </div>
