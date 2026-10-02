@@ -1,6 +1,6 @@
 // src/app.js
 import { appState } from './state.js';
-import { loadAllDataFromFirestore } from './db.js';
+import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderServidoresTable } from './servidores.js';
@@ -60,6 +60,65 @@ window.switchTab = function(tabName) {
     case 'ferias':
       renderFeriasModule('ferias-container');
       break;
+  }
+};
+
+/**
+ * Função de migração em lote com trava de segurança:
+ * Converte apenas os registros da CRF (scope === 'CRF') que estão como 'SDP' para 'EXTRAJORNADA'
+ */
+window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
+  const role = (appState.currentUser?.perfil || appState.currentUser?.nivelAcesso || '').toUpperCase();
+  
+  if (role !== 'ADMINISTRADOR') {
+    alert("Operação restrita ao Administrador do Sistema.");
+    return;
+  }
+
+  // Trava rigorosa: Apenas escalas do âmbito da CRF com o tipo 'SDP'
+  const escalasSdpCrf = (appState.escalas || []).filter(e => 
+    e.scope === 'CRF' && (e.tipo === 'SDP' || e.tipo === 'sdp')
+  );
+
+  if (escalasSdpCrf.length === 0) {
+    alert("Nenhuma escala da CRF registrada como 'SDP' foi localizada para correção.");
+    return;
+  }
+
+  const confirmacao = confirm(
+    `ATENÇÃO - MIGRAÇÃO DE DADOS EXCLUSIVA DA CRF:\n\n` +
+    `Foram localizadas ${escalasSdpCrf.length} escalas restritas da CRF cadastradas como 'SDP'.\n\n` +
+    `Deseja converter apenas estes registros para 'EXTRAJORNADA'?\n` +
+    `(As escalas locais das delegacias NÃO serão alteradas).`
+  );
+
+  if (!confirmacao) return;
+
+  let corrigidos = 0;
+  let erros = 0;
+
+  console.log(`🚀 Iniciando correção de ${escalasSdpCrf.length} registros da CRF...`);
+
+  for (const escala of escalasSdpCrf) {
+    try {
+      escala.tipo = 'EXTRAJORNADA';
+      await syncDocToFirestore('escalas', escala.id, escala);
+      corrigidos++;
+    } catch (err) {
+      console.error(`❌ Erro ao atualizar escala CRF ${escala.id}:`, err);
+      erros++;
+    }
+  }
+
+  alert(
+    `Correção Concluída!\n\n` +
+    `• Registros da CRF convertidos para EXTRAJORNADA: ${corrigidos}\n` +
+    `• Falhas: ${erros}`
+  );
+
+  // Recarrega a visualização ativa se for a CRF
+  if (window.renderCalendarGrid && appState.activeTab === 'crf') {
+    window.renderCalendarGrid('calendar-crf-container', 'CRF');
   }
 };
 
