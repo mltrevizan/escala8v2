@@ -227,7 +227,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
       } else {
-        // AGRUPAMENTO E ORDENAÇÃO: PLANTÃO PRIMEIRO, DEPOIS SOBREAVISO
         const gruposDelegacia = {};
         escalasDoDia.forEach(esc => {
           const key = `${esc.tipo || 'PLANTÃO'}_${esc.vtr || ''}_${esc.turno || '24h'}`;
@@ -235,7 +234,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           gruposDelegacia[key].push(esc);
         });
 
-        // Ordena para que os grupos de PLANTÃO fiquem sempre no topo e SOBREAVISO em seguida
         const chavesOrdenadas = Object.keys(gruposDelegacia).sort((a, b) => {
           const tipoA = a.split('_')[0];
           const tipoB = b.split('_')[0];
@@ -243,7 +241,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const peso = (tipo) => {
             if (tipo === 'PLANTÃO') return 1;
             if (tipo === 'SOBREAVISO') return 2;
-            return 3; // Extrajornada e outros
+            return 3;
           };
 
           return peso(tipoA) - peso(tipoB);
@@ -255,12 +253,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // ESTILOS DE COR: PLANTÃO (AZUL CLARO), SOBREAVISO (AZUL ESCURO/INDIGO NOTURNO) E EXTRA (ROXO)
-          let cardStyle = 'bg-sky-100/90 border-sky-300 text-sky-950';
+          // ESTILOS DE COR AJUSTADOS:
+          // PLANTÃO: MESMA COR DO DIURNO CRF (AMARELO / MASSA)
+          // SOBREAVISO: MESMA COR DO NOTURNO CRF (AZUL INDIGO)
+          // EXTRA: ROXO
+          let cardStyle = 'bg-amber-100/90 border-amber-300 text-amber-950';
           let rotuloTipo = 'PLANTÃO';
 
           if (isSobreaviso) {
-            cardStyle = 'bg-indigo-50 border-indigo-200 text-indigo-950'; // Mesmo tom do NOTURNO no CRF
+            cardStyle = 'bg-indigo-50 border-indigo-200 text-indigo-950';
             rotuloTipo = 'SOBREAVISO';
           } else if (isExtra) {
             cardStyle = 'bg-purple-100/90 border-purple-300 text-purple-950';
@@ -497,7 +498,7 @@ window.mostrarTooltipEscala = function(event, escalaId) {
       <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
         <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
           <span>${srv?.nome || 'Não informado'}</span>
-          <span class="text-[8px] ${isSobreaviso ? 'bg-indigo-100 text-indigo-900' : 'bg-sky-100 text-sky-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+          <span class="text-[8px] ${isSobreaviso ? 'bg-indigo-100 text-indigo-900' : 'bg-amber-100 text-amber-900'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
         </div>
         <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
         <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
