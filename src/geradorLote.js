@@ -472,7 +472,6 @@ window.executarGeradorLote = async function(e) {
   const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
   const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
 
-  // PARSIA A DURAÇÃO EM DIAS DO TURNO DA UNIDADE (Ex: "2 dias", "3 dias")
   let duracaoDiasTurno = 1;
   if (turnoPadraoCalculado.includes('dias')) {
     duracaoDiasTurno = parseInt(turnoPadraoCalculado) || 1;
@@ -493,7 +492,7 @@ window.executarGeradorLote = async function(e) {
     return;
   }
 
-  // 1. SALVA E MEMORIZA A CONFIGURAÇÃO DO GERADOR NA DELEGACIA NO FIRESTORE
+  // 1. Salva configuração memorizada na delegacia
   if (delObj) {
     delObj.geradorConfig = {
       modo: geradorState.modo,
@@ -503,7 +502,6 @@ window.executarGeradorLote = async function(e) {
     await syncDocToFirestore('delegacias', delObj.id, delObj);
   }
 
-  // 2. GERA OS LANÇAMENTOS COM SUPORTE A TRANSBORDO DE MÊS
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
@@ -523,10 +521,9 @@ window.executarGeradorLote = async function(e) {
 
   let inseridosCount = 0;
   let filaIndex = 0;
+  const conflitosDetectados = []; // Estrutura: { servidorNome, data, tipoModalidade }
 
   for (const dtIso of diasValidos) {
-    // LÓGICA DE TRANSBORDO / CONTINUIDADE MULTIDIAS:
-    // Gera as datas contínuas do turno (ex: se for 3 dias, gera para dtIso, dtIso+1 e dtIso+2)
     const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
 
     if (geradorState.modo === 'INDIVIDUAL') {
@@ -549,6 +546,9 @@ window.executarGeradorLote = async function(e) {
         appState.escalas.push(novaEscala);
         await syncDocToFirestore('escalas', newEscId, novaEscala);
         inseridosCount++;
+
+        // Checagem de conflito com Férias/Licença
+        verificarECatalogarConflito(sId, dataSubsequent, tipoModalidade, conflitosDetectados);
       }
     } else {
       const equipeAtiva = geradorState.equipes[filaIndex % geradorState.equipes.length];
@@ -572,14 +572,17 @@ window.executarGeradorLote = async function(e) {
           appState.escalas.push(novaEscala);
           await syncDocToFirestore('escalas', newEscId, novaEscala);
           inseridosCount++;
+
+          // Checagem de conflito com Férias/Licença
+          verificarECatalogarConflito(sId, dataSubsequent, tipoModalidade, conflitosDetectados);
         }
       }
     }
   }
 
-  alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados em lote (incluindo continuidades de turno transbordadas).`);
   window.fecharModalGeradorLote();
 
+  // Re-renderiza abas
   if (scope === 'CRF') {
     if (typeof window.filtrarTabelaCrfInline === 'function') window.filtrarTabelaCrfInline();
     renderCalendarGrid('calendar-crf-container', 'CRF');
@@ -587,7 +590,52 @@ window.executarGeradorLote = async function(e) {
     if (typeof window.filtrarTabelaDelInline === 'function') window.filtrarTabelaDelInline();
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   }
+
+  // EXIBE MENSAGEM COM ALERTA DE CONFLITOS (SE HOUVER)
+  if (conflitosDetectados.length > 0) {
+    let msgConflito = `⚠️ ATENÇÃO: Escala gerada (${inseridosCount} lançamentos), porém foram identificados ${conflitosDetectados.length} plantões marcados durante períodos de FÉRIAS/LICENÇA:\n\n`;
+    
+    // Agrupa conflitos por policial
+    const agrupado = {};
+    conflitosDetectados.forEach(c => {
+      if (!agrupado[c.servidorNome]) agrupado[c.servidorNome] = [];
+      agrupado[c.servidorNome].push(`${formatarDataBr(c.data)} (${c.tipoModalidade})`);
+    });
+
+    Object.keys(agrupado).forEach(nome => {
+      msgConflito += `• ${nome}:\n  Datas: ${agrupado[nome].join(', ')}\n\n`;
+    });
+
+    alert(msgConflito);
+  } else {
+    alert(`Sucesso! ${inseridosCount} lançamentos de escala gerados sem nenhum conflito de férias/licença.`);
+  }
 };
+
+// AUXILIAR DE VERIFICAÇÃO DE CONFLITO
+function verificarECatalogarConflito(servidorId, dataIso, tipoModalidade, listaConflitos) {
+  const srv = (appState.servidores || []).find(s => s.id === servidorId);
+  if (!srv) return;
+
+  const temAfastamento = (appState.ferias || []).some(f => {
+    if (f.servidorId !== servidorId) return false;
+    return dataIso >= f.dataInicio && dataIso <= f.dataFim;
+  });
+
+  if (temAfastamento) {
+    listaConflitos.push({
+      servidorNome: srv.nome,
+      data: dataIso,
+      tipoModalidade: tipoModalidade
+    });
+  }
+}
+
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
+}
 
 // GERA ARRAY DE DATAS SEQUENCIAIS PARA TURNOS DE MÚLTIPLOS DIAS (EX: 2 OU 3 DIAS)
 function gerarDatasMultiplasContinuas(dataInicialIso, diasDuracao) {
