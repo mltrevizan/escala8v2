@@ -3,90 +3,189 @@ import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 
+let delegaciasFiltroState = {
+  busca: '',
+  sdp: 'TODAS'
+};
+
 export function renderDelegaciasCards(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const delegacias = appState.delegacias || [];
-
-  let html = `
-    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-4 font-sans">
+  const html = `
+    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Unidades</h2>
-          <p class="text-[11px] text-slate-500">Configuração de regime, horários e unificação de plantões</p>
+          <h2 class="font-bold text-sm text-slate-800">Hierarquia de SDPs e Delegacias</h2>
+          <p class="text-[11px] text-slate-500">Gestão de Subdivisões (Tronco) e Unidades Vinculadas (Galhos)</p>
         </div>
-        <div class="flex gap-2">
-          <button onclick="window.abrirModalDelegacia()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-            ➕ Nova Unidade / Delegacia
+        <div class="flex flex-wrap gap-2">
+          <button onclick="window.abrirModalGerenciarSdps()" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ⚙️ Gerenciar SDPs
           </button>
+          <button onclick="window.abrirModalDelegacia()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Nova Delegacia
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de Filtro e Digitação -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+        <div class="sm:col-span-2">
+          <input type="text" id="filtro-del-busca" oninput="window.atualizarFiltrosDelegaciasList()" placeholder="🔍 Filtrar por nome da delegacia ou SDP..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+        <div>
+          <select id="filtro-del-sdp" onchange="window.atualizarFiltrosDelegaciasList()" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <!-- Popula dinamicamente -->
+          </select>
         </div>
       </div>
     </div>
 
-    <div class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-sans">
+    <!-- Lista Estruturada Tronco e Galhos -->
+    <div id="lista-delegacias-tronco" class="p-4 space-y-6 font-sans"></div>
   `;
 
-  if (delegacias.length === 0) {
-    html += `<p class="col-span-full text-xs text-slate-400 italic text-center p-8">Nenhuma delegacia cadastrada.</p>`;
-  } else {
-    html += delegacias.map(del => {
-      const pConfig = del.plantaoConfig || {};
-      const sConfig = del.sobreavisoConfig || {};
-
-      return `
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 flex flex-col justify-between space-y-3 hover:border-slate-300 transition">
-          <div>
-            <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-              <div>
-                <span class="font-black text-slate-900 text-sm uppercase block">${del.nome}</span>
-                <span class="text-[10px] text-slate-500 font-bold uppercase">Subdivisão: ${del.subdivisao || '8ª SDP'}</span>
-              </div>
-              <span class="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded uppercase">${del.municipio || 'PR'}</span>
-            </div>
-
-            <div class="pt-2.5 space-y-2 text-xs">
-              <!-- Config de Plantão -->
-              <div class="p-2 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
-                <span class="font-bold text-slate-800 text-[11px] block">🏢 Plantão Local</span>
-                <div class="text-[10px] text-slate-600 grid grid-cols-2 gap-1 font-mono">
-                  <span>Regime: <b>${pConfig.regime || 'ININTERRUPTA'}</b></span>
-                  <span>Turno: <b>${pConfig.intervalo || '24h'}</b></span>
-                  <span class="col-span-2">Úteis: ${pConfig.uteis || del.horarioUteis || '08:00 às 08:00'}</span>
-                  <span class="col-span-2">Não Úteis: ${pConfig.naoUteis || del.horarioNaoUteis || '08:00 às 08:00'}</span>
-                </div>
-              </div>
-
-              <!-- Config de Sobreaviso -->
-              <div class="p-2 bg-amber-50/50 rounded-xl border border-amber-200/60 space-y-1">
-                <span class="font-bold text-amber-950 text-[11px] block">📞 Sobreaviso</span>
-                <div class="text-[10px] text-amber-900 grid grid-cols-2 gap-1 font-mono">
-                  <span>Regime: <b>${sConfig.regime || 'INTERMITENTE'}</b></span>
-                  <span>Turno: <b>${sConfig.intervalo || '24h'}</b></span>
-                  <span class="col-span-2">Úteis: ${sConfig.uteis || '18:00 às 08:00'}</span>
-                  <span class="col-span-2">Não Úteis: ${sConfig.naoUteis || '08:00 às 08:00'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-2 border-t border-slate-100 flex justify-end gap-2">
-            <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer transition">
-              ✏️ Editar
-            </button>
-            <button onclick="window.excluirDelegacia('${del.id}')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer transition">
-              🗑️️ Excluir
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  html += `</div>`;
   container.innerHTML = html;
+  window.popularFiltroSdpsSelect();
+  window.renderizarListaTroncoGalhos();
 }
 
+window.popularFiltroSdpsSelect = function() {
+  const select = document.getElementById('filtro-del-sdp');
+  if (!select) return;
+
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  let opts = `<option value="TODAS">Todas as SDPs (Subdivisões)</option>`;
+  sdpsUnicas.forEach(sdp => {
+    opts += `<option value="${sdp}">${sdp}</option>`;
+  });
+
+  select.innerHTML = opts;
+};
+
+window.atualizarFiltrosDelegaciasList = function() {
+  delegaciasFiltroState.busca = document.getElementById('filtro-del-busca')?.value?.toLowerCase() || '';
+  delegaciasFiltroState.sdp = document.getElementById('filtro-del-sdp')?.value || 'TODAS';
+
+  window.renderizarListaTroncoGalhos();
+};
+
+window.renderizarListaTroncoGalhos = function() {
+  const container = document.getElementById('lista-delegacias-tronco');
+  if (!container) return;
+
+  const { busca, sdp } = delegaciasFiltroState;
+
+  // Monta conjunto único de SDPs
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  let sdpsLista = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  if (sdp !== 'TODAS') {
+    sdpsLista = sdpsLista.filter(s => s === sdp);
+  }
+
+  if (sdpsLista.length === 0) {
+    container.innerHTML = `<p class="text-xs text-slate-400 italic text-center p-8">Nenhuma subdivisão localizada para os filtros.</p>`;
+    return;
+  }
+
+  let htmlTotal = '';
+
+  sdpsLista.forEach(sdpNome => {
+    // Filtra delegacias vinculadas a este Tronco (SDP)
+    let delVinculadas = (appState.delegacias || []).filter(d => {
+      const delSdp = (d.subdivisao || '8ª SDP').trim().toUpperCase();
+      if (delSdp !== sdpNome) return false;
+
+      if (busca) {
+        const bateuNome = (d.nome || '').toLowerCase().includes(busca);
+        const bateuSdp = delSdp.toLowerCase().includes(busca);
+        if (!bateuNome && !bateuSdp) return false;
+      }
+
+      return true;
+    });
+
+    if (busca && delVinculadas.length === 0 && !sdpNome.toLowerCase().includes(busca)) {
+      return; // Oculta a SDP vazia se não bater com a busca
+    }
+
+    let linhasTabela = delVinculadas.map(del => {
+      const p = del.plantaoConfig || {};
+      const s = del.sobreavisoConfig || {};
+
+      return `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+          <td class="p-3 font-bold text-slate-900 uppercase">
+            <span class="text-sm block">${del.nome}</span>
+          </td>
+          <td class="p-3 font-mono text-[11px] text-slate-700">
+            <span class="font-bold text-slate-800 block">Plantão: ${p.intervalo \vert{}\vert{} '24h'} (${p.regime || 'ININTERRUPTA'})</span>
+            <span class="text-slate-500 text-[10px] block">Úteis: ${p.uteis \vert{}\vert{} '08:00 às 08:00'} \vert{} Não Úteis: ${p.naoUteis || '08:00 às 08:00'}</span>
+          </td>
+          <td class="p-3 font-mono text-[11px] text-amber-950 bg-amber-50/40 rounded-lg">
+            <span class="font-bold block">Sobreaviso: ${s.intervalo \vert{}\vert{} '24h'} (${s.regime || 'INTERMITENTE'})</span>
+            <span class="text-amber-800/80 text-[10px] block">Úteis: ${s.uteis \vert{}\vert{} '18:00 às 08:00'} \vert{} Não Úteis: ${s.naoUteis || '08:00 às 08:00'}</span>
+          </td>
+          <td class="p-3 text-right space-x-1">
+            <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
+              ✏️ Editar
+            </button>
+            <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
+              🗑 Excluir
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    if (delVinculadas.length === 0) {
+      linhasTabela = `<tr><td colspan="4" class="p-4 text-center text-slate-400 italic">Nenhuma delegacia vinculada a esta SDP.</td></tr>`;
+    }
+
+    htmlTotal += `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <!-- Cabeçalho do Tronco (SDP) -->
+        <div class="p-3 bg-slate-800 text-white flex items-center justify-between font-bold text-xs uppercase tracking-wider">
+          <div class="flex items-center gap-2">
+            <span>🏛️ TRONCO: ${sdpNome}</span>
+            <span class="px-2 py-0.5 bg-slate-700 text-slate-200 font-extrabold text-[10px] rounded-full">${delVinculadas.length} Unidades</span>
+          </div>
+        </div>
+
+        <!-- Tabela dos Galhos (Delegacias) -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse font-sans">
+            <thead>
+              <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-2.5">Delegacia / Sigla</th>
+                <th class="p-2.5">Regime de Plantão Local</th>
+                <th class="p-2.5">Regime de Sobreaviso</th>
+                <th class="p-2.5 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">${linhasTabela}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = htmlTotal;
+};
+
+// =========================================================================
+// MODAL 1: CADASTRAR / EDITAR DELEGACIA (GALHO)
+// =========================================================================
 window.abrirModalDelegacia = function(delId = null) {
   let modal = document.getElementById('modal-delegacia');
   if (!modal) {
@@ -94,18 +193,26 @@ window.abrirModalDelegacia = function(delId = null) {
     modal = document.getElementById('modal-delegacia');
   }
 
+  // Popula seletores de SDPs
+  const selectSdp = document.getElementById('del-sdp');
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  let sdpOpts = ``;
+  [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
+    sdpOpts += `<option value="${s}">${s}</option>`;
+  });
+  if (selectSdp) selectSdp.innerHTML = sdpOpts;
+
   const inputId = document.getElementById('del-id');
   const inputNome = document.getElementById('del-nome');
-  const inputSdp = document.getElementById('del-sdp');
-  const inputMunicipio = document.getElementById('del-municipio');
 
-  // Plantão
   const selPRegime = document.getElementById('del-p-regime');
   const selPIntervalo = document.getElementById('del-p-intervalo');
   const inputPUteis = document.getElementById('del-p-uteis');
   const inputPNaoUteis = document.getElementById('del-p-nao-uteis');
 
-  // Sobreaviso
   const selSRegime = document.getElementById('del-s-regime');
   const selSIntervalo = document.getElementById('del-s-intervalo');
   const inputSUteis = document.getElementById('del-s-uteis');
@@ -116,8 +223,7 @@ window.abrirModalDelegacia = function(delId = null) {
     if (del) {
       inputId.value = del.id;
       inputNome.value = del.nome || '';
-      inputSdp.value = del.subdivisao || '8ª SDP';
-      inputMunicipio.value = del.municipio || '';
+      selectSdp.value = (del.subdivisao || '8ª SDP').trim().toUpperCase();
 
       const p = del.plantaoConfig || {};
       selPRegime.value = p.regime || 'ININTERRUPTA';
@@ -134,8 +240,6 @@ window.abrirModalDelegacia = function(delId = null) {
   } else {
     inputId.value = '';
     inputNome.value = '';
-    inputSdp.value = '8ª SDP';
-    inputMunicipio.value = '';
 
     selPRegime.value = 'ININTERRUPTA';
     selPIntervalo.value = '24h';
@@ -161,7 +265,6 @@ window.salvarDelegaciaModal = async function(e) {
   const id = document.getElementById('del-id').value;
   const nome = document.getElementById('del-nome').value.toUpperCase().trim();
   const subdivisao = document.getElementById('del-sdp').value.toUpperCase().trim();
-  const municipio = document.getElementById('del-municipio').value.toUpperCase().trim();
 
   const plantaoConfig = {
     regime: document.getElementById('del-p-regime').value,
@@ -183,7 +286,6 @@ window.salvarDelegaciaModal = async function(e) {
 
   delObj.nome = nome;
   delObj.subdivisao = subdivisao;
-  delObj.municipio = municipio;
   delObj.plantaoConfig = plantaoConfig;
   delObj.sobreavisoConfig = sobreavisoConfig;
   delObj.horarioUteis = plantaoConfig.uteis;
@@ -194,7 +296,7 @@ window.salvarDelegaciaModal = async function(e) {
 
   await syncDocToFirestore('delegacias', targetId, delObj);
 
-  alert("Unidade cadastrada/atualizada com sucesso!");
+  alert("Delegacia salva com sucesso!");
   window.fecharModalDelegacia();
 
   renderDelegaciasCards('delegacias-container');
@@ -202,7 +304,7 @@ window.salvarDelegaciaModal = async function(e) {
 };
 
 window.excluirDelegacia = async function(id) {
-  if (!confirm("Deseja realmente remover esta unidade policial?")) return;
+  if (!confirm("Deseja realmente excluir esta delegacia?")) return;
 
   appState.delegacias = (appState.delegacias || []).filter(d => d.id !== id);
   await syncDocToFirestore('delegacias', id, null, true);
@@ -211,12 +313,131 @@ window.excluirDelegacia = async function(id) {
   renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
 };
 
+// =========================================================================
+// MODAL 2: EDITAR / CRIAR / EXCLUIR SDPS (TRONCO)
+// =========================================================================
+window.abrirModalGerenciarSdps = function() {
+  let modal = document.getElementById('modal-gerenciar-sdps');
+  if (!modal) {
+    criarModalGerenciarSdpsDOM();
+    modal = document.getElementById('modal-gerenciar-sdps');
+  }
+
+  window.renderizarListaSdpsModal();
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalGerenciarSdps = function() {
+  document.getElementById('modal-gerenciar-sdps')?.classList.add('hidden');
+};
+
+window.renderizarListaSdpsModal = function() {
+  const container = document.getElementById('lista-sdps-modal-corpo');
+  if (!container) return;
+
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  const sdps = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  container.innerHTML = sdps.map((sdpNome, idx) => `
+    <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+      <span>🏛️ ${sdpNome}</span>
+      <div class="space-x-1">
+        <button onclick="window.editarNomeSdpPrompt('${sdpNome}')" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold">Editar</button>
+        <button onclick="window.excluirSdpModal('${sdpNome}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold">Excluir</button>
+      </div>
+    </div>
+  `).join('');
+};
+
+window.salvarNovaSdpModal = async function(e) {
+  e.preventDefault();
+
+  const input = document.getElementById('modal-sdp-novo-nome');
+  const nomeSdp = input.value.toUpperCase().trim();
+
+  if (!nomeSdp) return;
+
+  if (!appState.sdps) appState.sdps = [];
+  const exists = appState.sdps.some(s => s.nome === nomeSdp);
+
+  if (!exists) {
+    const newSdpId = 'sdp_' + Date.now();
+    const sdpObj = { id: newSdpId, nome: nomeSdp };
+    appState.sdps.push(sdpObj);
+    await syncDocToFirestore('sdps', newSdpId, sdpObj);
+  }
+
+  input.value = '';
+  window.renderizarListaSdpsModal();
+  renderDelegaciasCards('delegacias-container');
+};
+
+window.editarNomeSdpPrompt = async function(nomeAntigo) {
+  const novoNome = prompt("Digite o novo nome para a Subdivisão (SDP):", nomeAntigo);
+  if (!novoNome || novoNome.toUpperCase().trim() === nomeAntigo) return;
+
+  const nomeFormatado = novoNome.toUpperCase().trim();
+
+  // Atualiza em todas as delegacias vinculadas
+  (appState.delegacias || []).forEach(async d => {
+    if ((d.subdivisao || '').toUpperCase() === nomeAntigo) {
+      d.subdivisao = nomeFormatado;
+      await syncDocToFirestore('delegacias', d.id, d);
+    }
+  });
+
+  // Atualiza no cadastro de SDPs
+  if (!appState.sdps) appState.sdps = [];
+  const sdpObj = appState.sdps.find(s => s.nome === nomeAntigo);
+  if (sdpObj) {
+    sdpObj.nome = nomeFormatado;
+    await syncDocToFirestore('sdps', sdpObj.id, sdpObj);
+  } else {
+    const newSdpId = 'sdp_' + Date.now();
+    const newObj = { id: newSdpId, nome: nomeFormatado };
+    appState.sdps.push(newObj);
+    await syncDocToFirestore('sdps', newSdpId, newObj);
+  }
+
+  alert("Subdivisão (SDP) atualizada em todas as delegacias!");
+  window.renderizarListaSdpsModal();
+  renderDelegaciasCards('delegacias-container');
+};
+
+window.excluirSdpModal = async function(nomeSdp) {
+  const vinculos = (appState.delegacias || []).filter(d => (d.subdivisao || '').toUpperCase() === nomeSdp);
+
+  if (vinculos.length > 0) {
+    alert(`Não é possível excluir a ${nomeSdp} pois existem ${vinculos.length} delegacia(s) vinculadas a ela. Realoque as delegacias primeiro.`);
+    return;
+  }
+
+  if (!confirm(`Deseja realmente remover a ${nomeSdp}?`)) return;
+
+  appState.sdps = (appState.sdps || []).filter(s => s.nome !== nomeSdp);
+  
+  // Tenta sincronizar a exclusão
+  const sdpObj = (appState.sdps || []).find(s => s.nome === nomeSdp);
+  if (sdpObj) {
+    await syncDocToFirestore('sdps', sdpObj.id, null, true);
+  }
+
+  window.renderizarListaSdpsModal();
+  renderDelegaciasCards('delegacias-container');
+};
+
+// =========================================================================
+// INJEÇÃO DOM DOS MODAIS
+// =========================================================================
 function criarModalDelegaciaDOM() {
   const modalHTML = `
     <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <h3 class="font-bold text-slate-900 text-sm">Cadastro de Unidade / Delegacia</h3>
+          <h3 class="font-bold text-slate-900 text-sm">Cadastro de Delegacia (Galho)</h3>
           <button type="button" onclick="window.fecharModalDelegacia()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
@@ -225,19 +446,14 @@ function criarModalDelegaciaDOM() {
 
           <!-- Identificação -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Subdivisão / Tronco (SDP):</label>
+              <select id="del-sdp" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase"></select>
+            </div>
             <div class="sm:col-span-2">
               <label class="block font-bold text-slate-700 mb-1">Sigla / Nome da Delegacia:</label>
               <input type="text" id="del-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 1ª SDP / DEL LEOPOLIS" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase">
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Subdivisão / SDP:</label>
-              <input type="text" id="del-sdp" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 8ª SDP" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase">
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Município:</label>
-            <input type="text" id="del-municipio" oninput="this.value = this.value.toUpperCase()" placeholder="EX: PARANAVAÍ" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase">
           </div>
 
           <!-- Parâmetros Plantão Local -->
@@ -306,9 +522,38 @@ function criarModalDelegaciaDOM() {
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="window.fecharModalDelegacia()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Unidade</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Delegacia</button>
           </div>
         </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function criarModalGerenciarSdpsDOM() {
+  const modalHTML = `
+    <div id="modal-gerenciar-sdps" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">🏛️ Gerenciar Subdivisões (SDPs)</h3>
+          <button type="button" onclick="window.fecharModalGerenciarSdps()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <!-- Formulário Adicionar Nova SDP -->
+        <form onsubmit="window.salvarNovaSdpModal(event)" class="flex gap-2">
+          <input type="text" id="modal-sdp-novo-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 9ª SDP" class="flex-1 border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 text-xs uppercase">
+          <button type="submit" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">➕ Adicionar</button>
+        </form>
+
+        <div class="space-y-2 pt-2 border-t flex-1 overflow-y-auto pr-1">
+          <label class="block font-bold text-slate-700 text-xs mb-1">Subdivisões Existentes:</label>
+          <div id="lista-sdps-modal-corpo" class="space-y-1.5"></div>
+        </div>
+
+        <div class="pt-3 border-t flex justify-end shrink-0">
+          <button type="button" onclick="window.fecharModalGerenciarSdps()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 text-xs cursor-pointer">Fechar</button>
+        </div>
       </div>
     </div>
   `;
