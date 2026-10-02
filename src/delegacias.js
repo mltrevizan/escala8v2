@@ -53,8 +53,12 @@ window.popularFiltroSdpsSelect = function() {
   if (!select) return;
 
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
-  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
-  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+  (appState.delegacias || []).forEach(d => {
+    if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase());
+  });
+  (appState.sdps || []).forEach(s => {
+    if (s.nome) setSdps.add(s.nome.trim().toUpperCase());
+  });
 
   const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -77,11 +81,16 @@ window.renderizarListaTroncoGalhos = function() {
   const container = document.getElementById('lista-delegacias-tronco');
   if (!container) return;
 
-  const { busca, sdp } = delegaciasFiltroState;
+  const busca = delegaciasFiltroState.busca;
+  const sdp = delegaciasFiltroState.sdp;
 
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
-  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
-  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+  (appState.delegacias || []).forEach(d => {
+    if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase());
+  });
+  (appState.sdps || []).forEach(s => {
+    if (s.nome) setSdps.add(s.nome.trim().toUpperCase());
+  });
 
   let sdpsLista = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -114,45 +123,57 @@ window.renderizarListaTroncoGalhos = function() {
       return;
     }
 
-    let linhasTabela = delVinculadas.map(del => {
-      const p = del.plantaoConfig || {};
-      const s = del.sobreavisoConfig || {};
-
-      return `
-        <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
-          <td class="p-3 font-bold text-slate-900 uppercase">
-            <span class="text-sm block">${del.nome}</span>
-          </td>
-          <td class="p-3 font-mono text-[11px] text-slate-700">
-            <span class="font-bold text-slate-800 block">Plantão: ${p.intervalo \vert{}\vert{} '24h'} (${p.regime || 'ININTERRUPTA'})</span>
-            <span class="text-slate-500 text-[10px] block">Úteis: ${p.uteis \vert{}\vert{} '08:00 às 08:00'} \vert{} Não Úteis: ${p.naoUteis || '08:00 às 08:00'}</span>
-          </td>
-          <td class="p-3 font-mono text-[11px] text-amber-950 bg-amber-50/40 rounded-lg">
-            <span class="font-bold block">Sobreaviso: ${s.intervalo \vert{}\vert{} '24h'} (${s.regime || 'INTERMITENTE'})</span>
-            <span class="text-amber-800/80 text-[10px] block">Úteis: ${s.uteis \vert{}\vert{} '18:00 às 08:00'} \vert{} Não Úteis: ${s.naoUteis || '08:00 às 08:00'}</span>
-          </td>
-          <td class="p-3 text-right space-x-1">
-            <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
-              ✏️ Editar
-            </button>
-            <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
-              🗑 Excluir
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
+    let linhasTabela = '';
     if (delVinculadas.length === 0) {
       linhasTabela = `<tr><td colspan="4" class="p-4 text-center text-slate-400 italic">Nenhuma delegacia vinculada a esta SDP.</td></tr>`;
+    } else {
+      linhasTabela = delVinculadas.map(del => {
+        const p = del.plantaoConfig || {};
+        const s = del.sobreavisoConfig || {};
+        const pIntervalo = p.intervalo || '24h';
+        const pRegime = p.regime || 'ININTERRUPTA';
+        const pUteis = p.uteis || '08:00 às 08:00';
+        const pNaoUteis = p.naoUteis || '08:00 às 08:00';
+
+        const sIntervalo = s.intervalo || '24h';
+        const sRegime = s.regime || 'INTERMITENTE';
+        const sUteis = s.uteis || '18:00 às 08:00';
+        const sNaoUteis = s.naoUteis || '08:00 às 08:00';
+
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+            <td class="p-3 font-bold text-slate-900 uppercase">
+              <span class="text-sm block">${del.nome}</span>
+            </td>
+            <td class="p-3 font-mono text-[11px] text-slate-700">
+              <span class="font-bold text-slate-800 block">Plantão: ${pIntervalo} (${pRegime})</span>
+              <span class="text-slate-500 text-[10px] block">Úteis: ${pUteis} \vert{} Não Úteis: ${pNaoUteis}</span>
+            </td>
+            <td class="p-3 font-mono text-[11px] text-amber-950 bg-amber-50/40 rounded-lg">
+              <span class="font-bold block">Sobreaviso: ${sIntervalo} (${sRegime})</span>
+              <span class="text-amber-800/80 text-[10px] block">Úteis: ${sUteis} \vert{} Não Úteis: ${sNaoUteis}</span>
+            </td>
+            <td class="p-3 text-right space-x-1">
+              <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
+                ✏️ Editar
+              </button>
+              <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-md shadow-xs cursor-pointer">
+                🗑 Excluir
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
+
+    const qtdUnidades = delVinculadas.length;
 
     htmlTotal += `
       <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div class="p-3 bg-slate-800 text-white flex items-center justify-between font-bold text-xs uppercase tracking-wider">
           <div class="flex items-center gap-2">
             <span>🏛️ TRONCO: ${sdpNome}</span>
-            <span class="px-2 py-0.5 bg-slate-700 text-slate-200 font-extrabold text-[10px] rounded-full">${delVinculadas.length} Unidades</span>
+            <span class="px-2 py-0.5 bg-slate-700 text-slate-200 font-extrabold text-[10px] rounded-full">${qtdUnidades} Unidades</span>
           </div>
         </div>
 
@@ -185,8 +206,12 @@ window.abrirModalDelegacia = function(delId = null) {
 
   const selectSdp = document.getElementById('del-sdp');
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
-  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
-  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+  (appState.delegacias || []).forEach(d => {
+    if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase());
+  });
+  (appState.sdps || []).forEach(s => {
+    if (s.nome) setSdps.add(s.nome.trim().toUpperCase());
+  });
 
   let sdpOpts = ``;
   [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
@@ -322,20 +347,26 @@ window.renderizarListaSdpsModal = function() {
   if (!container) return;
 
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
-  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
-  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+  (appState.delegacias || []).forEach(d => {
+    if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase());
+  });
+  (appState.sdps || []).forEach(s => {
+    if (s.nome) setSdps.add(s.nome.trim().toUpperCase());
+  });
 
   const sdps = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  container.innerHTML = sdps.map((sdpNome) => `
-    <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
-      <span>🏛️ ${sdpNome}</span>
-      <div class="space-x-1">
-        <button onclick="window.editarNomeSdpPrompt('${sdpNome}')" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold">Editar</button>
-        <button onclick="window.excluirSdpModal('${sdpNome}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold">Excluir</button>
+  container.innerHTML = sdps.map(sdpNome => {
+    return `
+      <div class="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+        <span>🏛️ ${sdpNome}</span>
+        <div class="space-x-1">
+          <button onclick="window.editarNomeSdpPrompt('${sdpNome}')" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold">Editar</button>
+          <button onclick="window.excluirSdpModal('${sdpNome}')" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold">Excluir</button>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 };
 
 window.salvarNovaSdpModal = async function(e) {
