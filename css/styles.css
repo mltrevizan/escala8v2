@@ -1,4 +1,4 @@
-/* src/styles.css - Identidade Visual Oficial PCPR */
+/* css/styles.css - Identidade Visual Oficial PCPR */
 
 :root {
   --pcpr-gold: #BEA55A;       /* Dourado Fundo Emblema */
@@ -11,48 +11,21 @@
 }
 
 body {
-  font-family: 'Exo 2', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Exo 2', -apple-system, BlinkMacSystemFont, sans-serif !important;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Regras de Tipografia de Escalas */
-.cal-v1-day-num {
-  font-size: 11px !important;
-  line-height: 13px !important;
-  font-weight: 800 !important;
-}
+/* Regras Tipográficas de Escala */
+.cal-v1-day-num { font-size: 11px !important; line-height: 13px !important; font-weight: 800 !important; }
+.cal-v1-header-title { font-size: 8.5px !important; line-height: 10px !important; font-weight: 800 !important; letter-spacing: 0.04em !important; }
+.cal-v1-header-time { font-size: 7.5px !important; line-height: 9px !important; font-weight: 600 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important; }
+.cal-v1-srv-name { font-size: 9px !important; line-height: 11.5px !important; font-weight: 600 !important; }
+.cal-v1-tag-extra { font-size: 6.5px !important; line-height: 8px !important; font-weight: 900 !important; padding: 1px 3px !important; }
 
-.cal-v1-header-title {
-  font-size: 8.5px !important;
-  line-height: 10px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.04em !important;
-}
-
-.cal-v1-header-time {
-  font-size: 7.5px !important;
-  line-height: 9px !important;
-  font-weight: 600 !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-}
-
-.cal-v1-srv-name {
-  font-size: 9px !important;
-  line-height: 11.5px !important;
-  font-weight: 600 !important;
-}
-
-.cal-v1-tag-extra {
-  font-size: 6.5px !important;
-  line-height: 8px !important;
-  font-weight: 900 !important;
-  padding: 1px 3px !important;
-}
-
-/* Estilização Customizada de Abas no Padrão PCPR */
+/* Estilização Ativa de Abas PCPR */
 .tab-btn.active {
   background-color: var(--pcpr-black) !important;
   color: #FFFFFF !important;
-  border-bottom: 2px solid var(--pcpr-gold) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+  border-bottom: 3px solid var(--pcpr-gold) !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
 }
