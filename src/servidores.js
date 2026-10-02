@@ -16,45 +16,39 @@ export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  // Garante a adequação dos perfis iniciais em massa se ainda estiverem genéricos
   normalizarPerfisServidoresEmMassa();
 
   const html = `
-    <!-- Cabeçalho de Controle e Ações -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Cadastro Geral de Servidores / Policiais</h2>
           <p class="text-[11px] text-slate-500">Gestão de efetivo, cargos, contatos, perfis e lotações de origem</p>
         </div>
-        <button onclick="window.abrirModalServidor()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+        <button onclick="window.abrirModalServidor()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
           ➕ Novo Servidor
         </button>
       </div>
 
-      <!-- Barra de Filtros Múltiplos -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida:</label>
-          <input type="text" id="filtro-srv-busca" oninput="window.atualizarFiltrosServidoresList()" placeholder="Nome, cargo ou telefone..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          <input type="text" id="filtro-srv-busca" oninput="window.atualizarFiltrosServidoresList()" placeholder="Nome, cargo ou telefone..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛 Subdivisão (SDP):</label>
-          <select id="filtro-srv-sdp" onchange="window.aoMudarFiltroSdpServidores(this.value)" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-          </select>
+          <select id="filtro-srv-sdp" onchange="window.aoMudarFiltroSdpServidores(this.value)" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Delegacia / Unidade:</label>
-          <select id="filtro-srv-del" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-          </select>
+          <select id="filtro-srv-del" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">👮 Cargo:</label>
-          <select id="filtro-srv-cargo" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-          </select>
+          <select id="filtro-srv-cargo" onchange="window.atualizarFiltrosServidoresList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
         </div>
 
         <div>
@@ -71,7 +65,6 @@ export function renderServidoresTable(containerId) {
         </div>
       </div>
 
-      <!-- Contador de Resultados -->
       <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1">
         <span id="total-servidores-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-0.5 rounded-md">
           Exibindo 0 Servidores
@@ -80,7 +73,6 @@ export function renderServidoresTable(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Gerencial de Servidores -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -136,7 +128,6 @@ window.popularFiltrosIniciaisServidores = function() {
   if (selectSdp) {
     const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
     (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
-    (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
 
     let opts = `<option value="TODAS">Todas as SDPs</option>`;
     [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
@@ -163,7 +154,6 @@ window.popularFiltrosIniciaisServidores = function() {
 window.aoMudarFiltroSdpServidores = function(sdpSelecionada) {
   servidoresState.sdp = sdpSelecionada;
   servidoresState.delegaciaId = 'TODAS';
-
   window.atualizarOptionsDelegaciasFiltro();
   window.atualizarFiltrosServidoresList();
 };
@@ -180,11 +170,9 @@ window.atualizarOptionsDelegaciasFiltro = function() {
   }
 
   let opts = `<option value="TODAS">Todas as Delegacias</option>`;
-  delegaciasFiltradas
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-    .forEach(d => {
-      opts += `<option value="${d.id}">${d.nome}</option>`;
-    });
+  delegaciasFiltradas.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+    opts += `<option value="${d.id}">${d.nome}</option>`;
+  });
 
   selectDel.innerHTML = opts;
   selectDel.value = servidoresState.delegaciaId;
@@ -211,11 +199,7 @@ window.ordenarServidoresPorColuna = function(coluna) {
   ['NOME', 'CARGO', 'DELEGACIA', 'SDP', 'PERFIL'].forEach(col => {
     const iconEl = document.getElementById(`sort-icon-${col}`);
     if (iconEl) {
-      if (col === servidoresState.sortColuna) {
-        iconEl.innerText = servidoresState.sortDirecao === 'ASC' ? '⬆️' : '⬇️';
-      } else {
-        iconEl.innerText = '';
-      }
+      iconEl.innerText = (col === servidoresState.sortColuna) ? (servidoresState.sortDirecao === 'ASC' ? '⬆️' : '⬇️') : '';
     }
   });
 
@@ -250,17 +234,9 @@ window.renderTabelaServidoresCorpo = function() {
       if (sdpSrv !== sdp) return false;
     }
 
-    if (delegaciaId !== 'TODAS') {
-      if (srv.delegaciaId !== delegaciaId) return false;
-    }
-
-    if (cargo !== 'TODOS') {
-      if ((srv.cargo || '').toUpperCase() !== cargo) return false;
-    }
-
-    if (perfil !== 'TODOS') {
-      if ((srv.perfil || 'APJ') !== perfil) return false;
-    }
+    if (delegaciaId !== 'TODAS' && srv.delegaciaId !== delegaciaId) return false;
+    if (cargo !== 'TODOS' && (srv.cargo || '').toUpperCase() !== cargo) return false;
+    if (perfil !== 'TODOS' && (srv.perfil || 'APJ') !== perfil) return false;
 
     return true;
   });
@@ -270,23 +246,11 @@ window.renderTabelaServidoresCorpo = function() {
     const delB = (appState.delegacias || []).find(d => d.id === b.delegaciaId);
 
     let valA = '', valB = '';
-
-    if (sortColuna === 'NOME') {
-      valA = a.nome || '';
-      valB = b.nome || '';
-    } else if (sortColuna === 'CARGO') {
-      valA = a.cargo || '';
-      valB = b.cargo || '';
-    } else if (sortColuna === 'DELEGACIA') {
-      valA = delA?.nome || a.delegaciaNome || '';
-      valB = delB?.nome || b.delegaciaNome || '';
-    } else if (sortColuna === 'SDP') {
-      valA = delA?.subdivisao || a.subdivisao || '';
-      valB = delB?.subdivisao || b.subdivisao || '';
-    } else if (sortColuna === 'PERFIL') {
-      valA = a.perfil || 'APJ';
-      valB = b.perfil || 'APJ';
-    }
+    if (sortColuna === 'NOME') { valA = a.nome || ''; valB = b.nome || ''; }
+    else if (sortColuna === 'CARGO') { valA = a.cargo || ''; valB = b.cargo || ''; }
+    else if (sortColuna === 'DELEGACIA') { valA = delA?.nome || a.delegaciaNome || ''; valB = delB?.nome || b.delegaciaNome || ''; }
+    else if (sortColuna === 'SDP') { valA = delA?.subdivisao || a.subdivisao || ''; valB = delB?.subdivisao || b.subdivisao || ''; }
+    else if (sortColuna === 'PERFIL') { valA = a.perfil || 'APJ'; valB = b.perfil || 'APJ'; }
 
     const res = valA.localeCompare(valB, undefined, { numeric: true });
     return sortDirecao === 'ASC' ? res : -res;
@@ -304,18 +268,17 @@ window.renderTabelaServidoresCorpo = function() {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const perfilSrv = srv.perfil || 'APJ';
 
+    // CORES OFICIAIS PCPR PARA BADGES DE PERFIL
     let badgePerfilClass = 'bg-slate-100 text-slate-700 border-slate-300';
-    if (perfilSrv === 'Administrador') badgePerfilClass = 'bg-rose-100 text-rose-900 border-rose-300 font-black';
-    else if (perfilSrv === 'Coordenador') badgePerfilClass = 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
-    else if (perfilSrv === 'Superintendente') badgePerfilClass = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold';
-    else if (perfilSrv === 'Delegado') badgePerfilClass = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-    else if (perfilSrv === 'APJ') badgePerfilClass = 'bg-sky-100 text-sky-900 border-sky-300 font-semibold';
+    if (perfilSrv === 'Administrador') badgePerfilClass = 'bg-black text-pcpr-gold border-pcpr-gold font-extrabold';
+    else if (perfilSrv === 'Coordenador') badgePerfilClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
+    else if (perfilSrv === 'Superintendente') badgePerfilClass = 'bg-[#006AB3] text-white border-sky-600 font-bold';
+    else if (perfilSrv === 'Delegado') badgePerfilClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
+    else if (perfilSrv === 'APJ') badgePerfilClass = 'bg-slate-100 text-slate-800 border-slate-300 font-semibold';
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
-        <td class="p-3 font-bold text-slate-800">
-          <span>${srv.nome}</span>
-        </td>
+        <td class="p-3 font-bold text-slate-800">${srv.nome}</td>
         <td class="p-3 font-semibold text-slate-700">${srv.cargo || 'APJ'}</td>
         <td class="p-3 text-slate-600 font-medium">${del ? del.nome : (srv.delegaciaNome || 'Não informada')}</td>
         <td class="p-3 font-mono font-bold text-slate-700">${del?.subdivisao || srv.subdivisao || '8ª SDP'}</td>
@@ -393,7 +356,7 @@ window.aplicarMascaraTelefone = function(input) {
   if (value.length > 6) {
     value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
   } else if (value.length > 2) {
-    value = `(${value.slice(0, 2)})${value.slice(2)}`;
+    value = `(${value.slice(0, 2)}) ${value.slice(2)}`;
   } else if (value.length > 0) {
     value = `(${value}`;
   }
@@ -501,7 +464,7 @@ function criarModalServidorDOM() {
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="window.fecharModalServidor()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer">Salvar Policial</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-xl font-bold shadow-xs cursor-pointer">Salvar Policial</button>
           </div>
         </form>
       </div>
