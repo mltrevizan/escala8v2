@@ -5,11 +5,29 @@ import { renderCalendarGrid } from './calendar.js';
 
 let gestaoCrfFiltros = { busca: '', sdp: 'TODAS', delegaciaId: 'TODAS' };
 
+let gestaoDelTabelaState = {
+  busca: '',
+  modalidade: 'TODAS',
+  mes: appState.currentMonth,
+  ano: appState.currentYear,
+  sortColuna: 'DATA',
+  sortDirecao: 'ASC'
+};
+
+let modalCrfFiltros = { cargo: 'DELEGADO', busca: '' };
+let modalDelFiltros = { cargo: 'TODOS', busca: '' };
+
 function normalizarTipoModalidade(tipo) {
   if (!tipo) return 'PLANTÃO';
   const t = tipo.trim().toUpperCase();
   if (t === 'SDP') return 'EXTRAJORNADA';
   return t;
+}
+
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
 // =========================================================================
@@ -23,7 +41,7 @@ export function renderGestaoCrfModule(containerId) {
   const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   container.innerHTML = `
-    <!-- Topo Gerencial com Ações Padronizadas PCPR -->
+    <!-- Topo Gerencial -->
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -178,25 +196,32 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS
+// 2. MÓDULO GESTÃO POR DELEGACIAS (COM FILTROS COMPLETOS, ORDENAÇÃO E EXCLUSÃO EM MASSA)
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
-  const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const { selectedDelegaciaId } = appState;
+  gestaoDelTabelaState.mes = appState.currentMonth;
+  gestaoDelTabelaState.ano = appState.currentYear;
 
   let optsDelegacias = (appState.delegacias || []).map(d => 
     `<option value="${d.id}" ${d.id === selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
+
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  let optsMeses = monthNames.map((m, idx) => `<option value="${idx}" ${idx === gestaoDelTabelaState.mes ? 'selected' : ''}>${m}</option>`).join('');
+
+  let optsAnos = [gestaoDelTabelaState.ano - 1, gestaoDelTabelaState.ano, gestaoDelTabelaState.ano + 1]
+    .map(a => `<option value="${a}" ${a === gestaoDelTabelaState.ano ? 'selected' : ''}>${a}</option>`).join('');
 
   container.innerHTML = `
     <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão de Escalas por Delegacia</h2>
-          <p class="text-[11px] text-slate-500">Controle dos plantões locais e sobreavisos das unidades (${mesExtenso})</p>
+          <p class="text-[11px] text-slate-500">Controle, consultas, filtros avançados e exclusão em lote</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
@@ -211,33 +236,82 @@ export function renderGestaoDelegaciasModule(containerId) {
           <button onclick="window.importarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📥 Importar CSV
           </button>
+          <button onclick="window.excluirTodosFiltradosDelegacia()" class="px-3 py-2 bg-[#E2001A] hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            🚨 Excluir Filtrados
+          </button>
         </div>
       </div>
 
-      <div class="pt-2 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div class="flex items-center gap-2 w-full sm:w-auto">
-          <label class="text-xs font-bold text-slate-700">Selecione a Unidade:</label>
-          <select id="gestao-del-select-unidade" onchange="window.mudarUnidadeGestaoDel(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-xl p-2 shadow-xs">
+      <!-- Barra de Filtros com Busca Letra a Letra, Mês/Ano e Modalidade -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Unidade Alvo:</label>
+          <select id="gestao-del-select-unidade" onchange="window.mudarUnidadeGestaoDel(this.value)" class="w-full text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs">
             ${optsDelegacias}
           </select>
         </div>
 
-        <div class="w-full sm:w-64">
-          <input type="text" id="gest-del-busca" oninput="window.renderTabelaGestaoDelCorpo()" placeholder="🔍 Filtrar por policial ou VTR..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida (Letra a Letra):</label>
+          <input type="text" id="gest-del-busca" oninput="window.atualizarFiltrosGestaoDelList()" placeholder="Policial ou VTR..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏷 Modalidade:</label>
+          <select id="gest-del-modalidade" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            <option value="TODAS">Todas as Modalidades</option>
+            <option value="PLANTÃO">PLANTÃO LOCAL</option>
+            <option value="SOBREAVISO">SOBREAVISO</option>
+            <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📅 Mês:</label>
+          <select id="gest-del-mes" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${optsMeses}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Ano:</label>
+          <select id="gest-del-ano" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            ${optsAnos}
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1">
+        <span id="gest-del-total-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-0.5 rounded-md">
+          Exibindo 0 Registros
+        </span>
+        <span class="text-[10px] text-slate-400 italic">Dica: clique nos cabeçalhos para reordenar (A-Z / Z-A)</span>
       </div>
     </div>
 
+    <!-- Tabela Com Ordenação de Colunas -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-            <th class="p-3">Data</th>
-            <th class="p-3">Policial Escalado</th>
-            <th class="p-3">Cargo</th>
-            <th class="p-3">Viatura (VTR)</th>
-            <th class="p-3">Turno</th>
-            <th class="p-3">Modalidade</th>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px] select-none">
+            <th onclick="window.ordenarTabelaGestaoDel('DATA')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Data <span id="sort-del-icon-DATA">⬆️</span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoDel('POLICIAL')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Policial Escalado <span id="sort-del-icon-POLICIAL"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoDel('CARGO')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Cargo <span id="sort-del-icon-CARGO"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoDel('VTR')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Viatura (VTR) <span id="sort-del-icon-VTR"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoDel('TURNO')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Turno <span id="sort-del-icon-TURNO"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoDel('MODALIDADE')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Modalidade <span id="sort-del-icon-MODALIDADE"></span>
+            </th>
             <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
@@ -249,17 +323,44 @@ export function renderGestaoDelegaciasModule(containerId) {
   window.renderTabelaGestaoDelCorpo();
 }
 
-window.renderTabelaGestaoDelCorpo = function() {
-  const tbody = document.getElementById('tabela-gestao-del-corpo');
-  if (!tbody) return;
+window.atualizarFiltrosGestaoDelList = function() {
+  gestaoDelTabelaState.busca = document.getElementById('gest-del-busca')?.value?.toLowerCase().trim() || '';
+  gestaoDelTabelaState.modalidade = document.getElementById('gest-del-modalidade')?.value || 'TODAS';
+  gestaoDelTabelaState.mes = parseInt(document.getElementById('gest-del-mes')?.value || appState.currentMonth);
+  gestaoDelTabelaState.ano = parseInt(document.getElementById('gest-del-ano')?.value || appState.currentYear);
 
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
-  const busca = document.getElementById('gest-del-busca')?.value?.toLowerCase().trim() || '';
+  window.renderTabelaGestaoDelCorpo();
+};
 
-  const escalasDel = (appState.escalas || []).filter(e => {
+window.ordenarTabelaGestaoDel = function(coluna) {
+  if (gestaoDelTabelaState.sortColuna === coluna) {
+    gestaoDelTabelaState.sortDirecao = gestaoDelTabelaState.sortDirecao === 'ASC' ? 'DESC' : 'ASC';
+  } else {
+    gestaoDelTabelaState.sortColuna = coluna;
+    gestaoDelTabelaState.sortDirecao = 'ASC';
+  }
+
+  ['DATA', 'POLICIAL', 'CARGO', 'VTR', 'TURNO', 'MODALIDADE'].forEach(col => {
+    const el = document.getElementById(`sort-del-icon-${col}`);
+    if (el) {
+      el.innerText = (col === gestaoDelTabelaState.sortColuna) ? (gestaoDelTabelaState.sortDirecao === 'ASC' ? '⬆️' : '⬇️') : '';
+    }
+  });
+
+  window.renderTabelaGestaoDelCorpo();
+};
+
+window.obterEscalasFiltradasGestaoDel = function() {
+  const { selectedDelegaciaId } = appState;
+  const { busca, modalidade, mes, ano } = gestaoDelTabelaState;
+
+  return (appState.escalas || []).filter(e => {
     if (e.scope !== 'DELEGACIA' || e.delegaciaId !== selectedDelegaciaId) return false;
-    const [ano, mes] = e.data.split('-').map(Number);
-    if (ano !== currentYear || (mes - 1) !== currentMonth) return false;
+    const [a, m] = e.data.split('-').map(Number);
+    if (a !== ano || (m - 1) !== mes) return false;
+
+    const tipoModalidade = normalizarTipoModalidade(e.tipo);
+    if (modalidade !== 'TODAS' && tipoModalidade !== modalidade) return false;
 
     if (busca) {
       const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
@@ -274,7 +375,35 @@ window.renderTabelaGestaoDelCorpo = function() {
     }
 
     return true;
-  }).sort((a, b) => a.data.localeCompare(b.data));
+  });
+};
+
+window.renderTabelaGestaoDelCorpo = function() {
+  const tbody = document.getElementById('tabela-gestao-del-corpo');
+  if (!tbody) return;
+
+  const { sortColuna, sortDirecao } = gestaoDelTabelaState;
+  let escalasDel = window.obterEscalasFiltradasGestaoDel();
+
+  // Ordenação Reativa
+  escalasDel.sort((a, b) => {
+    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
+    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
+
+    let valA = '', valB = '';
+    if (sortColuna === 'DATA') { valA = a.data || ''; valB = b.data || ''; }
+    else if (sortColuna === 'POLICIAL') { valA = srvA?.nome || ''; valB = srvB?.nome || ''; }
+    else if (sortColuna === 'CARGO') { valA = srvA?.cargo || ''; valB = srvB?.cargo || ''; }
+    else if (sortColuna === 'VTR') { valA = a.vtr || ''; valB = b.vtr || ''; }
+    else if (sortColuna === 'TURNO') { valA = a.turno || ''; valB = b.turno || ''; }
+    else if (sortColuna === 'MODALIDADE') { valA = normalizarTipoModalidade(a.tipo); valB = normalizarTipoModalidade(b.tipo); }
+
+    const res = valA.localeCompare(valB, undefined, { numeric: true });
+    return sortDirecao === 'ASC' ? res : -res;
+  });
+
+  const totalEl = document.getElementById('gest-del-total-count');
+  if (totalEl) totalEl.innerText = `Exibindo ${escalasDel.length} Registros`;
 
   if (escalasDel.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400 italic">Nenhum lançamento localizado para os filtros informados nesta unidade.</td></tr>`;
@@ -304,7 +433,7 @@ window.renderTabelaGestaoDelCorpo = function() {
         </td>
         <td class="p-3 text-right space-x-1">
           <button onclick="window.abrirModalDetalhesTurno('Gestão Delegacia', '${esc.data}', '${esc.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
-            ✏️ Editar
+            ✏️️ Editar
           </button>
           <button onclick="window.excluirEscalaGestaoDirect('${esc.id}', 'DELEGACIA')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
             🗑 Excluir
@@ -320,8 +449,33 @@ window.mudarUnidadeGestaoDel = function(id) {
   renderGestaoDelegaciasModule('gestao-delegacias-container');
 };
 
+window.excluirTodosFiltradosDelegacia = async function() {
+  const filtrados = window.obterEscalasFiltradasGestaoDel();
+  if (filtrados.length === 0) {
+    alert("Não há registros filtrados para excluir.");
+    return;
+  }
+
+  const confirm1 = confirm(`ATENÇÃO: Deseja realmente EXCLUIR TODOS OS ${filtrados.length} REGISTROS FILTRADOS exibidos na tabela?`);
+  if (!confirm1) return;
+
+  const confirm2 = confirm(`Confirmação final: Esta ação removerá ${filtrados.length} plantões do banco de dados permanentemente.`);
+  if (!confirm2) return;
+
+  const idsParaRemover = new Set(filtrados.map(e => e.id));
+  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(e.id));
+
+  for (const escId of idsParaRemover) {
+    await syncDocToFirestore('escalas', escId, null, true);
+  }
+
+  alert(`Sucesso! ${filtrados.length} lançamentos excluídos.`);
+  renderGestaoDelegaciasModule('gestao-delegacias-container');
+  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+};
+
 // =========================================================================
-// 3. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO CRF
+// 3. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO CRF (COM FILTRO POR CARGO E NOME LETRA A LETRA)
 // =========================================================================
 window.abrirModalLancamentoCrf = function() {
   let modal = document.getElementById('modal-lancamento-crf');
@@ -330,26 +484,89 @@ window.abrirModalLancamentoCrf = function() {
     modal = document.getElementById('modal-lancamento-crf');
   }
 
-  const selectSrv = document.getElementById('ml-crf-servidor-id');
-  let optsSrv = `<option value="">Selecione o Policial...</option>`;
-  (appState.servidores || [])
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-    .forEach(s => {
-      optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`;
-    });
-  if (selectSrv) selectSrv.innerHTML = optsSrv;
+  modalCrfFiltros.cargo = 'DELEGADO';
+  modalCrfFiltros.busca = '';
 
-  document.getElementById('ml-crf-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('ml-crf-filtro-cargo').value = 'DELEGADO';
+  document.getElementById('ml-crf-filtro-busca').value = '';
+
+  // Sugestão Inteligente de Data e Turno Livres no mês
+  const dtSugerida = obterPrimeiraDataLivreCrf();
+  document.getElementById('ml-crf-data').value = dtSugerida.data;
+  document.getElementById('ml-crf-turno').value = dtSugerida.turno;
   document.getElementById('ml-crf-tipo').value = 'PLANTÃO';
-  document.getElementById('ml-crf-turno').value = '24h';
-  document.getElementById('ml-crf-origem-nome').value = '';
 
-  window.aoMudarServidorCrf('');
+  window.atualizarOptionsServidoresCrfModal();
   modal.classList.remove('hidden');
 };
 
+function obterPrimeiraDataLivreCrf() {
+  const { currentYear, currentMonth } = appState;
+  const hoje = new Date();
+  const hojeIso = hoje.toISOString().split('T')[0];
+
+  const totalDias = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  for (let d = 1; d <= totalDias; d++) {
+    const dtIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (dtIso < hojeIso) continue;
+
+    const escalasNoDia = (appState.escalas || []).filter(e => e.scope === 'CRF' && e.data === dtIso);
+    const tem24h = escalasNoDia.some(e => e.turno === '24h');
+    const tem12D = escalasNoDia.some(e => e.turno === '12h (D)');
+    const tem12N = escalasNoDia.some(e => e.turno === '12h (N)');
+
+    if (!tem24h && !tem12D) return { data: dtIso, turno: '12h (D)' };
+    if (!tem24h && !tem12N) return { data: dtIso, turno: '12h (N)' };
+  }
+
+  return { data: hojeIso, turno: '24h' };
+}
+
 window.fecharModalLancamentoCrf = function() {
   document.getElementById('modal-lancamento-crf')?.classList.add('hidden');
+};
+
+window.atualizarFiltrosServidoresCrfModal = function() {
+  modalCrfFiltros.cargo = document.getElementById('ml-crf-filtro-cargo')?.value || 'TODOS';
+  modalCrfFiltros.busca = document.getElementById('ml-crf-filtro-busca')?.value?.toLowerCase().trim() || '';
+
+  window.atualizarOptionsServidoresCrfModal();
+};
+
+window.atualizarOptionsServidoresCrfModal = function() {
+  const selectSrv = document.getElementById('ml-crf-servidor-id');
+  if (!selectSrv) return;
+
+  const { cargo, busca } = modalCrfFiltros;
+
+  let srvs = [...(appState.servidores || [])].filter(s => {
+    const n = normalizeText(s.nome || '');
+    if (n === 'administrador do sistema' || n === 'admin') return false;
+
+    if (cargo !== 'TODOS') {
+      const cargoPol = (s.cargo || '').toUpperCase();
+      if (cargo === 'DELEGADO' && !cargoPol.includes('DELEGADO')) return false;
+      if (cargo === 'APJ' && cargoPol.includes('DELEGADO')) return false;
+    }
+
+    if (busca) {
+      const nomePol = (s.nome || '').toLowerCase();
+      if (!nomePol.includes(busca)) return false;
+    }
+
+    return true;
+  });
+
+  srvs.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let opts = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
+  srvs.forEach(s => {
+    opts += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`;
+  });
+
+  selectSrv.innerHTML = opts;
+  window.aoMudarServidorCrf(selectSrv.value);
 };
 
 window.aoMudarServidorCrf = function(srvId) {
@@ -383,7 +600,6 @@ window.atualizarDelegadosDisponiveisCrf = function() {
   const dataSel = document.getElementById('ml-crf-data')?.value;
   const turnoSel = document.getElementById('ml-crf-turno')?.value;
 
-  // Busca Delegados já escalados no mesmo dia e turno para a CRF
   const escalasDelegados = (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF' || e.data !== dataSel || e.turno !== turnoSel) return false;
     const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
@@ -455,9 +671,28 @@ function criarModalLancamentoCrfDOM() {
             <input type="date" id="ml-crf-data" required onchange="window.atualizarDelegadosDisponiveisCrf()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
-            <select id="ml-crf-servidor-id" required onchange="window.aoMudarServidorCrf(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+          <!-- Filtro de Cargo e Busca por Letra -->
+          <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Cargo:</label>
+                <select id="ml-crf-filtro-cargo" onchange="window.atualizarFiltrosServidoresCrfModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+                  <option value="DELEGADO" selected>DELEGADO</option>
+                  <option value="APJ">APJ / AGENTE</option>
+                  <option value="TODOS">TODOS OS CARGOS</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
+                <input type="text" id="ml-crf-filtro-busca" oninput="window.atualizarFiltrosServidoresCrfModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
+              <select id="ml-crf-servidor-id" required onchange="window.aoMudarServidorCrf(this.value)" class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
+            </div>
           </div>
 
           <div>
@@ -501,7 +736,7 @@ function criarModalLancamentoCrfDOM() {
 }
 
 // =========================================================================
-// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA (COM FILTRO POR CARGO, BUSCA POR NOME E SUGESTÕES DE HORÁRIO/DATA)
 // =========================================================================
 window.abrirModalLancamentoDelegacia = function() {
   let modal = document.getElementById('modal-lancamento-delegacia');
@@ -516,20 +751,96 @@ window.abrirModalLancamentoDelegacia = function() {
   const inputDelNome = document.getElementById('ml-del-unidade-nome');
   if (inputDelNome) inputDelNome.value = delObj ? delObj.nome : 'Unidade Selecionada';
 
-  // Filtra policiais pertencentes a essa unidade no topo da lista
+  modalDelFiltros.cargo = 'TODOS';
+  modalDelFiltros.busca = '';
+
+  document.getElementById('ml-del-filtro-cargo').value = 'TODOS';
+  document.getElementById('ml-del-filtro-busca').value = '';
+
+  const dtSugerida = obterPrimeiraDataLivreDelegacia(selectedDelegaciaId);
+  document.getElementById('ml-del-data').value = dtSugerida;
+  document.getElementById('ml-del-tipo').value = 'PLANTÃO';
+  window.aoMudarModalidadeDelegacia('PLANTÃO');
+  document.getElementById('ml-del-vtr').value = '';
+
+  window.atualizarOptionsServidoresDelModal();
+  modal.classList.remove('hidden');
+};
+
+function obterPrimeiraDataLivreDelegacia(delId) {
+  const { currentYear, currentMonth } = appState;
+  const hoje = new Date();
+  const hojeIso = hoje.toISOString().split('T')[0];
+
+  const totalDias = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  for (let d = 1; d <= totalDias; d++) {
+    const dtIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (dtIso < hojeIso) continue;
+
+    const temEscala = (appState.escalas || []).some(e => e.scope === 'DELEGACIA' && e.delegaciaId === delId && e.data === dtIso);
+    if (!temEscala) return dtIso;
+  }
+
+  return hojeIso;
+}
+
+window.fecharModalLancamentoDelegacia = function() {
+  document.getElementById('modal-lancamento-delegacia')?.classList.add('hidden');
+};
+
+window.aoMudarModalidadeDelegacia = function(tipo) {
+  const selectTurno = document.getElementById('ml-del-turno');
+  if (!selectTurno) return;
+
+  const { selectedDelegaciaId } = appState;
+  const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+
+  if (tipo === 'SOBREAVISO') {
+    const duracaoPref = delObj?.sobreavisoConfig?.intervalo || '24h';
+    selectTurno.value = duracaoPref;
+  } else {
+    const duracaoPref = delObj?.plantaoConfig?.intervalo || '24h';
+    selectTurno.value = duracaoPref;
+  }
+};
+
+window.atualizarFiltrosServidoresDelModal = function() {
+  modalDelFiltros.cargo = document.getElementById('ml-del-filtro-cargo')?.value || 'TODOS';
+  modalDelFiltros.busca = document.getElementById('ml-del-filtro-busca')?.value?.toLowerCase().trim() || '';
+
+  window.atualizarOptionsServidoresDelModal();
+};
+
+window.atualizarOptionsServidoresDelModal = function() {
   const selectSrv = document.getElementById('ml-del-servidor-id');
-  let optsSrv = `<option value="">Selecione o Policial...</option>`;
+  if (!selectSrv) return;
 
-  const servidoresUnidade = [];
-  const demaisServidores = [];
+  const { selectedDelegaciaId } = appState;
+  const { cargo, busca } = modalDelFiltros;
 
-  (appState.servidores || []).forEach(s => {
-    if (s.delegaciaId === selectedDelegaciaId) servidoresUnidade.push(s);
-    else demaisServidores.push(s);
+  let srvs = [...(appState.servidores || [])].filter(s => {
+    const n = normalizeText(s.nome || '');
+    if (n === 'administrador do sistema' || n === 'admin') return false;
+
+    if (cargo !== 'TODOS') {
+      const cargoPol = (s.cargo || '').toUpperCase();
+      if (cargo === 'DELEGADO' && !cargoPol.includes('DELEGADO')) return false;
+      if (cargo === 'APJ' && cargoPol.includes('DELEGADO')) return false;
+    }
+
+    if (busca) {
+      const nomePol = (s.nome || '').toLowerCase();
+      if (!nomePol.includes(busca)) return false;
+    }
+
+    return true;
   });
 
-  servidoresUnidade.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-  demaisServidores.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const servidoresUnidade = srvs.filter(s => s.delegaciaId === selectedDelegaciaId).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const demaisServidores = srvs.filter(s => s.delegaciaId !== selectedDelegaciaId).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let optsSrv = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
 
   if (servidoresUnidade.length > 0) {
     optsSrv += `<optgroup label="Efetivo da Unidade">`;
@@ -543,18 +854,7 @@ window.abrirModalLancamentoDelegacia = function() {
     optsSrv += `</optgroup>`;
   }
 
-  if (selectSrv) selectSrv.innerHTML = optsSrv;
-
-  document.getElementById('ml-del-data').value = new Date().toISOString().split('T')[0];
-  document.getElementById('ml-del-tipo').value = 'PLANTÃO';
-  document.getElementById('ml-del-turno').value = '24h';
-  document.getElementById('ml-del-vtr').value = '';
-
-  modal.classList.remove('hidden');
-};
-
-window.fecharModalLancamentoDelegacia = function() {
-  document.getElementById('modal-lancamento-delegacia')?.classList.add('hidden');
+  selectSrv.innerHTML = optsSrv;
 };
 
 window.salvarLancamentoDelegaciaModal = async function(e) {
@@ -614,15 +914,34 @@ function criarModalLancamentoDelegaciaDOM() {
             <input type="date" id="ml-del-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
-            <select id="ml-del-servidor-id" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+          <!-- Filtro de Cargo e Busca por Letra -->
+          <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Cargo:</label>
+                <select id="ml-del-filtro-cargo" onchange="window.atualizarFiltrosServidoresDelModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+                  <option value="TODOS" selected>TODOS OS CARGOS</option>
+                  <option value="DELEGADO">DELEGADO</option>
+                  <option value="APJ">APJ / AGENTE</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
+                <input type="text" id="ml-del-filtro-busca" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
+              <select id="ml-del-servidor-id" required class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
-              <select id="ml-del-tipo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+              <select id="ml-del-tipo" onchange="window.aoMudarModalidadeDelegacia(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
                 <option value="PLANTÃO">PLANTÃO LOCAL</option>
                 <option value="SOBREAVISO">SOBREAVISO</option>
                 <option value="EXTRAJORNADA">EXTRAJORNADA</option>
@@ -953,12 +1272,6 @@ window.confirmarVinculoApjPontual = async function(dataPlantao, turnoPlantao, se
   renderGestaoCrfModule('gestao-crf-container');
   renderCalendarGrid('calendar-crf-container', 'CRF');
 };
-
-function formatarDataBr(dataIso) {
-  if (!dataIso) return '-';
-  const parts = dataIso.split('-');
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
-}
 
 function criarModalVincularApjPontualDOM() {
   const modalHTML = `
