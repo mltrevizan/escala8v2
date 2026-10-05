@@ -40,7 +40,7 @@ export async function loadAllDataFromFirestore() {
           delegaciaNome: data.delegaciaNome || '',
           subdivisao: data.subdivisao || '',
           nivelAcesso: data.nivelAcesso || data.perfil || 'VISUALIZADOR',
-          telefone: '🔒 [Acesso Restrito]' // Substitui o número real por máscara segura
+          telefone: '🔒 [Acesso Restrito]'
         };
       }
 
@@ -58,9 +58,29 @@ export async function loadAllDataFromFirestore() {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    console.log(`Dados carregados com sucesso! (Modo: ${isAutenticado ? 'Autenticado' : 'Público/Sanitizado'})`);
+    console.log(`Dados do Firestore carregados com sucesso! (Modo: ${isAutenticado ? 'Autenticado' : 'Público/Sanitizado'})`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
+  }
+}
+
+/**
+ * Sincroniza um documento específico com o Firestore (Criação, Atualização ou Exclusão)
+ */
+export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
+  try {
+    const docRef = db.collection(collectionName).doc(docId);
+
+    if (isDelete) {
+      await docRef.delete();
+      console.log(`Documento ${docId} removido da coleção ${collectionName}.`);
+    } else {
+      await docRef.set(dataObj, { merge: true });
+      console.log(`Documento ${docId} salvo/atualizado na coleção ${collectionName}.`);
+    }
+  } catch (error) {
+    console.error(`Erro ao sincronizar documento na coleção ${collectionName}:`, error);
+    throw error;
   }
 }
