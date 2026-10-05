@@ -199,8 +199,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       : 'border-t border-l border-slate-200/80';
 
     html += `
-      <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto cursor-pointer"
-           onclick="window.abrirModalDetalhesPlantao('${dateStr}', '${scope}')">
+      <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
         <div class="flex items-center justify-between mb-1 px-0.5">
           <div class="flex items-center gap-1">
             <span class="cal-v1-day-num ${isHoje ? 'text-black font-black' : (feriadoDoDia ? 'text-red-700' : (isWeekend ? 'text-amber-800' : 'text-slate-800'))}">
@@ -223,8 +222,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       const diurnoEscalas = escalasDoDia.filter(e => e.turno === '12h (D)' || e.turno === '24h');
       const noturnoEscalas = escalasDoDia.filter(e => e.turno === '12h (N)');
 
-      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716] shadow-xs');
-      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs');
+      html += renderBalaoPeriodo('DIURNO', '07h30 - 19h30', diurnoEscalas, 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716] shadow-xs', dateStr);
+      html += renderBalaoPeriodo('NOTURNO', '19h30 - 07h30', noturnoEscalas, 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs', dateStr);
     } else {
       if (escalasDoDia.length === 0) {
         html += `<span class="text-[8.5px] text-slate-300 italic block font-light px-1">Livre</span>`;
@@ -276,7 +275,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           }).join('');
 
           html += `
-            <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('Escala Local', '${primeiraEsc.data}', '${idsString}')"
+            <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}', '${dateStr}')"
                  onmouseenter="window.mostrarTooltipGrupo(event, '${rotuloTipo}', '${primeiraEsc.turno || '24h'}', '${idsString}')"
                  onmouseleave="window.ocultarTooltip()"
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
@@ -315,7 +314,7 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
   return `${prefixo} ${primeiroNome} ${ultimoSobrenome}`;
 }
 
-function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
+function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   if (escalasArray.length === 0) {
     return `
       <div class="p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
@@ -371,7 +370,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle) {
   const headerColorClass = isNoturno ? 'border-white/20 text-slate-300' : 'border-[#BEA55A]/50 text-[#5A4716]';
 
   return `
-    <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}')"
+    <div onclick="event.stopPropagation(); window.abrirModalDetalhesTurno('${titulo}', '${horario}', '${idsString}', '${dateStr}')"
          onmouseenter="window.mostrarTooltipGrupo(event, '${titulo}', '${horario}', '${idsString}')"
          onmouseleave="window.ocultarTooltip()"
          class="p-1 rounded-md border ${bgStyle} space-y-0.5 cursor-pointer hover:brightness-95 hover:shadow-sm transition">
@@ -446,7 +445,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
     const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
     const primeiraEscala = escalas[0];
 
-    // Permissão de telefone baseada na janela de datas (Ontem, Hoje e Amanhã para não logados)
     const podeVerTelefone = canViewPhoneForDate(primeiraEscala?.data);
 
     let content = `
@@ -485,94 +483,6 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   }
 };
 
-window.mostrarTooltipEscala = function(event, escalaId) {
-  if (window.innerWidth < 768) return;
-
-  try {
-    const esc = (appState.escalas || []).find(e => e.id === escalaId);
-    if (!esc) return;
-
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const delEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
-    const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
-    const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
-
-    const isSobreaviso = esc.tipo === 'SOBREAVISO';
-    const podeVerTelefone = canViewPhoneForDate(esc.data);
-    const telExibicao = podeVerTelefone ? (srv?.telefone || '-') : '🔒 [Acesso Restrito]';
-
-    const { entradaStr, saidaStr } = calcularHorariosEntradaSaida(esc, delEscala);
-
-    const content = `
-      <div class="p-2.5 space-y-1 text-left min-w-[220px] font-sans">
-        <div class="font-bold text-slate-900 border-b border-slate-200 pb-1 text-xs flex items-center justify-between">
-          <span>${srv?.nome || 'Não informado'}</span>
-          <span class="text-[8px] ${isSobreaviso ? 'bg-black text-pcpr-gold border border-pcpr-gold' : 'bg-[#F7F3E8] text-[#5A4716] border border-[#BEA55A]'} px-1 rounded font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
-        </div>
-        <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
-        <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
-        <div class="text-[10px] text-slate-600"><b>Unidade do Plantão:</b> ${delEscala ? delEscala.nome : 'Unidade Local'}</div>
-        <div class="text-[10px] text-emerald-800 font-mono"><b>Entrada:</b> ${entradaStr}</div>
-        <div class="text-[10px] text-rose-800 font-mono"><b>Saída:</b> ${saidaStr}</div>
-        <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${telExibicao}</div>
-      </div>
-    `;
-
-    exibirElementoTooltip(event, content);
-  } catch (err) {
-    console.error("Erro tooltip escala:", err);
-  }
-};
-
-function calcularHorariosEntradaSaida(escala, delObj) {
-  const isSobreaviso = escala.tipo === 'SOBREAVISO';
-  let config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
-
-  const dtInicioIso = escala.dataInicio || escala.data;
-
-  const [anoIn, mesIn, diaIn] = dtInicioIso.split('-').map(Number);
-  const dtInObj = new Date(anoIn, mesIn - 1, diaIn);
-  const dayOfWeekIn = dtInObj.getDay();
-  const isFimDeSemanaIn = (dayOfWeekIn === 0 || dayOfWeekIn === 6);
-
-  let horarioTexto = '08:00 às 08:00';
-  if (config) {
-    horarioTexto = isFimDeSemanaIn ? (config.naoUteis || '08:00 às 08:00') : (config.uteis || '08:00 às 08:00');
-  } else if (delObj) {
-    horarioTexto = isFimDeSemanaIn ? (delObj.horarioNaoUteis || '08:00 às 08:00') : (delObj.horarioUteis || '08:00 às 08:00');
-  }
-
-  let horaIn = '08:00', horaOut = '08:00';
-  if (horarioTexto.includes('às')) {
-    const partes = horarioTexto.split('às').map(p => p.trim());
-    horaIn = partes[0] || '08:00';
-    horaOut = partes[1] || '08:00';
-  }
-
-  const dtBrIn = `${String(diaIn).padStart(2, '0')}/${String(mesIn).padStart(2, '0')}/${anoIn}`;
-
-  let dtBrOut = dtBrIn;
-  if (escala.dataFim) {
-    const [anoOut, mesOut, diaOut] = escala.dataFim.split('-').map(Number);
-    dtBrOut = `${String(diaOut).padStart(2, '0')}/${String(mesOut).padStart(2, '0')}/${anoOut}`;
-  } else {
-    let duracaoDias = 1;
-    if (escala.turno && escala.turno.includes('dias')) {
-      duracaoDias = parseInt(escala.turno) || 1;
-    }
-    const dtSaidaObj = new Date(anoIn, mesIn - 1, diaIn + duracaoDias);
-    const ddOut = String(dtSaidaObj.getDate()).padStart(2, '0');
-    const mmOut = String(dtSaidaObj.getMonth() + 1).padStart(2, '0');
-    const yyOut = dtSaidaObj.getFullYear();
-    dtBrOut = `${ddOut}/${mmOut}/${yyOut}`;
-  }
-
-  return {
-    entradaStr: `${dtBrIn} às ${horaIn}`,
-    saidaStr: `${dtBrOut} às ${horaOut}`
-  };
-}
-
 function exibirElementoTooltip(event, htmlContent) {
   let tooltip = document.getElementById('global-calendar-tooltip');
   if (!tooltip) {
@@ -610,9 +520,9 @@ window.ocultarTooltip = function() {
 };
 
 // =========================================================================
-// MODAL DE DETALHES DO PLANTÃO / POP-UP RESTRITO
+// MODAL DE DETALHES DIRECIONADO AO BALÃO / TURNO ESPECÍFICO
 // =========================================================================
-window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
+window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, dataIso) {
   let modal = document.getElementById('modal-detalhes-plantao');
   if (!modal) {
     criarModalDetalhesPlantaoDOM();
@@ -620,34 +530,42 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
   }
 
   const containerConteudo = document.getElementById('modal-detalhes-conteudo');
+  const tituloModalEl = document.getElementById('modal-detalhes-titulo-sub');
   if (!containerConteudo) return;
 
-  const escalasDoDia = (appState.escalas || []).filter(e => e.data === dataIso && e.scope === scope);
+  const ids = idsString.split(',');
+  const escalasDoGrupo = (appState.escalas || []).filter(e => ids.includes(e.id));
   
-  // Exibição restrita de telefone: Ontem, Hoje e Amanhã para não autenticados
   const podeVerTelefone = canViewPhoneForDate(dataIso);
   const showBtnApj = hasPermission('SHOW_BTN_INCLUIR_TROCAR_APJ');
   const showBtnDel = hasPermission('SHOW_BTN_TROCAR_DELEGADO');
 
-  if (escalasDoDia.length === 0) {
+  if (tituloModalEl) {
+    tituloModalEl.innerText = `${tituloGrupo} (${horarioGrupo}) • ${formatarDataBr(dataIso)}`;
+  }
+
+  if (escalasDoGrupo.length === 0) {
     containerConteudo.innerHTML = `
       <div class="p-6 text-center text-slate-400 italic font-sans text-xs">
-        Nenhum plantão ou sobreaviso registrado para esta data (${formatarDataBr(dataIso)}).
+        Nenhum registro localizado para este turno (${formatarDataBr(dataIso)}).
       </div>
     `;
   } else {
-    let cardsHtml = escalasDoDia.map(esc => {
+    let cardsHtml = escalasDoGrupo.map(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+      const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
 
       let btnDelHtml = '';
-      if (isDel && showBtnDel) {
+      // TRAVA: Só exibe botão de troca de delegado se NÃO for extrajornada
+      if (isDel && showBtnDel && !isExtra) {
         btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
       }
 
       let btnApjHtml = '';
-      if (!isDel && showBtnApj) {
+      // TRAVA: Só exibe botão de troca/inclusão de APJ se NÃO for extrajornada
+      if (!isDel && showBtnApj && !isExtra) {
         btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">➕/🔄 Incluir / Trocar APJ</button>';
       }
 
@@ -657,7 +575,9 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
             <span class="text-[10px] uppercase font-extrabold ${isDel ? 'text-[#5A4716]' : 'text-slate-500'}">
               ${isDel ? 'Delegado Responsável' : 'APJ / Agente Integrante'}
             </span>
-            <span class="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold uppercase">${esc.tipo || 'PLANTÃO'}</span>
+            <span class="text-[9px] ${isExtra ? 'bg-black text-pcpr-gold border border-pcpr-gold' : 'bg-slate-200 text-slate-700'} px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+              ${isExtra ? 'EXTRAJORNADA' : (esc.tipo || 'PLANTÃO')} • ${esc.turno || horarioGrupo}
+            </span>
           </div>
 
           <div class="flex items-center justify-between gap-2">
@@ -681,14 +601,6 @@ window.abrirModalDetalhesPlantao = function(dataIso, scope = 'CRF') {
   modal.classList.remove('hidden');
 };
 
-window.abrirModalDetalhesTurno = function(titulo, horario, idsString) {
-  const ids = idsString.split(',');
-  const primeiraEsc = (appState.escalas || []).find(e => ids.includes(e.id));
-  if (primeiraEsc) {
-    window.abrirModalDetalhesPlantao(primeiraEsc.data, primeiraEsc.scope || 'CRF');
-  }
-};
-
 window.fecharModalDetalhesPlantao = function() {
   document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
 };
@@ -704,9 +616,9 @@ function criarModalDetalhesPlantaoDOM() {
     <div id="modal-detalhes-plantao" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 flex flex-col border-t-4 border-pcpr-gold">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <div class="flex items-center gap-2">
-            <span class="text-lg">📅</span>
-            <h3 class="font-bold text-slate-900 text-sm">Detalhes da Escala de Plantão</h3>
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm flex items-center gap-1.5">📅 Detalhes do Turno</h3>
+            <p id="modal-detalhes-titulo-sub" class="text-[11px] text-slate-500 font-medium"></p>
           </div>
           <button type="button" onclick="window.fecharModalDetalhesPlantao()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
