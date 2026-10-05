@@ -1,8 +1,6 @@
 // src/db.js
 import { appState } from './state.js';
 
-const db = firebase.firestore();
-
 /**
  * Retorna as datas de Ontem, Hoje e Amanhã em formato ISO (YYYY-MM-DD)
  */
@@ -28,21 +26,21 @@ function obterDatasOperacionaisIso() {
  */
 export async function loadAllDataFromFirestore() {
   try {
+    const db = firebase.firestore();
+
     const statusEl = document.getElementById('app-status');
     if (statusEl && !appState.currentUser) {
       statusEl.innerHTML = `<span class="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold animate-pulse">Carregando dados...</span>`;
     }
 
-    const isAutenticado = !!(firebase.auth() && firebase.auth().currentUser);
+    const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
 
-    // Carregamento direto e seguro das coleções
-    const [snapServidores, snapDelegacias, snapEscalas, snapFeriados, snapSdps] = await Promise.all([
-      db.collection('servidores').get().catch(() => ({ docs: [] })),
-      db.collection('delegacias').get().catch(() => ({ docs: [] })),
-      db.collection('escalas').get().catch(() => ({ docs: [] })),
-      db.collection('feriados').get().catch(() => ({ docs: [] })),
-      db.collection('sdps').get().catch(() => ({ docs: [] }))
-    ]);
+    // Busca direta das coleções no Firestore
+    const snapDelegacias = await db.collection('delegacias').get();
+    const snapEscalas = await db.collection('escalas').get();
+    const snapFeriados = await db.collection('feriados').get();
+    const snapSdps = await db.collection('sdps').get();
+    const snapServidores = await db.collection('servidores').get();
 
     // 1. Delegacias
     appState.delegacias = snapDelegacias.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -56,20 +54,20 @@ export async function loadAllDataFromFirestore() {
 
     // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
     const datasOperacionais = obterDatasOperacionaisIso();
-    const idsPlantoinstasOperacionais = new Set();
+    const idsPlantonistasOperacionais = new Set();
 
     appState.escalas.forEach(e => {
       if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
-        idsPlantoinstasOperacionais.add(e.servidorId);
+        idsPlantonistasOperacionais.add(e.servidorId);
       }
     });
 
-    // 4. Servidores (Sanitização Apenas do Telefone, preservando Nome/Cargo/Unidade intactos)
+    // 4. Servidores (Sanitização Apenas do Telefone, mantendo Nomes, Cargos e Lotações)
     appState.servidores = snapServidores.docs.map(doc => {
       const data = doc.data();
       const srvId = doc.id;
 
-      const podeExibirTelefone = isAutenticado || idsPlantoinstasOperacionais.has(srvId);
+      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(srvId);
 
       return {
         id: srvId,
@@ -100,6 +98,7 @@ export async function loadAllDataFromFirestore() {
  */
 export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
   try {
+    const db = firebase.firestore();
     const docRef = db.collection(collectionName).doc(docId);
 
     if (isDelete) {
