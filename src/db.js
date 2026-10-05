@@ -4,9 +4,27 @@ import { appState } from './state.js';
 const db = firebase.firestore();
 
 /**
+ * Retorna as datas de Ontem, Hoje e Amanhã em formato ISO (YYYY-MM-DD)
+ */
+function obterDatasOperacionaisIso() {
+  const hoje = new Date();
+  const ontem = new Date(hoje);
+  ontem.setDate(hoje.getDate() - 1);
+  const amanha = new Date(hoje);
+  amanha.setDate(hoje.getDate() + 1);
+
+  const formatISO = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  return new Set([formatISO(ontem), formatISO(hoje), formatISO(amanha)]);
+}
+
+/**
  * Carrega todos os documentos do Firestore para o estado global appState.
- * Sanitiza telefones de visitantes, MAS MANTÉM VISÍVEIS os contatos de quem 
- * está escalado no dia anterior, dia atual ou dia seguinte.
  */
 export async function loadAllDataFromFirestore() {
   try {
@@ -15,10 +33,9 @@ export async function loadAllDataFromFirestore() {
       statusEl.innerHTML = `<span class="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold animate-pulse">Carregando dados...</span>`;
     }
 
-    // 1. Verifica autenticação do usuário
     const isAutenticado = !!(firebase.auth() && firebase.auth().currentUser);
 
-    // 2. Carregamento paralelo das coleções
+    // Carregamento direto e seguro das coleções
     const [snapServidores, snapDelegacias, snapEscalas, snapFeriados, snapSdps] = await Promise.all([
       db.collection('servidores').get().catch(() => ({ docs: [] })),
       db.collection('delegacias').get().catch(() => ({ docs: [] })),
@@ -27,58 +44,51 @@ export async function loadAllDataFromFirestore() {
       db.collection('sdps').get().catch(() => ({ docs: [] }))
     ]);
 
-    const escalasDocs = snapEscalas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // 1. Delegacias
+    appState.delegacias = snapDelegacias.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // 3. Mapeia as datas operacionais: Ontem, Hoje e Amanhã (formato YYYY-MM-DD)
-    const hojeObj = new Date();
-    const ontemObj = new Date(hojeObj);
-    ontemObj.setDate(hojeObj.getDate() - 1);
-    const amanhaObj = new Date(hojeObj);
-    amanhaObj.setDate(hojeObj.getDate() + 1);
+    // 2. Escalas
+    appState.escalas = snapEscalas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const formatISO = (d) => d.toISOString().split('T')[0];
-    const datasVisiveisSet = new Set([formatISO(ontemObj), formatISO(hojeObj), formatISO(amanhaObj)]);
+    // 3. Feriados e SDPs
+    appState.feriados = snapFeriados.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    appState.sdps = snapSdps.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // 4. Identifica o ID de todos os policiais escalados nessas datas operacionais
-    const idsServidoresComAcessoAberto = new Set();
-    escalasDocs.forEach(esc => {
-      if (esc.data && datasVisiveisSet.has(esc.data) && esc.servidorId) {
-        idsServidoresComAcessoAberto.add(esc.servidorId);
+    // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
+    const datasOperacionais = obterDatasOperacionaisIso();
+    const idsPlantoinstasOperacionais = new Set();
+
+    appState.escalas.forEach(e => {
+      if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
+        idsPlantoinstasOperacionais.add(e.servidorId);
       }
     });
 
-    // 5. SANITIZAÇÃO INTELIGENTE DE SERVIDORES
+    // 4. Servidores (Sanitização Apenas do Telefone, preservando Nome/Cargo/Unidade intactos)
     appState.servidores = snapServidores.docs.map(doc => {
       const data = doc.data();
       const srvId = doc.id;
 
-      // Permite o telefone se:
-      // a) O usuário estiver logado no sistema (isAutenticado), OU
-      // b) O policial estiver escalado ontem, hoje ou amanhã (idsServidoresComAcessoAberto)
-      const podeExibirTelefone = isAutenticado || idsServidoresComAcessoAberto.has(srvId);
+      const podeExibirTelefone = isAutenticado || idsPlantoinstasOperacionais.has(srvId);
 
       return {
         id: srvId,
         ...data,
-        nome: data.nome || '',
+        nome: data.nome || 'Servidor',
         cargo: data.cargo || 'APJ',
-        delegaciaId: data.delegaciaId || null,
+        delegaciaId: data.delegaciaId || '',
         delegaciaNome: data.delegaciaNome || '',
         subdivisao: data.subdivisao || '',
         telefone: podeExibirTelefone ? (data.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
       };
     });
 
-    appState.delegacias = snapDelegacias.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    appState.escalas = escalasDocs;
-    appState.feriados = snapFeriados.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    appState.sdps = snapSdps.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
+    // Define uma delegacia padrão inicial se houver cadastradas
     if (appState.delegacias.length > 0 && !appState.selectedDelegaciaId) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    console.log(`Dados carregados com sucesso! (Telefones liberados para plantonistas de Ontem/Hoje/Amanhã)`);
+    console.log(`Carregamento concluído: ${appState.servidores.length} servidores e ${appState.delegacias.length} delegacias ativas.`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
