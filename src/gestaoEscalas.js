@@ -196,7 +196,7 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS (COM GERAÇÃO EM LOTE E FILTROS COMPLETOS)
+// 2. MÓDULO GESTÃO POR DELEGACIAS (COM GERAÇÃO EM LOTE RECONECTADA AO GERADORLOTE.JS)
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -227,7 +227,8 @@ export function renderGestaoDelegaciasModule(containerId) {
           <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Lançamento Local
           </button>
-          <button onclick="window.gerarEscalaLoteDelegacia()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+          <!-- CHAMA O GERADORLOTE.JS OFICIAL -->
+          <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar em Lote
           </button>
           <button onclick="window.exportarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
@@ -242,7 +243,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtros com Busca Letra a Letra, Mês/Ano e Modalidade -->
+      <!-- Barra de Filtros -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Unidade Alvo:</label>
@@ -289,7 +290,7 @@ export function renderGestaoDelegaciasModule(containerId) {
       </div>
     </div>
 
-    <!-- Tabela Com Ordenação de Colunas -->
+    <!-- Tabela Com Ordenação -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -323,70 +324,6 @@ export function renderGestaoDelegaciasModule(containerId) {
   window.renderTabelaGestaoDelCorpo();
 }
 
-/**
- * Função de geração em lote para a escala local da Delegacia selecionada
- */
-window.gerarEscalaLoteDelegacia = async function() {
-  const delId = document.getElementById('gestao-del-select-unidade')?.value || appState.selectedDelegaciaId;
-  const mes = gestaoDelTabelaState.mes;
-  const ano = gestaoDelTabelaState.ano;
-
-  if (!delId) {
-    alert("Selecione uma delegacia/unidade para gerar a escala.");
-    return;
-  }
-
-  const delegaciaObj = (appState.delegacias || []).find(d => d.id === delId);
-  const nomeDel = delegaciaObj ? delegaciaObj.nome : 'Unidade Selecionada';
-
-  const confirmacao = confirm(
-    `Deseja gerar automaticamente a escala em lote para:\n` +
-    `• Unidade: ${nomeDel}\n` +
-    `• Período: ${mes + 1}/${ano}\n\n` +
-    `Atenção: Os plantões serão distribuídos entre o efetivo cadastrado nesta unidade.`
-  );
-
-  if (!confirmacao) return;
-
-  const totalDias = new Date(ano, mes + 1, 0).getDate();
-  const policiaisDel = (appState.servidores || []).filter(s => s.delegaciaId === delId);
-
-  if (policiaisDel.length === 0) {
-    alert(`Nenhum policial cadastrado para a unidade ${nomeDel}.`);
-    return;
-  }
-
-  let gerados = 0;
-  for (let day = 1; day <= totalDias; day++) {
-    const dataIso = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
-    const escalaId = `esc_del_${delId}_${dataIso}`;
-    const novaescala = {
-      id: escalaId,
-      scope: 'DELEGACIA',
-      delegaciaId: delId,
-      data: dataIso,
-      tipo: 'PLANTÃO',
-      turno: '24h',
-      servidorId: policiaisDel[(day - 1) % policiaisDel.length].id,
-      criadoEm: new Date().toISOString()
-    };
-
-    await syncDocToFirestore('escalas', escalaId, novaescala);
-    
-    if (!appState.escalas) appState.escalas = [];
-    const idx = appState.escalas.findIndex(e => e.id === escalaId);
-    if (idx >= 0) appState.escalas[idx] = novaescala;
-    else appState.escalas.push(novaescala);
-
-    gerados++;
-  }
-
-  alert(`Escala em lote gerada com sucesso para ${nomeDel}! Total de ${gerados} dias criados.`);
-  renderGestaoDelegaciasModule('gestao-delegacias-container');
-  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-};
-
 window.atualizarFiltrosGestaoDelList = function() {
   gestaoDelTabelaState.busca = document.getElementById('gest-del-busca')?.value?.toLowerCase().trim() || '';
   gestaoDelTabelaState.modalidade = document.getElementById('gest-del-modalidade')?.value || 'TODAS';
@@ -407,7 +344,7 @@ window.ordenarTabelaGestaoDel = function(coluna) {
   ['DATA', 'POLICIAL', 'CARGO', 'VTR', 'TURNO', 'MODALIDADE'].forEach(col => {
     const el = document.getElementById(`sort-del-icon-${col}`);
     if (el) {
-      el.innerText = (col === gestaoDelTabelaState.sortColuna) ? (gestaoDelTabelaState.sortDirecao === 'ASC' ? '⬆️' : '⬇️') : '';
+      el.innerText = (col === gestaoDelTabelaState.sortColuna) ? (gestaoDelTabelaState.sortDirecao === 'ASC' ? '⬆️️' : '⬇️') : '';
     }
   });
 
