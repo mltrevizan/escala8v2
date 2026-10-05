@@ -24,7 +24,6 @@ export function initAuthModule() {
 
   firebase.auth().onAuthStateChanged(async (user) => {
     if (user) {
-      // 1. Recarrega os dados completos (sem sanitização) ao realizar login
       await loadAllDataFromFirestore();
 
       const srv = (appState.servidores || []).find(s => {
@@ -43,14 +42,12 @@ export function initAuthModule() {
       };
     } else {
       appState.currentUser = null;
-      // 2. Se deslogou, sanitiza recarregando a base pública
       await loadAllDataFromFirestore();
     }
 
     renderUserStatusHeader();
     applyUIPermissions();
     
-    // Recarrega o calendário visível
     if (window.renderCalendarGrid) {
       window.renderCalendarGrid(
         appState.activeTab === 'crf' ? 'calendar-crf-container' : 'calendar-delegacia-container', 
@@ -217,7 +214,6 @@ window.executarLoginFirebase = async function(e) {
     const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
 
-    // EXIGE ALTERAÇÃO DE SENHA SE AINDA USAR A SENHA PADRÃO
     if (password === 'Central123') {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
@@ -252,9 +248,6 @@ window.fazerLogoutApp = async function() {
   }
 };
 
-// =========================================================================
-// MODAL DE TROCA OBRIGATÓRIA DE SENHA PADRÃO (COM GARANTIA DE FECHAMENTO)
-// =========================================================================
 let userParaTrocaSenha = null;
 
 window.abrirModalTrocarSenhaObrigatoria = function(user) {
@@ -272,15 +265,11 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
   modal.classList.remove('hidden');
 };
 
-/**
- * Cancela/Fecha a troca obrigatória de senha e desconecta o usuário por segurança.
- */
 window.cancelarTrocaSenhaObrigatoria = async function() {
   const confirma = confirm("A alteração da senha padrão é obrigatória para acessar o sistema. Se cancelar, sua sessão será encerrada. Deseja sair?");
   
   if (confirma) {
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
-    // Encerra a sessão imediatamente para impedir o uso da conta sem alterar a senha
     await firebase.auth().signOut();
     appState.currentUser = null;
     
@@ -338,6 +327,8 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
 };
 
 function criarModalLoginDOM() {
+  document.getElementById('modal-login-app')?.remove();
+
   const modalHTML = `
     <div id="modal-login-app" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 flex flex-col border-t-4 border-pcpr-gold">
@@ -383,11 +374,12 @@ function criarModalLoginDOM() {
 }
 
 function criarModalTrocarSenhaDOM() {
+  document.getElementById('modal-trocar-senha-obrigatoria')?.remove();
+
   const modalHTML = `
     <div id="modal-trocar-senha-obrigatoria" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans" onclick="if(event.target === this) window.cancelarTrocaSenhaObrigatoria()">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 flex flex-col border-t-4 border-amber-500 relative">
         
-        <!-- Botão de Fecho (X) que força o Logout -->
         <button type="button" onclick="window.cancelarTrocaSenhaObrigatoria()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer" title="Cancelar e Sair">
           ✕
         </button>
