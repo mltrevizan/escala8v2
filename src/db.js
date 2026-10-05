@@ -35,22 +35,32 @@ export async function loadAllDataFromFirestore() {
 
     const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
 
-    // Busca direta das coleções no Firestore
-    const snapDelegacias = await db.collection('delegacias').get();
-    const snapEscalas = await db.collection('escalas').get();
-    const snapFeriados = await db.collection('feriados').get();
-    const snapSdps = await db.collection('sdps').get();
-    const snapServidores = await db.collection('servidores').get();
+    // Função auxiliar para buscar coleção de forma segura sem estourar exceção global
+    const buscarColecaoSegura = async (nomeColecao) => {
+      try {
+        const snap = await db.collection(nomeColecao).get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (err) {
+        console.warn(`[Aviso Firestore] Acesso restrito ou sem permissão para ler '${nomeColecao}':`, err.message);
+        return [];
+      }
+    };
 
-    // 1. Delegacias
-    appState.delegacias = snapDelegacias.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Buscas paralelas seguras (Incluindo a coleção 'ferias')
+    const [delegaciasData, escalasData, feriadosData, sdpsData, servidoresData, feriasData] = await Promise.all([
+      buscarColecaoSegura('delegacias'),
+      buscarColecaoSegura('escalas'),
+      buscarColecaoSegura('feriados'),
+      buscarColecaoSegura('sdps'),
+      buscarColecaoSegura('servidores'),
+      buscarColecaoSegura('ferias')
+    ]);
 
-    // 2. Escalas
-    appState.escalas = snapEscalas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    // 3. Feriados e SDPs
-    appState.feriados = snapFeriados.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    appState.sdps = snapSdps.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    appState.delegacias = delegaciasData;
+    appState.escalas = escalasData;
+    appState.feriados = feriadosData;
+    appState.sdps = sdpsData;
+    appState.ferias = feriasData; // Mapeamento essencial para a verificação de afastamentos
 
     // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
     const datasOperacionais = obterDatasOperacionaisIso();
@@ -62,31 +72,26 @@ export async function loadAllDataFromFirestore() {
       }
     });
 
-    // 4. Servidores (Sanitização Apenas do Telefone, mantendo Nomes, Cargos e Lotações)
-    appState.servidores = snapServidores.docs.map(doc => {
-      const data = doc.data();
-      const srvId = doc.id;
-
-      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(srvId);
+    // Servidores (Sanitização Apenas do Telefone, mantendo Nomes, Cargos e Lotações)
+    appState.servidores = servidoresData.map(srv => {
+      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(srv.id);
 
       return {
-        id: srvId,
-        ...data,
-        nome: data.nome || 'Servidor',
-        cargo: data.cargo || 'APJ',
-        delegaciaId: data.delegaciaId || '',
-        delegaciaNome: data.delegaciaNome || '',
-        subdivisao: data.subdivisao || '',
-        telefone: podeExibirTelefone ? (data.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
+        ...srv,
+        nome: srv.nome || 'Servidor',
+        cargo: srv.cargo || 'APJ',
+        delegaciaId: srv.delegaciaId || '',
+        delegaciaNome: srv.delegaciaNome || '',
+        subdivisao: srv.subdivisao || '',
+        telefone: podeExibirTelefone ? (srv.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
       };
     });
 
-    // Define uma delegacia padrão inicial se houver cadastradas
     if (appState.delegacias.length > 0 && !appState.selectedDelegaciaId) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    console.log(`Carregamento concluído: ${appState.servidores.length} servidores e ${appState.delegacias.length} delegacias ativas.`);
+    console.log(`Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias e ${appState.ferias.length} registros de férias.`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
