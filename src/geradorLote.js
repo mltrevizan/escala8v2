@@ -22,13 +22,11 @@ let geradorState = {
 function normalizarDataParaIso(dataInput) {
   if (!dataInput) return '';
   if (typeof dataInput === 'string') {
-    // Pega apenas a parte da data YYYY-MM-DD se vier em formato ISO completo
     const apenasData = dataInput.split('T')[0];
     if (apenasData.includes('-')) {
       const parts = apenasData.split('-');
       if (parts[0].length === 4) return apenasData; // YYYY-MM-DD
     }
-    // Tratamento para data em formato BR (DD/MM/YYYY)
     if (apenasData.includes('/')) {
       const parts = apenasData.split('/');
       if (parts.length === 3) {
@@ -37,7 +35,6 @@ function normalizarDataParaIso(dataInput) {
     }
   }
   
-  // Se for objeto Date
   if (dataInput instanceof Date && !isNaN(dataInput)) {
     const yyyy = dataInput.getFullYear();
     const mm = String(dataInput.getMonth() + 1).padStart(2, '0');
@@ -57,7 +54,6 @@ export function estaDeFerias(servidorId, dataEscalaIso) {
   const dataAlvoIso = normalizarDataParaIso(dataEscalaIso);
 
   return appState.ferias.some(f => {
-    // Garante compatibilidade do campo ID do servidor
     const matchServidor = (f.servidorId === servidorId || f.policialId === servidorId);
     if (!matchServidor) return false;
 
@@ -66,7 +62,6 @@ export function estaDeFerias(servidorId, dataEscalaIso) {
 
     if (!dataInicioIso || !dataFimIso) return false;
 
-    // Comparação precisa YYYY-MM-DD
     return dataAlvoIso >= dataInicioIso && dataAlvoIso <= dataFimIso;
   });
 }
@@ -505,7 +500,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
-// EXECUÇÃO CORRIGIDA DO GERADOR EM LOTE
+// EXECUÇÃO CORRIGIDA DO GERADOR EM LOTE COM TRAVA ESTRITA DE DATA FIM
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -541,7 +536,6 @@ window.executarGeradorLote = async function(e) {
     return;
   }
 
-  // 1. MEMORIZA CONFIGURAÇÃO NA DELEGACIA
   if (delObj) {
     delObj.geradorConfig = {
       modo: geradorState.modo,
@@ -551,7 +545,6 @@ window.executarGeradorLote = async function(e) {
     await syncDocToFirestore('delegacias', delObj.id, delObj);
   }
 
-  // 2. FILTRA OS DIAS VÁLIDOS NO INTERVALO
   const diasIntervalo = gerarArrayDatasISO(dataInicio, dataFim);
   const diasValidos = diasIntervalo.filter(dtStr => {
     const parts = dtStr.split('-').map(Number);
@@ -586,7 +579,6 @@ window.executarGeradorLote = async function(e) {
   let filaIndex = 0;
   const conflitosDetectados = [];
 
-  // CORREÇÃO CRÍTICA DO SALTO DE DIAS: O LAÇO AVANÇA CONFORME A DURAÇÃO DO TURNO
   let idxDia = 0;
   while (idxDia < diasValidos.length) {
     const dtIso = diasValidos[idxDia];
@@ -597,6 +589,9 @@ window.executarGeradorLote = async function(e) {
       filaIndex++;
 
       for (const dataSubsequent of datasDoTurno) {
+        // CORREÇÃO CRÍTICA: Bloqueia qualquer lançamento que ultrapasse a dataFim selecionada
+        if (dataSubsequent > dataFim) continue;
+
         const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const novaEscala = {
           id: newEscId,
@@ -621,6 +616,9 @@ window.executarGeradorLote = async function(e) {
 
       for (const sId of equipeAtiva.membros) {
         for (const dataSubsequent of datasDoTurno) {
+          // CORREÇÃO CRÍTICA: Bloqueia qualquer lançamento de equipe que ultrapasse a dataFim selecionada
+          if (dataSubsequent > dataFim) continue;
+
           const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
           const novaEscala = {
             id: newEscId,
@@ -643,7 +641,6 @@ window.executarGeradorLote = async function(e) {
       }
     }
 
-    // SALTA O NÚMERO DE DIAS DO TURNO PARA A PRÓXIMA EQUIPE/POLICIAL
     idxDia += duracaoDiasTurno;
   }
 
@@ -728,6 +725,9 @@ function formatarDataBr(dataIso) {
 }
 
 function criarModalGeradorLoteDOM() {
+  // Limpeza de elemento duplicado antes da criação
+  document.getElementById('modal-gerador-lote')?.remove();
+
   const modalHTML = `
     <div id="modal-gerador-lote" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
