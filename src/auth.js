@@ -21,32 +21,42 @@ export function initAuthModule() {
     return;
   }
 
-  firebase.auth().onAuthStateChanged(async (user) => {
-    if (user) {
-      const srv = (appState.servidores || []).find(s => {
-        const emailSrv = obterEmailAutenticacao(s);
-        return emailSrv === user.email.toLowerCase();
-      });
+firebase.auth().onAuthStateChanged(async (user) => {
+  if (user) {
+    // 1. Recarrega os dados sem a sanitização
+    await loadAllDataFromFirestore();
 
-      appState.currentUser = {
-        uid: user.uid,
-        email: user.email,
-        nome: srv ? srv.nome : (user.displayName || 'ADMINISTRADOR DO SISTEMA'),
-        cargo: srv ? srv.cargo : 'DELEGADO',
-        perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
-        delegaciaId: srv ? srv.delegaciaId : null,
-        subdivisao: srv ? srv.subdivisao : '8ª SDP'
-      };
-    } else {
-      appState.currentUser = null;
-    }
+    const srv = (appState.servidores || []).find(s => {
+      const emailSrv = obterEmailAutenticacao(s);
+      return emailSrv === user.email.toLowerCase();
+    });
 
-    renderUserStatusHeader();
-    applyUIPermissions();
-  });
+    appState.currentUser = {
+      uid: user.uid,
+      email: user.email,
+      nome: srv ? srv.nome : (user.displayName || 'ADMINISTRADOR DO SISTEMA'),
+      cargo: srv ? srv.cargo : 'DELEGADO',
+      perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
+      delegaciaId: srv ? srv.delegaciaId : null,
+      subdivisao: srv ? srv.subdivisao : '8ª SDP'
+    };
+  } else {
+    appState.currentUser = null;
+    // 2. Se deslogou, sanitiza recarregando a base pública
+    await loadAllDataFromFirestore();
+  }
 
   renderUserStatusHeader();
-}
+  applyUIPermissions();
+  
+  // Recarrega o calendário visível
+  if (window.renderCalendarGrid) {
+    window.renderCalendarGrid(
+      appState.activeTab === 'crf' ? 'calendar-crf-container' : 'calendar-delegacia-container', 
+      appState.activeTab === 'crf' ? 'CRF' : 'DELEGACIA'
+    );
+  }
+});
 
 export function renderUserStatusHeader() {
   const container = document.getElementById('app-status');
