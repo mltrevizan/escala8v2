@@ -78,7 +78,7 @@ export async function loadAllDataFromFirestore() {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    console.log(`Dados carregados com sucesso! (Telefones liberto para plantonistas de Ontem/Hoje/Amanhã)`);
+    console.log(`Dados carregados com sucesso! (Telefones liberados para plantonistas de Ontem/Hoje/Amanhã)`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
@@ -100,4 +100,7 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
       console.log(`Documento ${docId} salvo/atualizado na coleção ${collectionName}.`);
     }
   } catch (error) {
-    console.error(`Erro ao
+    console.error(`Erro ao sincronizar documento na coleção ${collectionName}:`, error);
+    throw error;
+  }
+}
