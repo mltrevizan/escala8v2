@@ -16,6 +16,61 @@ let geradorState = {
   filtroCargo: 'TODOS'
 };
 
+/**
+ * Normaliza qualquer formato de data (ISO, Timestamp ou YYYY-MM-DD) para YYYY-MM-DD limpo
+ */
+function normalizarDataParaIso(dataInput) {
+  if (!dataInput) return '';
+  if (typeof dataInput === 'string') {
+    // Pega apenas a parte da data YYYY-MM-DD se vier em formato ISO completo
+    const apenasData = dataInput.split('T')[0];
+    if (apenasData.includes('-')) {
+      const parts = apenasData.split('-');
+      if (parts[0].length === 4) return apenasData; // YYYY-MM-DD
+    }
+    // Tratamento para data em formato BR (DD/MM/YYYY)
+    if (apenasData.includes('/')) {
+      const parts = apenasData.split('/');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+  }
+  
+  // Se for objeto Date
+  if (dataInput instanceof Date && !isNaN(dataInput)) {
+    const yyyy = dataInput.getFullYear();
+    const mm = String(dataInput.getMonth() + 1).padStart(2, '0');
+    const dd = String(dataInput.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return String(dataInput);
+}
+
+/**
+ * Verifica de forma rigorosa se o policial está em gozo de férias ou licença em uma determinada data
+ */
+export function estaDeFerias(servidorId, dataEscalaIso) {
+  if (!servidorId || !dataEscalaIso || !appState.ferias) return false;
+
+  const dataAlvoIso = normalizarDataParaIso(dataEscalaIso);
+
+  return appState.ferias.some(f => {
+    // Garante compatibilidade do campo ID do servidor
+    const matchServidor = (f.servidorId === servidorId || f.policialId === servidorId);
+    if (!matchServidor) return false;
+
+    const dataInicioIso = normalizarDataParaIso(f.dataInicio || f.inicio);
+    const dataFimIso = normalizarDataParaIso(f.dataFim || f.fim);
+
+    if (!dataInicioIso || !dataFimIso) return false;
+
+    // Comparação precisa YYYY-MM-DD
+    return dataAlvoIso >= dataInicioIso && dataAlvoIso <= dataFimIso;
+  });
+}
+
 export function initGeradorLoteModule() {
   criarModalGeradorLoteDOM();
 }
@@ -504,7 +559,8 @@ window.executarGeradorLote = async function(e) {
     const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6;
 
     const isFeriadoValido = (appState.feriados || []).some(f => {
-      if (f.data !== dtStr) return false;
+      const fDataIso = normalizarDataParaIso(f.data);
+      if (fDataIso !== dtStr) return false;
       if (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL') return true;
 
       if (f.tipo === 'MUNICIPAL') {
@@ -624,10 +680,7 @@ function verificarECatalogarConflito(servidorId, dataIso, tipoModalidade, listaC
   const srv = (appState.servidores || []).find(s => s.id === servidorId);
   if (!srv) return;
 
-  const temAfastamento = (appState.ferias || []).some(f => {
-    if (f.servidorId !== servidorId) return false;
-    return dataIso >= f.dataInicio && dataIso <= f.dataFim;
-  });
+  const temAfastamento = estaDeFerias(servidorId, dataIso);
 
   if (temAfastamento) {
     listaConflitos.push({
