@@ -6,6 +6,7 @@ import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEsc
 import { renderServidoresTable } from './servidores.js';
 import { renderDelegaciasCards } from './delegacias.js';
 import { initAuthModule } from './auth.js';
+import { initGeradorLoteModule } from './geradorLote.js';
 
 /**
  * Troca de aba ativa
@@ -75,7 +76,6 @@ window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
     return;
   }
 
-  // Trava rigorosa: Apenas escalas do âmbito da CRF com o tipo 'SDP'
   const escalasSdpCrf = (appState.escalas || []).filter(e => 
     e.scope === 'CRF' && (e.tipo === 'SDP' || e.tipo === 'sdp')
   );
@@ -97,8 +97,6 @@ window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
   let corrigidos = 0;
   let erros = 0;
 
-  console.log(`🚀 Iniciando correção de ${escalasSdpCrf.length} registros da CRF...`);
-
   for (const escala of escalasSdpCrf) {
     try {
       escala.tipo = 'EXTRAJORNADA';
@@ -116,7 +114,6 @@ window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
     `• Falhas: ${erros}`
   );
 
-  // Recarrega a visualização ativa se for a CRF
   if (window.renderCalendarGrid && appState.activeTab === 'crf') {
     window.renderCalendarGrid('calendar-crf-container', 'CRF');
   }
@@ -202,7 +199,12 @@ async function initApp() {
     // 2. Inicializa o observador do Firebase Auth e o botão/modal de Login
     initAuthModule();
 
-    // 3. Define a aba padrão inicial
+    // 3. Inicializa o DOM do Gerador em Lote Completo
+    if (typeof initGeradorLoteModule === 'function') {
+      initGeradorLoteModule();
+    }
+
+    // 4. Define a aba padrão inicial
     window.switchTab('crf');
 
   } catch (err) {
