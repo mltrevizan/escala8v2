@@ -246,7 +246,7 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 }
 
 // =========================================================================
-// 5. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE
+// 5. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE E FUNÇÕES LEGADAS DA API
 // =========================================================================
 
 export function podeVisualizarTelefoneServidor() {
@@ -255,8 +255,56 @@ export function podeVisualizarTelefoneServidor() {
 }
 
 /**
- * Alias de compatibilidade para o calendar.js
+ * Função genérica de checagem de permissão exigida pelo calendar.js
+ */
+export function hasPermission(permissionName, targetDelegaciaId = null) {
+  const perfil = getPerfilUsuarioLogado();
+  if (perfil === PERFIS.ADMINISTRADOR) return true;
+
+  switch (permissionName) {
+    case 'EDIT_DELEGACIA_SCHEDULE':
+    case 'EDIT_SCHEDULE':
+      return podeModificarEscalaDelegacia(targetDelegaciaId || appState.selectedDelegaciaId);
+
+    case 'EDIT_CRF_SCHEDULE':
+      return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
+
+    case 'VIEW_PHONE':
+    case 'VIEW_PHONE_NUMBER':
+      return podeVisualizarTelefoneServidor();
+
+    case 'MANAGE_SERVIDORES':
+      return podeAcessarAbaServidores();
+
+    case 'MANAGE_FERIAS':
+      return podeAcessarAbaFérias();
+
+    case 'MANAGE_FERIADOS':
+      return podeAcessarAbaFeriados();
+
+    case 'MANAGE_DELEGACIAS':
+      return podeAcessarAbaDelegacias();
+
+    default:
+      return perfil !== PERFIS.VISUALIZADOR;
+  }
+}
+
+/**
+ * Aliases de compatibilidade legada exigidos pelo calendar.js e outros módulos
  */
 export function canViewPhoneForDate() {
   return podeVisualizarTelefoneServidor();
+}
+
+export function canEditSchedule(delegaciaId = null) {
+  return podeModificarEscalaDelegacia(delegaciaId || appState.selectedDelegaciaId);
+}
+
+export function canEditCRF() {
+  return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
+}
+
+export function isAdmin() {
+  return getPerfilUsuarioLogado() === PERFIS.ADMINISTRADOR;
 }
