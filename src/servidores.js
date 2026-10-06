@@ -16,7 +16,7 @@ export function renderServidoresTable(containerId) {
 
   let optsDelegacias = `<option value="TODAS">Todas as Delegacias</option>`;
   (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
-    optsDelegacias += `<option value="${d.id}" ${(!isAdminOrCoord && d.id === userDelId) ? 'selected' : ''}>${d.nome}</option>`;
+    optsDelegacias += `<option value="${d.id}" ${(!isAdminOrCoord && d.id === userDelId) ? 'selected' : (servidoresFiltros.delegaciaId === d.id ? 'selected' : '')}>${d.nome}</option>`;
   });
 
   container.innerHTML = `
@@ -33,16 +33,16 @@ export function renderServidoresTable(containerId) {
         </div>
       </div>
 
-      <!-- Filtros -->
+      <!-- Filtros com injeção do valor da memória -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
         <div>
-          <input type="text" id="srv-filtro-busca" oninput="window.filtrarTabelaServidores()" placeholder="🔍 Nome, cargo ou login..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          <input type="text" id="srv-filtro-busca" value="${servidoresFiltros.busca || ''}" oninput="window.filtrarTabelaServidores()" placeholder="🔍 Nome, cargo ou login..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
         <div>
           <select id="srv-filtro-cargo" onchange="window.filtrarTabelaServidores()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <option value="TODOS">Todos os Cargos</option>
-            <option value="DELEGADO">DELEGADO DE POLÍCIA</option>
-            <option value="APJ">APJ (AGENTE DE POLÍCIA JUDICIÁRIA)</option>
+            <option value="TODOS" ${servidoresFiltros.cargo === 'TODOS' ? 'selected' : ''}>Todos os Cargos</option>
+            <option value="DELEGADO" ${servidoresFiltros.cargo === 'DELEGADO' ? 'selected' : ''}>DELEGADO DE POLÍCIA</option>
+            <option value="APJ" ${servidoresFiltros.cargo === 'APJ' ? 'selected' : ''}>APJ (AGENTE DE POLÍCIA JUDICIÁRIA)</option>
           </select>
         </div>
         <div>
@@ -96,10 +96,7 @@ window.renderTabelaServidoresCorpo = function() {
   const isAdminOrCoord = ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
 
   let servidoresLista = (appState.servidores || []).filter(srv => {
-    // 1. Oculta a conta do Administrador do Sistema da listagem de servidores
-    if (isProtectedAdminAccount(srv)) {
-      return false;
-    }
+    if (isProtectedAdminAccount(srv)) return false;
 
     const nomeNorm = (srv.nome || '').toLowerCase();
     const cargoNorm = (srv.cargo || '').toLowerCase();
@@ -114,7 +111,6 @@ window.renderTabelaServidoresCorpo = function() {
       if (cargo === 'APJ' && cargoNorm.includes('delegado')) return false;
     }
 
-    // Filtro por delegacia
     if (!isAdminOrCoord && userDelId) {
       if (srv.delegaciaId !== userDelId) return false;
     } else if (delegaciaId !== 'TODAS') {
@@ -168,9 +164,6 @@ window.renderTabelaServidoresCorpo = function() {
   }).join('');
 };
 
-// =========================================================================
-// MODAL CADASTRO / EDIÇÃO DE SERVIDOR
-// =========================================================================
 window.abrirModalServidor = function(srvId = null) {
   let modal = document.getElementById('modal-cadastro-servidor');
   if (!modal) {
@@ -183,14 +176,12 @@ window.abrirModalServidor = function(srvId = null) {
   const userDelId = getCurrentUserDelegaciaId();
   const isAdminOrCoord = ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
 
-  // Preenche opções de permissão permitidas
   const allowedRoles = getAllowedRolesForCreation();
   const selectNivel = document.getElementById('modal-srv-nivel');
   if (selectNivel) {
     selectNivel.innerHTML = allowedRoles.map(r => `<option value="${r}">${r}</option>`).join('');
   }
 
-  // Preenche opções de delegacias
   const selectDel = document.getElementById('modal-srv-delegacia');
   if (selectDel) {
     let opts = (appState.delegacias || []).map(d => 
@@ -200,7 +191,6 @@ window.abrirModalServidor = function(srvId = null) {
     selectDel.disabled = !isAdminOrCoord;
   }
 
-  // Trata o cargo padronizado (DELEGADO ou APJ)
   let cargoPadrao = 'APJ';
   if (srv && (srv.cargo || '').toUpperCase().includes('DELEGADO')) {
     cargoPadrao = 'DELEGADO';
@@ -211,7 +201,6 @@ window.abrirModalServidor = function(srvId = null) {
   document.getElementById('modal-srv-cargo').value = cargoPadrao;
   document.getElementById('modal-srv-telefone').value = srv ? (srv.telefone || '') : '';
 
-  // Oculta/Exibe o container de reset de senha dentro do modal de edição
   const containerReset = document.getElementById('modal-container-btn-reset');
   if (containerReset) {
     if (srvId) containerReset.classList.remove('hidden');
@@ -274,10 +263,8 @@ window.salvarServidorModalSubmit = async function(e) {
   if (idx >= 0) appState.servidores[idx] = novoServidor;
   else appState.servidores.push(novoServidor);
 
-  // 1. Salva dados cadastrais no Firestore
   await syncDocToFirestore('servidores', srvId, novoServidor);
 
-  // 2. Se for um policial NOVO, cadastra a conta no Auth com a senha inicial Central123
   if (isNovo) {
     await criarContaFirebaseAuth(novoServidor, 'Central123');
     alert(`Policial ${nome} cadastrado com sucesso!\n\nSenha Padrão Inicial: Central123`);
@@ -289,9 +276,6 @@ window.salvarServidorModalSubmit = async function(e) {
   renderServidoresTable('servidores-table-container');
 };
 
-/**
- * Função de Reset de Senha individual
- */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
   if (!idUsar) return;
@@ -381,7 +365,6 @@ function criarModalServidorDOM() {
             <input type="text" id="modal-srv-telefone" placeholder="(44) 99999-9999" class="w-full border rounded-xl p-2 bg-slate-50 font-medium text-slate-900">
           </div>
 
-          <!-- Botão de Reset de Senha dentro do modal de edição -->
           <div id="modal-container-btn-reset" class="hidden pt-2 border-t">
             <button type="button" onclick="window.resetarSenhaServidorDirect()" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1">
               🔑 Resetar Senha para o Padrão (Central123)
