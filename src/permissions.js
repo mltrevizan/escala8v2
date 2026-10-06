@@ -254,7 +254,50 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 }
 
 // =========================================================================
-// 5. COMPATIBILIDADE INTEGRAL (INTERFACE / SERVIDORES / CALENDAR / MODALS)
+// 5. APLICAÇÃO DE PERMISSÕES NA INTERFACE (UI)
+// =========================================================================
+
+/**
+ * Atualiza a visibilidade dos elementos e abas da tela conforme as permissões do usuário logado
+ */
+export function applyUIPermissions() {
+  const perfil = getPerfilUsuarioLogado();
+
+  // Mapeamento de abas e visibilidade
+  const abasMap = {
+    'tab-btn-gestao-crf': podeAcessarAbaGestaoCrf(),
+    'tab-btn-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
+    'tab-btn-servidores': podeAcessarAbaServidores(),
+    'tab-btn-ferias': podeAcessarAbaFérias(),
+    'tab-btn-feriados': podeAcessarAbaFeriados(),
+    'tab-btn-delegacias': podeAcessarAbaDelegacias()
+  };
+
+  Object.keys(abasMap).forEach(tabId => {
+    const el = document.getElementById(tabId);
+    if (el) {
+      if (abasMap[tabId]) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    }
+  });
+
+  // Se a aba ativa não puder ser acessada pelo perfil atual, volta para a aba pública de escala por delegacia
+  if (appState.activeTab === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
+    if (window.switchTab) window.switchTab('delegacia');
+  } else if (appState.activeTab === 'gestao-delegacias' && !podeAcessarAbaGestaoDelegacias()) {
+    if (window.switchTab) window.switchTab('delegacia');
+  } else if (appState.activeTab === 'servidores' && !podeAcessarAbaServidores()) {
+    if (window.switchTab) window.switchTab('delegacia');
+  } else if (appState.activeTab === 'delegacias' && !podeAcessarAbaDelegacias()) {
+    if (window.switchTab) window.switchTab('delegacia');
+  }
+}
+
+// =========================================================================
+// 6. COMPATIBILIDADE INTEGRAL (SERVIDORES / CALENDAR / MODALS / AUTH)
 // =========================================================================
 
 export function podeVisualizarTelefoneServidor() {
