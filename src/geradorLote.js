@@ -500,7 +500,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
-// EXECUÇÃO CORRIGIDA DO GERADOR EM LOTE COM TRAVA ESTRITA DE DATA FIM
+// EXECUÇÃO DO GERADOR EM LOTE COM EXTRAPOLAÇÃO PERMITIDA APENAS PARA COMPLETAR O ÚLTIMO CICLO
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -580,6 +580,7 @@ window.executarGeradorLote = async function(e) {
   const conflitosDetectados = [];
 
   let idxDia = 0;
+  // Permite que o loop processe o dia inicial se ele estiver dentro de diasValidos
   while (idxDia < diasValidos.length) {
     const dtIso = diasValidos[idxDia];
     const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
@@ -588,10 +589,8 @@ window.executarGeradorLote = async function(e) {
       const sId = geradorState.policiaisSelecionados[filaIndex % geradorState.policiaisSelecionados.length];
       filaIndex++;
 
+      // Extrapolação controlada: lança todos os dias do turno contínuo, mesmo que ultrapassem a dataFim
       for (const dataSubsequent of datasDoTurno) {
-        // CORREÇÃO CRÍTICA: Bloqueia qualquer lançamento que ultrapasse a dataFim selecionada
-        if (dataSubsequent > dataFim) continue;
-
         const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const novaEscala = {
           id: newEscId,
@@ -615,10 +614,8 @@ window.executarGeradorLote = async function(e) {
       filaIndex++;
 
       for (const sId of equipeAtiva.membros) {
+        // Extrapolação controlada para membros da equipe
         for (const dataSubsequent of datasDoTurno) {
-          // CORREÇÃO CRÍTICA: Bloqueia qualquer lançamento de equipe que ultrapasse a dataFim selecionada
-          if (dataSubsequent > dataFim) continue;
-
           const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
           const novaEscala = {
             id: newEscId,
@@ -725,7 +722,6 @@ function formatarDataBr(dataIso) {
 }
 
 function criarModalGeradorLoteDOM() {
-  // Limpeza de elemento duplicado antes da criação
   document.getElementById('modal-gerador-lote')?.remove();
 
   const modalHTML = `
