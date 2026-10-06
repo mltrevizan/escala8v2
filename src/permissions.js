@@ -254,48 +254,62 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 }
 
 // =========================================================================
-// 5. APLICAÇÃO DE PERMISSÕES NA INTERFACE (UI)
+// 5. APLICAÇÃO E BLOQUEIO RIGOROSO DE INTERFACE (UI)
 // =========================================================================
 
 export function applyUIPermissions() {
   const perfil = getPerfilUsuarioLogado();
 
-  // Ocultar ou exibir botões do menu superior baseado no texto e atributos do botão
-  const navButtons = document.querySelectorAll('button, a, [role="tab"]');
+  // Varredura por seletores diretos de IDs conhecidos das abas do sistema
+  const elementosAbas = [
+    { selector: '#tab-btn-gestao-crf, [data-tab="gestao-crf"]', permitir: podeAcessarAbaGestaoCrf() },
+    { selector: '#tab-btn-gestao-delegacias, [data-tab="gestao-delegacias"]', permitir: podeAcessarAbaGestaoDelegacias() },
+    { selector: '#tab-btn-servidores, [data-tab="servidores"]', permitir: podeAcessarAbaServidores() },
+    { selector: '#tab-btn-ferias, [data-tab="ferias"]', permitir: podeAcessarAbaFérias() },
+    { selector: '#tab-btn-feriados, [data-tab="feriados"]', permitir: podeAcessarAbaFeriados() },
+    { selector: '#tab-btn-delegacias, [data-tab="delegacias"]', permitir: podeAcessarAbaDelegacias() }
+  ];
 
-  navButtons.forEach(btn => {
+  elementosAbas.forEach(item => {
+    const els = document.querySelectorAll(item.selector);
+    els.forEach(el => {
+      if (!item.permitir) {
+        el.style.setProperty('display', 'none', 'important');
+        el.classList.add('hidden');
+      } else {
+        el.style.removeProperty('display');
+        el.classList.remove('hidden');
+      }
+    });
+  });
+
+  // Varredura genérica de botões por texto caso a aba não utilize ID ou atributo data-tab
+  const todosBotoes = document.querySelectorAll('button, a, [role="tab"], .nav-link');
+  todosBotoes.forEach(btn => {
     const txt = (btn.innerText || btn.textContent || '').toLowerCase().trim();
-    const id = (btn.id || '').toLowerCase();
-    const onclickAttr = (btn.getAttribute('onclick') || '').toLowerCase();
 
-    const isGestaoDel = txt.includes('gestão por delegacia') || txt.includes('gestão de delegacia') || id.includes('gestao-delegacia') || onclickAttr.includes('gestao-delegacias');
-    const isDelegacias = (txt === 'delegacias' || txt.includes('aba delegacias') || id === 'tab-btn-delegacias') && !isGestaoDel;
-    const isGestaoCrf = txt.includes('gestão crf') || id.includes('gestao-crf') || onclickAttr.includes('gestao-crf');
-    const isServidores = txt.includes('servidores') || txt.includes('policiais') || id.includes('servidores');
-    const isFerias = txt.includes('férias') || txt.includes('ferias');
-    const isFeriados = txt.includes('feriados');
+    const eAbaDelegacias = (txt === 'delegacias' || txt === 'unidades') && !txt.includes('gestão');
+    const eGestaoDel = txt.includes('gestão por delegacias') || txt.includes('gestão de delegacias');
+    const eGestaoCrf = txt.includes('gestão crf');
+    const eServidores = txt.includes('servidores') || txt.includes('policiais');
 
-    let permitir = true;
+    let autorizar = true;
+    if (eAbaDelegacias) autorizar = podeAcessarAbaDelegacias();
+    else if (eGestaoDel) autorizar = podeAcessarAbaGestaoDelegacias();
+    else if (eGestaoCrf) autorizar = podeAcessarAbaGestaoCrf();
+    else if (eServidores) autorizar = podeAcessarAbaServidores();
 
-    if (isGestaoDel) permitir = podeAcessarAbaGestaoDelegacias();
-    else if (isDelegacias) permitir = podeAcessarAbaDelegacias();
-    else if (isGestaoCrf) permitir = podeAcessarAbaGestaoCrf();
-    else if (isServidores) permitir = podeAcessarAbaServidores();
-    else if (isFerias) permitir = podeAcessarAbaFérias();
-    else if (isFeriados) permitir = podeAcessarAbaFeriados();
-
-    if (!permitir) {
-      btn.style.display = 'none';
+    if (!autorizar) {
+      btn.style.setProperty('display', 'none', 'important');
       btn.classList.add('hidden');
-    } else if (isGestaoDel || isDelegacias || isGestaoCrf || isServidores || isFerias || isFeriados) {
-      btn.style.display = '';
-      btn.classList.remove('hidden');
     }
   });
 
-  // Se o usuário estivesse em uma aba restrita no modo público, força retorno para escala por delegacia
+  // Redirecionamento de segurança para o modo público caso o usuário tente acessar aba restrita
   if (perfil === PERFIS.VISUALIZADOR) {
-    if (['gestao-crf', 'gestao-delegacias', 'servidores', 'delegacias', 'ferias', 'feriados'].includes(appState.activeTab)) {
+    const abasRestritas = ['delegacias', 'gestao-crf', 'gestao-delegacias', 'servidores', 'ferias', 'feriados'];
+    if (abasRestritas.includes(appState.activeTab)) {
+      appState.activeTab = 'delegacia';
       if (typeof window.switchTab === 'function') {
         window.switchTab('delegacia');
       }
@@ -303,15 +317,22 @@ export function applyUIPermissions() {
   }
 }
 
-// Executa a limpeza da interface no momento em que a página e os componentes DOM são carregados
+// Execução automática em múltiplos momentos do ciclo de vida para garantir o ocultamento
+applyUIPermissions();
+
 if (typeof window !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
     applyUIPermissions();
   });
-  // Executa uma segunda checagem em 500ms para pegar menus renderizados dinamicamente
-  setTimeout(() => {
+
+  // Interceptador para garantir re-execução sempre que o DOM sofrer alterações
+  const observer = new MutationObserver(() => {
     applyUIPermissions();
-  }, 500);
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
 }
 
 // =========================================================================
