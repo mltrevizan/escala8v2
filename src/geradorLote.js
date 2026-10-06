@@ -2,10 +2,11 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
+import { getPerfilUsuarioLogado, getDelegaciaIdUsuarioLogado, getSubdivisaoUsuarioLogado, PERFIS } from './permissions.js';
 
 let geradorState = {
   modo: 'INDIVIDUAL',
-  vtrIndividual: '', // Viatura/TAG para o modo Rotação Individual
+  vtrIndividual: '',
   policiaisSelecionados: [],
   equipes: [
     { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
@@ -17,16 +18,13 @@ let geradorState = {
   filtroCargo: 'TODOS'
 };
 
-/**
- * Normaliza qualquer formato de data (ISO, Timestamp ou YYYY-MM-DD) para YYYY-MM-DD limpo.
- */
 function normalizarDataParaIso(dataInput) {
   if (!dataInput) return '';
   if (typeof dataInput === 'string') {
     const apenasData = dataInput.split('T')[0];
     if (apenasData.includes('-')) {
       const parts = apenasData.split('-');
-      if (parts[0].length === 4) return apenasData; // YYYY-MM-DD
+      if (parts[0].length === 4) return apenasData;
     }
     if (apenasData.includes('/')) {
       const parts = apenasData.split('/');
@@ -46,9 +44,6 @@ function normalizarDataParaIso(dataInput) {
   return String(dataInput);
 }
 
-/**
- * Verifica de forma rigorosa se o policial está em gozo de férias ou licença em uma determinada data
- */
 export function estaDeFerias(servidorId, dataEscalaIso) {
   if (!servidorId || !dataEscalaIso || !appState.ferias) return false;
 
@@ -78,30 +73,65 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
     modal = document.getElementById('modal-gerador-lote');
   }
 
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  const sdpUser = getSubdivisaoUsuarioLogado();
+
   document.getElementById('ger-scope').value = scopeTarget;
 
-  const selectDel = document.getElementById('ger-delegacia');
-  let delOptions = (appState.delegacias || []).map(d => 
-    `<option value="${d.id}" ${d.id === appState.selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
-  ).join('');
-  if (selectDel) selectDel.innerHTML = delOptions;
+  // Filtragem estrita de delegacias permitidas para o gerador de lote
+  const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
+    if (perfil === PERFIS.ADMINISTRADOR) return true;
+    if (perfil === PERFIS.COORDENADOR) {
+      return d.subdivisao && d.subdivisao.trim().toUpperCase() === sdpUser;
+    }
+    if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+      return String(d.id) === String(userDelId);
+    }
+    return false;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
+  const isRestritoMesmaDelegacia = (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE);
+
+  let targetSelectedId = appState.selectedDelegaciaId;
+  if (isRestritoMesmaDelegacia) {
+    targetSelectedId = userDelId;
+  } else if (delegaciasPermitidas.length > 0 && !delegaciasPermitidas.some(d => String(d.id) === String(targetSelectedId))) {
+    targetSelectedId = delegaciasPermitidas[0].id;
+  }
+
+  const selectDel = document.getElementById('ger-delegacia');
+  let delOptions = delegaciasPermitidas.map(d => 
+    `<option value="${d.id}" ${String(d.id) === String(targetSelectedId) ? 'selected' : ''}>${d.nome}</option>`
+  ).join('');
+
+  if (delegaciasPermitidas.length === 0) {
+    delOptions = `<option value="">Nenhuma delegacia disponível sob sua gestão</option>`;
+  }
+
+  if (selectDel) {
+    selectDel.innerHTML = delOptions;
+    selectDel.disabled = isRestritoMesmaDelegacia;
+  }
+
+  // Filtro de policiais por delegacia no modal do gerador
   const selectFiltroDel = document.getElementById('ger-filtro-del');
-  let filtroDelOpts = `<option value="TODAS">Todas as Unidades</option>`;
-  (appState.delegacias || []).forEach(d => {
+  let filtroDelOpts = `<option value="TODAS">Todas as Unidades da Gestão</option>`;
+  delegaciasPermitidas.forEach(d => {
     filtroDelOpts += `<option value="${d.id}">${d.nome}</option>`;
   });
-  if (selectFiltroDel) selectFiltroDel.innerHTML = filtroDelOpts;
+
+  if (selectFiltroDel) {
+    selectFiltroDel.innerHTML = filtroDelOpts;
+    selectFiltroDel.disabled = isRestritoMesmaDelegacia;
+  }
 
   const selectFiltroCargo = document.getElementById('ger-filtro-cargo');
-  const cargosSet = new Set(['APJ', 'DELEGADO']);
-  (appState.servidores || []).forEach(s => {
-    if (s.cargo) cargosSet.add(s.cargo.toUpperCase());
-  });
-  let filtroCargoOpts = `<option value="TODOS">Todos os Cargos</option>`;
-  cargosSet.forEach(c => {
-    filtroCargoOpts += `<option value="${c}">${c}</option>`;
-  });
+  let filtroCargoOpts = `
+    <option value="TODOS">Todos os Cargos</option>
+    <option value="APJ">APJ (AGENTE DE POLÍCIA JUDICIÁRIA)</option>
+    <option value="DELEGADO">DELEGADO DE POLÍCIA</option>
+  `;
   if (selectFiltroCargo) selectFiltroCargo.innerHTML = filtroCargoOpts;
 
   const { currentYear, currentMonth } = appState;
@@ -109,7 +139,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
   document.getElementById('ger-data-inicio').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
   document.getElementById('ger-data-fim').value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
 
-  const idDelInicial = selectDel?.value || appState.selectedDelegaciaId;
+  const idDelInicial = targetSelectedId || selectDel?.value;
   window.carregarConfiguracaoMemorizadaDelegacia(idDelInicial);
 
   modal.classList.remove('hidden');
@@ -120,7 +150,7 @@ window.fecharModalGeradorLote = function() {
 };
 
 window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
-  const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
 
   geradorState = {
     modo: delObj?.geradorConfig?.modo || 'INDIVIDUAL',
@@ -151,6 +181,14 @@ window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
 };
 
 window.aoMudarDelegaciaGerador = function(delegaciaId) {
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+
+  if ((perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) && String(delegaciaId) !== String(userDelId)) {
+    alert("Ação Bloqueada: O seu perfil permite gerar escalas apenas para a sua delegacia de lotação.");
+    return;
+  }
+
   window.carregarConfiguracaoMemorizadaDelegacia(delegaciaId);
 };
 
@@ -161,7 +199,7 @@ window.atualizarInfoParametrizacaoUnidade = function() {
   const idDel = document.getElementById('ger-delegacia')?.value || appState.selectedDelegaciaId;
   const modalidade = document.getElementById('ger-modalidade')?.value || 'PLANTÃO';
 
-  const delObj = (appState.delegacias || []).find(d => d.id === idDel);
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(idDel));
   if (!delObj) {
     container.innerHTML = `<p class="text-[11px] text-slate-400 italic">Selecione uma unidade para carregar os parâmetros.</p>`;
     return;
@@ -191,7 +229,7 @@ window.atualizarInfoParametrizacaoUnidade = function() {
       </div>
 
       <button type="button" onclick="window.abrirModalDelegacia('${delObj.id}')" class="px-2.5 py-1.5 bg-sky-700 hover:bg-sky-800 text-white font-bold text-[11px] rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1 shrink-0">
-        <span>⚙️️</span> Ajustar Padrão
+        <span>⚙</span> Ajustar Padrão
       </button>
     </div>
   `;
@@ -233,12 +271,21 @@ function renderizarPainelModo() {
 }
 
 function filtrarServidoresComPersistencia(membrosFixosIds = []) {
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  const isRestritoDelegacia = (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE);
+
   const { filtroTexto, filtroDelegacia, filtroCargo } = geradorState;
 
   return [...(appState.servidores || [])]
     .filter(s => {
       const n = normalizeText(s.nome || '');
       if (n === 'administrador do sistema' || n === 'admin') return false;
+
+      // Trava de segurança por perfil do utilizador
+      if (isRestritoDelegacia && userDelId) {
+        if (String(s.delegaciaId) !== String(userDelId)) return false;
+      }
 
       if (membrosFixosIds.includes(s.id)) return true;
 
@@ -249,14 +296,16 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
       }
 
       if (filtroDelegacia !== 'TODAS') {
-        const delObj = (appState.delegacias || []).find(d => d.id === filtroDelegacia);
-        const bateuId = s.delegaciaId === filtroDelegacia;
+        const delObj = (appState.delegacias || []).find(d => String(d.id) === String(filtroDelegacia));
+        const bateuId = String(s.delegaciaId) === String(filtroDelegacia);
         const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(s.delegaciaId);
         if (!bateuId && !bateuUnificado) return false;
       }
 
       if (filtroCargo !== 'TODOS') {
-        if ((s.cargo || '').toUpperCase() !== filtroCargo) return false;
+        const cargoPol = (s.cargo || '').toUpperCase();
+        if (filtroCargo === 'DELEGADO' && !cargoPol.includes('DELEGADO')) return false;
+        if (filtroCargo === 'APJ' && cargoPol.includes('DELEGADO')) return false;
       }
 
       return true;
@@ -286,7 +335,7 @@ function renderizarModoIndividual(container) {
   let htmlServidores = servidoresFiltrados.map(srv => {
     const isChecked = geradorState.policiaisSelecionados.includes(srv.id);
     const posIndex = geradorState.policiaisSelecionados.indexOf(srv.id);
-    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
 
     return `
@@ -378,7 +427,7 @@ function renderizarModoEquipesV1(container) {
   let htmlPoliciaisEquipe = servidoresFiltrados.map(srv => {
     const isChecked = equipeAtiva.membros.includes(srv.id);
     const posIndex = equipeAtiva.membros.indexOf(srv.id);
-    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
 
     return `
@@ -513,9 +562,12 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
-// EXECUÇÃO DO GERADOR EM LOTE COM EXTRAPOLAÇÃO PERMITIDA APENAS PARA COMPLETAR O ÚLTIMO CICLO
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
+
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  const sdpUser = getSubdivisaoUsuarioLogado();
 
   const scope = document.getElementById('ger-scope').value;
   const delegaciaId = document.getElementById('ger-delegacia').value;
@@ -524,7 +576,21 @@ window.executarGeradorLote = async function(e) {
   const tipoModalidade = document.getElementById('ger-modalidade').value;
   const regraDias = document.getElementById('ger-regra-dias').value;
 
-  const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+  // TRAVA DE SEGURANÇA FINAL NO ENVIO DO FORMULÁRIO
+  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+    if (String(delegaciaId) !== String(userDelId)) {
+      alert("Ação Bloqueada: O seu perfil só tem autorização para gerar escalas para a sua delegacia de lotação.");
+      return;
+    }
+  } else if (perfil === PERFIS.COORDENADOR) {
+    const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
+    if (!delAlvo || delAlvo.subdivisao?.trim().toUpperCase() !== sdpUser) {
+      alert("Ação Bloqueada: O seu perfil permite gerar escalas apenas para delegacias da sua Subdivisão.");
+      return;
+    }
+  }
+
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
   const isSobreaviso = tipoModalidade === 'SOBREAVISO';
   const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
   const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
@@ -585,7 +651,7 @@ window.executarGeradorLote = async function(e) {
   });
 
   if (diasValidos.length === 0) {
-    alert("Nenhum dia no intervalo atende à regra de dias selecionada.");
+    alert("Nenum dia no intervalo atende à regra de dias selecionada.");
     return;
   }
 
