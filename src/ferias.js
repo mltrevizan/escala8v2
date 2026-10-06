@@ -3,8 +3,8 @@ import { appState } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { getCurrentUserRole, getCurrentUserDelegaciaId } from './permissions.js';
 
-// Estado local para controle de ordenação e filtros da tabela
 let ordenacaoAtual = { coluna: 'nome', asc: true };
+let feriasFiltros = { buscaCad: '', buscaTabela: '', sdpCad: '', delCad: '', sdpTab: '', delTab: '' };
 
 export function renderFeriasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -14,7 +14,6 @@ export function renderFeriasModule(containerId) {
   const userDelId = getCurrentUserDelegaciaId();
   const isRestritoDelegacia = ['DELEGADO', 'SUPERINTENDENTE'].includes(role);
 
-  // Extrai listas únicas de SDP e Delegacias para preencher os seletores
   const sdps = Array.from(new Set((appState.servidores || []).map(s => s.subdivisao).filter(Boolean))).sort();
   const delegacias = (appState.delegacias || []).slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
@@ -41,11 +40,10 @@ export function renderFeriasModule(containerId) {
           <span>🏖️</span> Novo Cadastramento de Afastamento
         </h3>
         
-        <!-- Filtros do Formulário -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs">
           <div>
             <label class="block font-bold text-slate-600 text-[10px] uppercase mb-0.5">Filtrar Policial por Nome:</label>
-            <input type="text" id="filtro-cad-busca" oninput="window.atualizarSelectServidoresCadastro()" 
+            <input type="text" id="filtro-cad-busca" value="${feriasFiltros.buscaCad || ''}" oninput="window.atualizarSelectServidoresCadastro()" 
                    placeholder="Digite o nome..." class="w-full border border-slate-300 rounded p-1 font-semibold text-slate-800 bg-white">
           </div>
           <div>
@@ -66,7 +64,6 @@ export function renderFeriasModule(containerId) {
           <div class="md:col-span-2">
             <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Selecionado:</label>
             <select id="ferias-servidor-id" required class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
-              <!-- Opções carregadas via JS -->
             </select>
           </div>
 
@@ -104,9 +101,8 @@ export function renderFeriasModule(containerId) {
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-100 pb-2">
           <h3 class="font-bold text-xs text-slate-800">Registros Cadastrados</h3>
           
-          <!-- Filtros da Tabela -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs w-full md:w-auto">
-            <input type="text" id="filtro-tabela-busca" oninput="window.renderTabelaFerias()" 
+            <input type="text" id="filtro-tabela-busca" value="${feriasFiltros.buscaTabela || ''}" oninput="window.renderTabelaFerias()" 
                    placeholder="🔍 Pesquisar na tabela..." class="border border-slate-300 rounded p-1 text-slate-800">
             <select id="filtro-tabela-sdp" ${isRestritoDelegacia ? 'disabled' : ''} onchange="window.renderTabelaFerias()" class="border border-slate-300 rounded p-1 text-slate-800">
               ${sdpOptionsHtml}
@@ -117,7 +113,6 @@ export function renderFeriasModule(containerId) {
           </div>
         </div>
 
-        <!-- Tabela com Ordenação nas Colunas -->
         <div class="overflow-x-auto font-sans">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
@@ -152,9 +147,6 @@ export function renderFeriasModule(containerId) {
   window.renderTabelaFerias();
 }
 
-/**
-  Filtra dinamicamente as opções de servidores no formulário de cadastro respeitando as permissões
- */
 window.atualizarSelectServidoresCadastro = function() {
   const select = document.getElementById('ferias-servidor-id');
   if (!select) return;
@@ -163,17 +155,16 @@ window.atualizarSelectServidoresCadastro = function() {
   const userDelId = getCurrentUserDelegaciaId();
   const isRestritoDelegacia = ['DELEGADO', 'SUPERINTENDENTE'].includes(role);
 
-  const termoBusca = (document.getElementById('filtro-cad-busca')?.value || '').toLowerCase();
+  feriasFiltros.buscaCad = document.getElementById('filtro-cad-busca')?.value || '';
+  const termoBusca = feriasFiltros.buscaCad.toLowerCase();
   const sdpFiltro = document.getElementById('filtro-cad-sdp')?.value || '';
   const delegaciaFiltro = isRestritoDelegacia ? userDelId : (document.getElementById('filtro-cad-delegacia')?.value || '');
 
   const servidoresFiltrados = (appState.servidores || []).filter(s => {
-    // Oculta Administrador do Sistema da lista
     if ((s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
       return false;
     }
 
-    // Restrição por perfil de Delegado e Superintendente
     if (isRestritoDelegacia && userDelId) {
       if (s.delegaciaId !== userDelId) return false;
     }
@@ -193,9 +184,6 @@ window.atualizarSelectServidoresCadastro = function() {
   select.innerHTML = srvOptions;
 };
 
-/**
- * Renderiza a tabela aplicando busca, filtros de permissão, SDP/Delegacia e ordenação por coluna
- */
 window.renderTabelaFerias = function() {
   const tbody = document.getElementById('tabela-ferias-corpo');
   if (!tbody) return;
@@ -204,13 +192,13 @@ window.renderTabelaFerias = function() {
   const userDelId = getCurrentUserDelegaciaId();
   const isRestritoDelegacia = ['DELEGADO', 'SUPERINTENDENTE'].includes(role);
 
-  const termoBusca = (document.getElementById('filtro-tabela-busca')?.value || '').toLowerCase();
+  feriasFiltros.buscaTabela = document.getElementById('filtro-tabela-busca')?.value || '';
+  const termoBusca = feriasFiltros.buscaTabela.toLowerCase();
   const sdpFiltro = document.getElementById('filtro-tabela-sdp')?.value || '';
   const delegaciaFiltro = isRestritoDelegacia ? userDelId : (document.getElementById('filtro-tabela-delegacia')?.value || '');
 
   let listaFerias = (appState.ferias || []).slice();
 
-  // Mapeia dados do servidor para cada registro
   let listaCompletada = listaFerias.map(fer => {
     const srv = (appState.servidores || []).find(s => s.id === fer.servidorId) || {};
     const cargoExibicao = (srv.cargo || '').toUpperCase().includes('DELEGADO') ? 'DELEGADO DE POLÍCIA' : 'APJ';
@@ -224,7 +212,6 @@ window.renderTabelaFerias = function() {
     };
   });
 
-  // Filtros aplicados com trava de perfil
   listaCompletada = listaCompletada.filter(f => {
     if (isRestritoDelegacia && userDelId) {
       if (f.delegaciaId !== userDelId) return false;
@@ -240,7 +227,6 @@ window.renderTabelaFerias = function() {
     return atendeBusca && atendeSdp && atendeDel;
   });
 
-  // Ordenação
   const { coluna, asc } = ordenacaoAtual;
   listaCompletada.sort((a, b) => {
     let valA = a[coluna] || a.servidorNome || '';
@@ -299,9 +285,6 @@ window.renderTabelaFerias = function() {
   }).join('');
 };
 
-/**
- * Alterna a coluna e a direção da ordenação na tabela
- */
 window.alternarOrdenacaoFerias = function(coluna) {
   if (ordenacaoAtual.coluna === coluna) {
     ordenacaoAtual.asc = !ordenacaoAtual.asc;
@@ -355,15 +338,12 @@ window.salvarFerias = async function(e) {
   if (!appState.ferias) appState.ferias = [];
   appState.ferias.push(novoAfastamento);
 
-  // Renderização instantânea
   window.renderTabelaFerias();
 
-  // Reset do formulário após sucesso
   document.getElementById('ferias-servidor-id').value = '';
   document.getElementById('ferias-data-inicio').value = '';
   document.getElementById('ferias-data-fim').value = '';
 
-  // Gravação em segundo plano
   try {
     await syncDocToFirestore('ferias', newFerId, novoAfastamento);
   } catch (err) {
@@ -374,11 +354,9 @@ window.salvarFerias = async function(e) {
 window.excluirFerias = async function(id) {
   if (!confirm("Deseja realmente remover este registro de afastamento?")) return;
 
-  // Remoção local imediata
   appState.ferias = (appState.ferias || []).filter(f => f.id !== id);
   window.renderTabelaFerias();
 
-  // Remoção no banco de dados em segundo plano
   try {
     await syncDocToFirestore('ferias', id, null, true);
   } catch (err) {
