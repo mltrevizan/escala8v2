@@ -296,7 +296,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         <thead>
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px] select-none">
             <th onclick="window.ordenarTabelaGestaoDel('DATA')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
-              Data <span id="sort-del-icon-DATA">⬆️</span>
+              Data <span id="sort-del-icon-DATA">⬆️️</span>
             </th>
             <th onclick="window.ordenarTabelaGestaoDel('POLICIAL')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
               Policial Escalado <span id="sort-del-icon-POLICIAL"></span>
@@ -344,7 +344,7 @@ window.ordenarTabelaGestaoDel = function(coluna) {
   ['DATA', 'POLICIAL', 'CARGO', 'VTR', 'TURNO', 'MODALIDADE'].forEach(col => {
     const el = document.getElementById(`sort-del-icon-${col}`);
     if (el) {
-      el.innerText = (col === gestaoDelTabelaState.sortColuna) ? (gestaoDelTabelaState.sortDirecao === 'ASC' ? '⬆️️' : '⬇️') : '';
+      el.innerText = (col === gestaoDelTabelaState.sortColuna) ? (gestaoDelTabelaState.sortDirecao === 'ASC' ? '⬆' : '⬇️') : '';
     }
   });
 
