@@ -30,6 +30,29 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
+// CÁLCULO AUTOMÁTICO DA DATA FIM COM BASE NA DURAÇÃO DO TURNO
+window.recalcularDataFimModalDelegacia = function() {
+  const dataInicioInput = document.getElementById('ml-del-data')?.value;
+  const turno = document.getElementById('ml-del-turno')?.value || '24h';
+  const inputFim = document.getElementById('ml-del-data-fim');
+
+  if (!dataInicioInput || !inputFim) return;
+
+  let duracaoDias = 1;
+  if (turno.includes('dias')) {
+    duracaoDias = parseInt(turno, 10) || 1;
+  }
+
+  const parts = dataInicioInput.split('-').map(Number);
+  const dataCalc = new Date(parts[0], parts[1] - 1, parts[2] + (duracaoDias - 1));
+
+  const yyyy = dataCalc.getFullYear();
+  const mm = String(dataCalc.getMonth() + 1).padStart(2, '0');
+  const dd = String(dataCalc.getDate()).padStart(2, '0');
+
+  inputFim.value = `${yyyy}-${mm}-${dd}`;
+};
+
 // =========================================================================
 // 1. MÓDULO GESTÃO CRF
 // =========================================================================
@@ -296,7 +319,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         <thead>
           <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px] select-none">
             <th onclick="window.ordenarTabelaGestaoDel('DATA')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
-              Data <span id="sort-del-icon-DATA">⬆️️</span>
+              Data <span id="sort-del-icon-DATA">⬆</span>
             </th>
             <th onclick="window.ordenarTabelaGestaoDel('POLICIAL')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
               Policial Escalado <span id="sort-del-icon-POLICIAL"></span>
@@ -734,7 +757,7 @@ function criarModalLancamentoCrfDOM() {
 }
 
 // =========================================================================
-// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA (ATUALIZADO)
 // =========================================================================
 window.abrirModalLancamentoDelegacia = function() {
   let modal = document.getElementById('modal-lancamento-delegacia');
@@ -762,6 +785,7 @@ window.abrirModalLancamentoDelegacia = function() {
   document.getElementById('ml-del-vtr').value = '';
 
   window.atualizarOptionsServidoresDelModal();
+  window.recalcularDataFimModalDelegacia();
   modal.classList.remove('hidden');
 };
 
@@ -801,6 +825,7 @@ window.aoMudarModalidadeDelegacia = function(tipo) {
     const duracaoPref = delObj?.plantaoConfig?.intervalo || '24h';
     selectTurno.value = duracaoPref;
   }
+  window.recalcularDataFimModalDelegacia();
 };
 
 window.atualizarFiltrosServidoresDelModal = function() {
@@ -858,34 +883,51 @@ window.atualizarOptionsServidoresDelModal = function() {
 window.salvarLancamentoDelegaciaModal = async function(e) {
   e.preventDefault();
 
-  const data = document.getElementById('ml-del-data').value;
+  const dataInicioIso = document.getElementById('ml-del-data').value;
   const servidorId = document.getElementById('ml-del-servidor-id').value;
   const tipo = document.getElementById('ml-del-tipo').value;
   const turno = document.getElementById('ml-del-turno').value;
   const vtr = document.getElementById('ml-del-vtr').value.toUpperCase().trim();
 
-  if (!servidorId || !data) {
+  if (!servidorId || !dataInicioIso) {
     alert("Selecione a data e o policial antes de salvar.");
     return;
   }
 
-  const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-  const novaEsc = {
-    id: newEscId,
-    data: data,
-    servidorId: servidorId,
-    delegaciaId: appState.selectedDelegaciaId,
-    scope: 'DELEGACIA',
-    tipo: tipo,
-    turno: turno,
-    vtr: vtr
-  };
+  let duracaoDias = 1;
+  if (turno.includes('dias')) {
+    duracaoDias = parseInt(turno, 10) || 1;
+  }
 
-  if (!appState.escalas) appState.escalas = [];
-  appState.escalas.push(novaEsc);
-  await syncDocToFirestore('escalas', newEscId, novaEsc);
+  const parts = dataInicioIso.split('-').map(Number);
+  let inseridosCount = 0;
 
-  alert("Lançamento Local cadastrado com sucesso!");
+  for (let i = 0; i < duracaoDias; i++) {
+    const d = new Date(parts[0], parts[1] - 1, parts[2] + i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const dataSubsequent = `${yyyy}-${mm}-${dd}`;
+
+    const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const novaEsc = {
+      id: newEscId,
+      data: dataSubsequent,
+      servidorId: servidorId,
+      delegaciaId: appState.selectedDelegaciaId,
+      scope: 'DELEGACIA',
+      tipo: tipo,
+      turno: turno,
+      vtr: vtr
+    };
+
+    if (!appState.escalas) appState.escalas = [];
+    appState.escalas.push(novaEsc);
+    await syncDocToFirestore('escalas', newEscId, novaEsc);
+    inseridosCount++;
+  }
+
+  alert(`Sucesso! ${inseridosCount} lançamento(s) na Delegacia cadastrado(s) com sucesso!`);
   window.fecharModalLancamentoDelegacia();
 
   renderGestaoDelegaciasModule('gestao-delegacias-container');
@@ -907,11 +949,51 @@ function criarModalLancamentoDelegaciaDOM() {
             <input type="text" id="ml-del-unidade-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-700 font-bold">
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Data do Plantão Local:</label>
-            <input type="date" id="ml-del-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+          <!-- 1. Modalidade e Duração do Turno -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
+              <select id="ml-del-tipo" onchange="window.aoMudarModalidadeDelegacia(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="PLANTÃO">PLANTÃO LOCAL</option>
+                <option value="SOBREAVISO">SOBREAVISO</option>
+                <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Duração do Turno:</label>
+              <select id="ml-del-turno" onchange="window.recalcularDataFimModalDelegacia()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+                <option value="12h">12 Horas</option>
+                <option value="24h">24 Horas (1 Dia)</option>
+                <option value="2 dias">2 Dias</option>
+                <option value="3 dias">3 Dias</option>
+                <option value="4 dias">4 Dias</option>
+                <option value="5 dias">5 Dias</option>
+                <option value="6 dias">6 Dias</option>
+                <option value="7 dias">7 Dias (1 Semana)</option>
+              </select>
+            </div>
           </div>
 
+          <!-- 2. TAG ou VTR (livre digitação) -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">TAG ou VTR (livre digitação):</label>
+            <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011 / DUSTER..." class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900 font-bold">
+          </div>
+
+          <!-- 3. Seleção de Datas (Início e Fim Automático) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
+              <input type="date" id="ml-del-data" onchange="window.recalcularDataFimModalDelegacia()" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Fim (Calculado):</label>
+              <input type="date" id="ml-del-data-fim" class="w-full border rounded-xl p-2 bg-slate-100 font-bold text-slate-700 cursor-not-allowed" readonly>
+            </div>
+          </div>
+
+          <!-- 4. Seleção do Policial Escalado -->
           <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
@@ -933,34 +1015,6 @@ function criarModalLancamentoDelegaciaDOM() {
               <label class="block font-bold text-slate-700 mb-1">Policial / Servidor Escalado:</label>
               <select id="ml-del-servidor-id" required class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
             </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
-              <select id="ml-del-tipo" onchange="window.aoMudarModalidadeDelegacia(this.value)" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="PLANTÃO">PLANTÃO LOCAL</option>
-                <option value="SOBREAVISO">SOBREAVISO</option>
-                <option value="EXTRAJORNADA">EXTRAJORNADA</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Duração do Turno:</label>
-              <select id="ml-del-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="12h">12 Horas</option>
-                <option value="24h">24 Horas (1 Dia)</option>
-                <option value="2 dias">2 Dias</option>
-                <option value="3 dias">3 Dias</option>
-                <option value="4 dias">4 Dias</option>
-                <option value="7 dias">7 Dias (1 Semana)</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Prefix da Viatura - VTR (Opcional):</label>
-            <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011" class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900">
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
