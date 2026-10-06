@@ -3,7 +3,7 @@ import { appState, normalizeText } from './state.js';
 
 /**
  * Módulo de Controle Central de Permissões e Perfis (Escala8 v2)
- * Perfis válidos: ADMINISTRADOR, COORDENADOR, DELEGADO, SUPERINTENDENTE, APJ, VISUALIZADOR
+ * Perfis oficiais: ADMINISTRADOR, COORDENADOR, DELEGADO, SUPERINTENDENTE, APJ, VISUALIZADOR
  */
 
 export const PERFIS = {
@@ -86,9 +86,6 @@ export function podeAcessarAbaDelegacias() {
 // 2. REGRAS DE MANIPULAÇÃO DE ESCALAS (CRF E DELEGACIAS)
 // =========================================================================
 
-/**
- * Verifica se pode incluir/editar/excluir escalas na Gestão por Delegacias
- */
 export function podeModificarEscalaDelegacia(delegaciaAlvoId) {
   const perfil = getPerfilUsuarioLogado();
 
@@ -109,25 +106,16 @@ export function podeModificarEscalaDelegacia(delegaciaAlvoId) {
   return false;
 }
 
-/**
- * Verifica se pode fazer alterações gerais na escala CRF
- */
 export function podeModificarEscalaCrfGeral() {
   const perfil = getPerfilUsuarioLogado();
   return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
 }
 
-/**
- * Permissão específica para o botão de Troca de Delegado na CRF
- */
 export function podeTrocarDelegadoCrf() {
   const perfil = getPerfilUsuarioLogado();
   return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO].includes(perfil);
 }
 
-/**
- * Permissão específica para o botão de Inclusão/Troca de APJ na CRF
- */
 export function podeTrocarOuIncluirApjCrf() {
   const perfil = getPerfilUsuarioLogado();
   return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE, PERFIS.APJ].includes(perfil);
@@ -137,9 +125,6 @@ export function podeTrocarOuIncluirApjCrf() {
 // 3. REGRAS DE MANIPULAÇÃO DE SERVIDORES E PERFIS
 // =========================================================================
 
-/**
- * Verifica se pode modificar (incluir/editar/excluir) um servidor cadastrado
- */
 export function podeModificarServidor(servidorAlvo) {
   const perfil = getPerfilUsuarioLogado();
 
@@ -160,9 +145,6 @@ export function podeModificarServidor(servidorAlvo) {
   return false;
 }
 
-/**
- * Retorna a lista de perfis que o usuário logado tem o poder de atribuir a outro servidor
- */
 export function obterPerfisAtribuiveis() {
   const perfil = getPerfilUsuarioLogado();
 
@@ -205,9 +187,6 @@ export function obterPerfisAtribuiveis() {
   return [PERFIS.VISUALIZADOR];
 }
 
-/**
- * Permissão para resetar senha do policial
- */
 export function podeResetarSenhaPolicial(servidorAlvo) {
   return podeModificarServidor(servidorAlvo);
 }
@@ -246,7 +225,7 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 }
 
 // =========================================================================
-// 5. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE E FUNÇÕES LEGADAS DA API
+// 5. COMPATIBILIDADE INTEGRAL (INTERFACE / CALENDAR / MODALS / SERVIDORES)
 // =========================================================================
 
 export function podeVisualizarTelefoneServidor() {
@@ -254,9 +233,6 @@ export function podeVisualizarTelefoneServidor() {
   return perfil !== PERFIS.VISUALIZADOR;
 }
 
-/**
- * Função genérica de checagem de permissão exigida pelo calendar.js
- */
 export function hasPermission(permissionName, targetDelegaciaId = null) {
   const perfil = getPerfilUsuarioLogado();
   if (perfil === PERFIS.ADMINISTRADOR) return true;
@@ -290,9 +266,6 @@ export function hasPermission(permissionName, targetDelegaciaId = null) {
   }
 }
 
-/**
- * Aliases de compatibilidade legada exigidos pelo calendar.js e outros módulos
- */
 export function canViewPhoneForDate() {
   return podeVisualizarTelefoneServidor();
 }
