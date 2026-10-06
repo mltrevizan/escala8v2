@@ -253,3 +253,10 @@ export function podeVisualizarTelefoneServidor() {
   const perfil = getPerfilUsuarioLogado();
   return perfil !== PERFIS.VISUALIZADOR;
 }
+
+/**
+ * Alias de compatibilidade para o calendar.js
+ */
+export function canViewPhoneForDate() {
+  return podeVisualizarTelefoneServidor();
+}
