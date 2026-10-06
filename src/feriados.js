@@ -291,4 +291,91 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
     }
 
     renderTabelaFeriados();
-    if
+    if (window.renderCalendarGrid) {
+      renderCalendarGrid('calendar-crf-container', 'CRF');
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    }
+
+    alert(`Importação concluída com sucesso!\n\n• Ano: ${anoAtual}\n• Novos Feriados Importados: ${adicionados}`);
+
+  } catch (err) {
+    console.error("Erro ao importar feriados:", err);
+    alert(`Não foi possível carregar os feriados automaticamente (${err.message}). Verifique sua conexão.`);
+  }
+};
+
+window.salvarFeriado = async function(e) {
+  e.preventDefault();
+
+  const idExistente = document.getElementById('feriado-id-input').value;
+  const data = document.getElementById('feriado-data').value;
+  const descricao = document.getElementById('feriado-desc').value.trim();
+  const tipo = document.getElementById('feriado-tipo').value;
+
+  let delegaciasIds = [];
+  if (tipo === 'MUNICIPAL') {
+    const selecionados = document.querySelectorAll('input[name="feriado_delegacias_ids"]:checked');
+    delegaciasIds = Array.from(selecionados).map(cb => cb.value);
+
+    if (delegaciasIds.length === 0) {
+      alert("Para feriados municipais, selecione pelo menos uma delegacia afetada.");
+      return;
+    }
+  }
+
+  const ferId = idExistente || 'feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+  const novoFeriado = {
+    id: ferId,
+    data: data,
+    descricao: descricao,
+    tipo: tipo,
+    delegaciasIds: delegaciasIds
+  };
+
+  if (!appState.feriados) appState.feriados = [];
+
+  const idx = appState.feriados.findIndex(f => f.id === ferId);
+  if (idx >= 0) appState.feriados[idx] = novoFeriado;
+  else appState.feriados.push(novoFeriado);
+
+  window.limparFormularioFeriado();
+  renderTabelaFeriados();
+
+  if (window.renderCalendarGrid) {
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
+
+  try {
+    await syncDocToFirestore('feriados', ferId, novoFeriado);
+    alert(idExistente ? "Feriado atualizado com sucesso!" : "Feriado cadastrado com sucesso!");
+  } catch (err) {
+    console.error("Erro ao salvar feriado no Firestore:", err);
+  }
+};
+
+window.excluirFeriado = async function(id) {
+  if (!confirm("Deseja realmente remover este feriado?")) return;
+
+  appState.feriados = (appState.feriados || []).filter(f => f.id !== id);
+
+  renderTabelaFeriados();
+
+  if (window.renderCalendarGrid) {
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
+
+  try {
+    await syncDocToFirestore('feriados', id, null, true);
+  } catch (err) {
+    console.error("Erro ao remover feriado no Firestore:", err);
+  }
+};
+
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
+}
