@@ -10,6 +10,31 @@ export function initModalsModule() {
 }
 
 // =========================================================================
+// CÁLCULO AUTOMÁTICO DA DATA DE TÉRMINO COM BASE NA DURAÇÃO DO TURNO
+// =========================================================================
+window.recalcularDataFimEscalaModal = function() {
+  const dataInicioInput = document.getElementById('modal-esc-data')?.value;
+  const turno = document.getElementById('modal-esc-turno')?.value || '24h';
+  const inputFim = document.getElementById('modal-esc-data-fim');
+
+  if (!dataInicioInput || !inputFim) return;
+
+  let duracaoDias = 1;
+  if (turno.includes('dias')) {
+    duracaoDias = parseInt(turno, 10) || 1;
+  }
+
+  const parts = dataInicioInput.split('-').map(Number);
+  const dataCalc = new Date(parts[0], parts[1] - 1, parts[2] + (duracaoDias - 1));
+
+  const yyyy = dataCalc.getFullYear();
+  const mm = String(dataCalc.getMonth() + 1).padStart(2, '0');
+  const dd = String(dataCalc.getDate()).padStart(2, '0');
+
+  inputFim.value = `${yyyy}-${mm}-${dd}`;
+};
+
+// =========================================================================
 // 1. MODAL DE LANÇAMENTO / EDIÇÃO DE ESCALA INDIVIDUAL
 // =========================================================================
 window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTarget = 'CRF') {
@@ -24,6 +49,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   const inputData = document.getElementById('modal-esc-data');
   const selectTipo = document.getElementById('modal-esc-tipo');
   const selectTurno = document.getElementById('modal-esc-turno');
+  const inputVtr = document.getElementById('modal-esc-vtr');
   const filtroUnidadeSelect = document.getElementById('modal-esc-filtro-unidade');
   const buscaSrvInput = document.getElementById('modal-esc-busca-srv');
 
@@ -42,7 +68,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
     selectTurno.value = horaAtual >= 18 ? '12h (N)' : '12h (D)';
   } else {
     selectTipo.innerHTML = `
-      <option value="PLANTÃO">PLANTÃO</option>
+      <option value="PLANTÃO">PLANTÃO LOCAL</option>
       <option value="SOBREAVISO">SOBREAVISO</option>
       <option value="EXTRAJORNADA">EXTRAJORNADA</option>
     `;
@@ -83,14 +109,17 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
       inputData.value = esc.data;
       selectTipo.value = (esc.tipo === 'SDP' ? 'EXTRAJORNADA' : (esc.tipo || (scopeTarget === 'CRF' ? 'REGULAR' : 'PLANTÃO')));
       selectTurno.value = esc.turno || (scopeTarget === 'CRF' ? '12h (D)' : '24h');
+      if (inputVtr) inputVtr.value = esc.vtr || '';
 
       renderListaServidoresCheckboxes([esc.servidorId], true);
     }
   } else {
     inputId.value = '';
+    if (inputVtr) inputVtr.value = '';
     renderListaServidoresCheckboxes([], false);
   }
 
+  window.recalcularDataFimEscalaModal();
   modal.classList.remove('hidden');
 };
 
@@ -110,6 +139,7 @@ window.atualizarTurnoPadraoDelegacia = function() {
   if (intervaloPadrao) {
     selectTurno.value = intervaloPadrao;
   }
+  window.recalcularDataFimEscalaModal();
 };
 
 window.fecharModalEscala = function() {
@@ -192,21 +222,27 @@ window.salvarEscalaModal = async function(e) {
 
   const id = document.getElementById('modal-esc-id').value;
   const scope = document.getElementById('modal-esc-scope').value;
-  const dataIso = document.getElementById('modal-esc-data').value;
+  const dataInicioIso = document.getElementById('modal-esc-data').value;
   const tipo = document.getElementById('modal-esc-tipo').value;
   const turno = document.getElementById('modal-esc-turno').value;
+  const vtr = document.getElementById('modal-esc-vtr')?.value?.toUpperCase() || '';
 
   const selecionados = document.querySelectorAll('input[name="modal_srv_ids"]:checked');
   const servidoresIds = Array.from(selecionados).map(cb => cb.value);
 
-  if (!dataIso) {
-    alert("Selecione a data do plantão.");
+  if (!dataInicioIso) {
+    alert("Selecione a data de início do plantão.");
     return;
   }
 
   if (servidoresIds.length === 0) {
-    alert("Selecione um policial para o plantão.");
+    alert("Selecione pelo menos um policial para o plantão.");
     return;
+  }
+
+  let duracaoDias = 1;
+  if (turno.includes('dias')) {
+    duracaoDias = parseInt(turno, 10) || 1;
   }
 
   const conflitosIndividuais = [];
@@ -224,16 +260,16 @@ window.salvarEscalaModal = async function(e) {
         if (delPorNome) idDelegaciaResolvido = delPorNome.id;
       }
 
-      esc.data = dataIso;
+      esc.data = dataInicioIso;
       esc.tipo = tipo;
       esc.turno = turno;
+      esc.vtr = vtr;
       esc.servidorId = novoSrvId;
       esc.delegaciaId = scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId;
 
       await syncDocToFirestore('escalas', esc.id, esc);
 
-      // CHECA SE HÁ FÉRIAS/LICENÇA NESTA DATA
-      const feriasObj = (appState.ferias || []).find(f => f.servidorId === novoSrvId && dataIso >= f.dataInicio && dataIso <= f.dataFim);
+      const feriasObj = (appState.ferias || []).find(f => f.servidorId === novoSrvId && dataInicioIso >= f.dataInicio && dataInicioIso <= f.dataFim);
       if (feriasObj && srvObj) {
         conflitosIndividuais.push({
           nome: srvObj.nome,
@@ -252,30 +288,39 @@ window.salvarEscalaModal = async function(e) {
         if (delPorNome) idDelegaciaResolvido = delPorNome.id;
       }
 
-      const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      const parts = dataInicioIso.split('-').map(Number);
+      for (let i = 0; i < duracaoDias; i++) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2] + i);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dataSubsequent = `${yyyy}-${mm}-${dd}`;
 
-      const novaEscala = {
-        id: newEscId,
-        data: dataIso,
-        servidorId: sId,
-        delegaciaId: scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId,
-        scope: scope,
-        tipo: tipo,
-        turno: turno
-      };
+        const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
-      if (!appState.escalas) appState.escalas = [];
-      appState.escalas.push(novaEscala);
-      await syncDocToFirestore('escalas', newEscId, novaEscala);
+        const novaEscala = {
+          id: newEscId,
+          data: dataSubsequent,
+          servidorId: sId,
+          delegaciaId: scope === 'CRF' ? (idDelegaciaResolvido || appState.selectedDelegaciaId || '') : appState.selectedDelegaciaId,
+          scope: scope,
+          tipo: tipo,
+          turno: turno,
+          vtr: vtr
+        };
 
-      // CHECA SE HÁ FÉRIAS/LICENÇA NESTA DATA
-      const feriasObj = (appState.ferias || []).find(f => f.servidorId === sId && dataIso >= f.dataInicio && dataIso <= f.dataFim);
-      if (feriasObj && srv) {
-        conflitosIndividuais.push({
-          nome: srv.nome,
-          motivo: feriasObj.tipo || 'Férias/Licença',
-          periodo: `${formatarDataBr(feriasObj.dataInicio)} a ${formatarDataBr(feriasObj.dataFim)}`
-        });
+        if (!appState.escalas) appState.escalas = [];
+        appState.escalas.push(novaEscala);
+        await syncDocToFirestore('escalas', newEscId, novaEscala);
+
+        const feriasObj = (appState.ferias || []).find(f => f.servidorId === sId && dataSubsequent >= f.dataInicio && dataSubsequent <= f.dataFim);
+        if (feriasObj && srv) {
+          conflitosIndividuais.push({
+            nome: srv.nome,
+            motivo: feriasObj.tipo || 'Férias/Licença',
+            periodo: `${formatarDataBr(feriasObj.dataInicio)} a ${formatarDataBr(feriasObj.dataFim)}`
+          });
+        }
       }
     }
   }
@@ -290,7 +335,6 @@ window.salvarEscalaModal = async function(e) {
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   }
 
-  // ALERTA DE CONFLITO EM LANCE INDIVIDUAL
   if (conflitosIndividuais.length > 0) {
     let msg = `⚠️ ALERTA DE CONFLITO DE FÉRIAS/LICENÇA:\n\nO lançamento foi registrado com sucesso, contudo:\n\n`;
     conflitosIndividuais.forEach(c => {
@@ -355,7 +399,7 @@ window.abrirModalDetalhesTurno = function(titulo, horarioOuData, idsString) {
             <div><b>Unidade do Plantão:</b> ${unidadePlantao}</div>
             <div><b>Data do Lançamento:</b> ${formatarDataBr(esc.data)}</div>
             <div><b>Duração / Turno:</b> ${esc.turno || '24h'}</div>
-            ${esc.vtr ? `<div class="sm:col-span-2"><b>🚘 Viatura (VTR):</b> <span class="bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold px-1.5 py-0.5 rounded text-[10px]">${esc.vtr}</span></div>` : ''}
+            ${esc.vtr ? `<div class="sm:col-span-2"><b>TAG ou VTR:</b> <span class="bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold px-1.5 py-0.5 rounded text-[10px]">${esc.vtr}</span></div>` : ''}
           </div>
 
           <div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
@@ -415,7 +459,7 @@ function criarModalEscalaDOM() {
     <div id="modal-escala" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
-          <h3 class="font-bold text-slate-900 text-sm">Lançamento de Plantão / Escala</h3>
+          <h3 class="font-bold text-slate-900 text-sm">📅 Lançamento de Plantão / Escala</h3>
           <button type="button" onclick="window.fecharModalEscala()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
@@ -423,23 +467,38 @@ function criarModalEscalaDOM() {
           <input type="hidden" id="modal-esc-id">
           <input type="hidden" id="modal-esc-scope">
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <!-- 1. Modalidade e Duração do Turno -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Data:</label>
-              <input type="date" id="modal-esc-data" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-            </div>
-
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Tipo:</label>
+              <label class="block font-bold text-slate-700 mb-1">Modalidade:</label>
               <select id="modal-esc-tipo" onchange="window.atualizarTurnoPadraoDelegacia()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
 
             <div>
-              <label class="block font-bold text-slate-700 mb-1">Turno / Duração:</label>
-              <select id="modal-esc-turno" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
+              <label class="block font-bold text-slate-700 mb-1">Duração do Turno:</label>
+              <select id="modal-esc-turno" onchange="window.recalcularDataFimEscalaModal()" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900"></select>
             </div>
           </div>
 
+          <!-- 2. TAG ou VTR (livre digitação) -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">TAG ou VTR (livre digitação):</label>
+            <input type="text" id="modal-esc-vtr" placeholder="Ex: VTR 801 / DUSTER..." class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase">
+          </div>
+
+          <!-- 3. Seleção de Datas (Início e Fim Automático) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
+              <input type="date" id="modal-esc-data" onchange="window.recalcularDataFimEscalaModal()" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Data Fim (Calculado):</label>
+              <input type="date" id="modal-esc-data-fim" class="w-full border rounded-xl p-2 bg-slate-100 font-bold text-slate-700 cursor-not-allowed" readonly>
+            </div>
+          </div>
+
+          <!-- 4. Seleção de Policiais -->
           <div class="space-y-2 pt-2 border-t">
             <div class="flex items-center justify-between">
               <label class="block font-bold text-slate-800">Selecione o Policial:</label>
