@@ -124,7 +124,7 @@ export function renderFeriadosModule(containerId) {
   `;
 
   container.innerHTML = html;
-  renderTabelaFeriados();
+  window.renderTabelaFeriados();
 }
 
 window.toggleSelecaoDelegaciasFeriado = function(tipo) {
@@ -142,11 +142,11 @@ window.toggleTodasDelegaciasFeriado = function() {
   const checkboxes = document.querySelectorAll('input[name="feriado_delegacias_ids"]');
   if (checkboxes.length === 0) return;
 
-  const algunDesmarcado = Array.from(checkboxes).some(cb => !cb.checked);
-  checkboxes.forEach(cb => cb.checked = algunDesmarcado);
+  const algumDesmarcado = Array.from(checkboxes).some(cb => !cb.checked);
+  checkboxes.forEach(cb => cb.checked = algumDesmarcado);
 };
 
-function renderTabelaFeriados() {
+window.renderTabelaFeriados = function() {
   const tbody = document.getElementById('tabela-feriados-corpo');
   if (!tbody) return;
 
@@ -167,7 +167,7 @@ function renderTabelaFeriados() {
         abrangenciaTexto = '<span class="text-amber-600 italic">Nenhuma delegacia vinculada</span>';
       } else {
         const nomes = ids.map(id => {
-          const d = (appState.delegacias || []).find(del => del.id === id);
+          const d = (appState.delegacias || []).find(del => String(del.id) === String(id));
           return d ? d.nome : 'Unidade';
         });
         abrangenciaTexto = `<span class="text-slate-900 font-medium">${nomes.join(', ')}</span>`;
@@ -195,30 +195,35 @@ function renderTabelaFeriados() {
       </tr>
     `;
   }).join('');
-}
+};
 
 window.editarFeriado = function(id) {
-  const feriado = (appState.feriados || []).find(f => f.id === id);
+  const feriado = (appState.feriados || []).find(f => String(f.id) === String(id));
   if (!feriado) return;
 
-  document.getElementById('feriado-id-input').value = feriado.id;
-  document.getElementById('feriado-data').value = feriado.data || '';
-  document.getElementById('feriado-desc').value = feriado.descricao || '';
-  document.getElementById('feriado-tipo').value = feriado.tipo || 'NACIONAL';
+  const idInput = document.getElementById('feriado-id-input');
+  const dataInput = document.getElementById('feriado-data');
+  const descInput = document.getElementById('feriado-desc');
+  const tipoInput = document.getElementById('feriado-tipo');
+
+  if (idInput) idInput.value = feriado.id;
+  if (dataInput) dataInput.value = feriado.data || '';
+  if (descInput) descInput.value = feriado.descricao || '';
+  if (tipoInput) tipoInput.value = feriado.tipo || 'NACIONAL';
 
   window.toggleSelecaoDelegaciasFeriado(feriado.tipo);
 
   const checkboxes = document.querySelectorAll('input[name="feriado_delegacias_ids"]');
-  const idsVinculados = feriado.delegaciasIds || [];
+  const idsVinculados = (feriado.delegaciasIds || []).map(String);
   checkboxes.forEach(cb => {
-    cb.checked = idsVinculados.includes(cb.value);
+    cb.checked = idsVinculados.includes(String(cb.value));
   });
 
   const tituloEl = document.getElementById('feriado-form-titulo');
   const btnCancelar = document.getElementById('btn-cancelar-edicao-feriado');
   const btnSalvar = document.getElementById('btn-salvar-feriado');
 
-  if (tituloEl) tituloEl.innerHTML = '<span>✏️️</span> Editar Feriado Cadastrado';
+  if (tituloEl) tituloEl.innerHTML = '<span>✏️</span> Editar Feriado Cadastrado';
   if (btnCancelar) btnCancelar.classList.remove('hidden');
   if (btnSalvar) btnSalvar.innerHTML = '💾 Atualizar Feriado';
 
@@ -226,10 +231,15 @@ window.editarFeriado = function(id) {
 };
 
 window.limparFormularioFeriado = function() {
-  document.getElementById('feriado-id-input').value = '';
-  document.getElementById('feriado-data').value = '';
-  document.getElementById('feriado-desc').value = '';
-  document.getElementById('feriado-tipo').value = 'NACIONAL';
+  const idInput = document.getElementById('feriado-id-input');
+  const dataInput = document.getElementById('feriado-data');
+  const descInput = document.getElementById('feriado-desc');
+  const tipoInput = document.getElementById('feriado-tipo');
+
+  if (idInput) idInput.value = '';
+  if (dataInput) dataInput.value = '';
+  if (descInput) descInput.value = '';
+  if (tipoInput) tipoInput.value = 'NACIONAL';
 
   window.toggleSelecaoDelegaciasFeriado('NACIONAL');
 
@@ -245,9 +255,6 @@ window.limparFormularioFeriado = function() {
   if (btnSalvar) btnSalvar.innerHTML = '➕ Salvar Feriado';
 };
 
-/**
- * Função de busca automatizada de feriados nacionais do ano corrente via API pública
- */
 window.carregarFeriadosNacionaisAnoAtual = async function() {
   const anoAtual = new Date().getFullYear();
 
@@ -272,7 +279,6 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
     let adicionados = 0;
 
     for (const item of feriadosApi) {
-      // Evita duplicidade de feriados já cadastrados na mesma data
       const jaExiste = appState.feriados.some(f => f.data === item.date && f.tipo === 'NACIONAL');
       if (!jaExiste) {
         const ferId = 'feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -290,7 +296,7 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
       }
     }
 
-    renderTabelaFeriados();
+    window.renderTabelaFeriados();
     if (window.renderCalendarGrid) {
       renderCalendarGrid('calendar-crf-container', 'CRF');
       renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
@@ -305,12 +311,17 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
 };
 
 window.salvarFeriado = async function(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
 
-  const idExistente = document.getElementById('feriado-id-input').value;
-  const data = document.getElementById('feriado-data').value;
-  const descricao = document.getElementById('feriado-desc').value.trim();
-  const tipo = document.getElementById('feriado-tipo').value;
+  const idExistente = document.getElementById('feriado-id-input')?.value || '';
+  const data = document.getElementById('feriado-data')?.value;
+  const descricao = (document.getElementById('feriado-desc')?.value || '').trim();
+  const tipo = document.getElementById('feriado-tipo')?.value || 'NACIONAL';
+
+  if (!data || !descricao) {
+    alert("Preencha a data e a descrição do feriado.");
+    return;
+  }
 
   let delegaciasIds = [];
   if (tipo === 'MUNICIPAL') {
@@ -323,7 +334,7 @@ window.salvarFeriado = async function(e) {
     }
   }
 
-  const ferId = idExistente || 'feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  const ferId = idExistente || ('feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
 
   const novoFeriado = {
     id: ferId,
@@ -335,18 +346,23 @@ window.salvarFeriado = async function(e) {
 
   if (!appState.feriados) appState.feriados = [];
 
-  const idx = appState.feriados.findIndex(f => f.id === ferId);
-  if (idx >= 0) appState.feriados[idx] = novoFeriado;
-  else appState.feriados.push(novoFeriado);
+  const idx = appState.feriados.findIndex(f => String(f.id) === String(ferId));
+  if (idx >= 0) {
+    appState.feriados[idx] = novoFeriado;
+  } else {
+    appState.feriados.push(novoFeriado);
+  }
 
+  // 1. Atualização instantânea na tela
   window.limparFormularioFeriado();
-  renderTabelaFeriados();
+  window.renderTabelaFeriados();
 
   if (window.renderCalendarGrid) {
     renderCalendarGrid('calendar-crf-container', 'CRF');
     renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
   }
 
+  // 2. Gravação em segundo plano no Firestore
   try {
     await syncDocToFirestore('feriados', ferId, novoFeriado);
     alert(idExistente ? "Feriado atualizado com sucesso!" : "Feriado cadastrado com sucesso!");
@@ -358,9 +374,9 @@ window.salvarFeriado = async function(e) {
 window.excluirFeriado = async function(id) {
   if (!confirm("Deseja realmente remover este feriado?")) return;
 
-  appState.feriados = (appState.feriados || []).filter(f => f.id !== id);
+  appState.feriados = (appState.feriados || []).filter(f => String(f.id) !== String(id));
 
-  renderTabelaFeriados();
+  window.renderTabelaFeriados();
 
   if (window.renderCalendarGrid) {
     renderCalendarGrid('calendar-crf-container', 'CRF');
