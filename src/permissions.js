@@ -1,178 +1,191 @@
 // src/permissions.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 
-export function getCurrentUserRole() {
-  if (!appState.currentUser) return 'VISUALIZADOR';
-  const role = (appState.currentUser.perfil || appState.currentUser.nivelAcesso || '').toUpperCase();
-  if (role.includes('ADMIN')) return 'ADMINISTRADOR';
-  if (role.includes('COORDENADOR')) return 'COORDENADOR';
-  if (role.includes('SUPERINTENDENTE')) return 'SUPERINTENDENTE';
-  if (role.includes('DELEGADO')) return 'DELEGADO';
-  if (role.includes('APJ') || role.includes('INVESTIGADOR') || role.includes('ESCRIVÃO')) return 'APJ';
-  return 'VISUALIZADOR';
+/**
+ * Módulo de Controle Central de Permissões e Perfis (Escala8 v2)
+ * Perfis válidos: ADMINISTRADOR, COORDENADOR, DELEGADO, SUPERINTENDENTE, APJ, VISUALIZADOR
+ */
+
+export const PERFIS = {
+  ADMINISTRADOR: 'ADMINISTRADOR',
+  COORDENADOR: 'COORDENADOR',
+  DELEGADO: 'DELEGADO',
+  SUPERINTENDENTE: 'SUPERINTENDENTE',
+  APJ: 'APJ',
+  VISUALIZADOR: 'VISUALIZADOR'
+};
+
+/**
+ * Retorna o perfil do usuário logado ou VISUALIZADOR se não houver login
+ */
+export function getPerfilUsuarioLogado() {
+  if (!appState.currentUser) return PERFIS.VISUALIZADOR;
+  const perfilStr = (appState.currentUser.perfil || appState.currentUser.cargo || '').toUpperCase().trim();
+  
+  if (perfilStr.includes('ADMIN')) return PERFIS.ADMINISTRADOR;
+  if (perfilStr.includes('COORDENADOR')) return PERFIS.COORDENADOR;
+  if (perfilStr.includes('DELEGADO')) return PERFIS.DELEGADO;
+  if (perfilStr.includes('SUPERINTENDENTE')) return PERFIS.SUPERINTENDENTE;
+  if (perfilStr.includes('APJ') || perfilStr.includes('AGENTE')) return PERFIS.APJ;
+
+  return PERFIS.VISUALIZADOR;
 }
 
-export function getCurrentUserDelegaciaId() {
-  return appState.currentUser ? appState.currentUser.delegaciaId : null;
+/**
+ * Retorna a delegacia em que o usuário logado está lotado
+ */
+export function getDelegaciaIdUsuarioLogado() {
+  return appState.currentUser?.delegaciaId || null;
 }
 
-export function canManageDelegacia(targetDelegaciaId) {
-  const role = getCurrentUserRole();
-  if (['ADMINISTRADOR', 'COORDENADOR'].includes(role)) return true;
-  if (['DELEGADO', 'SUPERINTENDENTE'].includes(role)) {
-    const userDelId = getCurrentUserDelegaciaId();
-    return userDelId && userDelId === targetDelegaciaId;
+/**
+ * Retorna a Subdivisão (SDP) da delegacia do usuário logado
+ */
+export function getSubdivisaoUsuarioLogado() {
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  if (!userDelId || !appState.delegacias) return null;
+  const delObj = appState.delegacias.find(d => d.id === userDelId);
+  return delObj?.subdivisao ? delObj.subdivisao.trim().toUpperCase() : null;
+}
+
+// =========================================================================
+// 1. REGRAS DE ACESSO ÀS ABAS / MÓDULOS DO SISTEMA
+// =========================================================================
+
+export function podeAcessarAbaGestaoCrf() {
+  const perfil = getPerfilUsuarioLogado();
+  return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
+}
+
+export function podeAcessarAbaGestaoDelegacias() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE].includes(perfil);
+}
+
+export function podeAcessarAbaServidores() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE].includes(perfil);
+}
+
+export function podeAcessarAbaFérias() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE].includes(perfil);
+}
+
+export function podeAcessarAbaFeriados() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE].includes(perfil);
+}
+
+export function podeAcessarAbaDelegacias() {
+  const perfil = getPerfilUsuarioLogado();
+  return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
+}
+
+// =========================================================================
+// 2. REGRAS DE MANIPULAÇÃO DE ESCALAS (CRF E DELEGACIAS)
+// =========================================================================
+
+/**
+ * Verifica se pode incluir/editar/excluir escalas na Gestão por Delegacias
+ */
+export function podeModificarEscalaDelegacia(delegaciaAlvoId) {
+  const perfil = getPerfilUsuarioLogado();
+
+  if (perfil === PERFIS.ADMINISTRADOR) return true;
+
+  if (perfil === PERFIS.COORDENADOR) {
+    const sdpUser = getSubdivisaoUsuarioLogado();
+    if (!sdpUser) return false;
+    const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaAlvoId);
+    return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
   }
+
+  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+    const userDelId = getDelegaciaIdUsuarioLogado();
+    return userDelId && String(userDelId) === String(delegaciaAlvoId);
+  }
+
   return false;
 }
 
 /**
- * Avalia se o telefone pode ser exibido.
- * Se o utilizador for VISUALIZADOR (não logado), exibe APENAS para: Ontem, Hoje e Amanhã.
+ * Verifica se pode fazer alterações gerais na escala CRF
  */
-export function canViewPhoneForDate(dataIso) {
-  const role = getCurrentUserRole();
-  if (role !== 'VISUALIZADOR') return true;
-
-  if (!dataIso) return false;
-
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
-  const [ano, mes, dia] = dataIso.split('-').map(Number);
-  const dtEscala = new Date(ano, mes - 1, dia);
-  dtEscala.setHours(0, 0, 0, 0);
-
-  const diffDias = Math.round((dtEscala - hoje) / (1000 * 60 * 60 * 24));
-  return diffDias >= -1 && diffDias <= 1; // -1 (Ontem), 0 (Hoje), +1 (Amanhã)
-}
-
-export function hasPermission(action, contextData = null) {
-  const role = getCurrentUserRole();
-
-  switch (action) {
-    case 'VIEW_GESTAO_CRF':
-      return ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
-
-    case 'EDIT_CRF_SCALES':
-      return ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
-
-    case 'RESTORE_CRF_BACKUP':
-      return role === 'ADMINISTRADOR';
-
-    case 'VIEW_GESTAO_DELEGACIAS':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    case 'EDIT_LOCAL_DELEGACIA_SCALE':
-      if (['ADMINISTRADOR', 'COORDENADOR'].includes(role)) return true;
-      if (['DELEGADO', 'SUPERINTENDENTE'].includes(role)) {
-        return contextData ? canManageDelegacia(contextData.delegaciaId) : true;
-      }
-      return false;
-
-    case 'DELETE_MASS_DELEGACIA':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    case 'VIEW_SERVIDORES':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    case 'EDIT_SERVIDOR':
-      if (['ADMINISTRADOR', 'COORDENADOR'].includes(role)) return true;
-      if (['DELEGADO', 'SUPERINTENDENTE'].includes(role)) {
-        return contextData ? canManageDelegacia(contextData.delegaciaId) : true;
-      }
-      return false;
-
-    case 'VIEW_UNIDADES':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    case 'EDIT_UNIDADE_CONFIG':
-      if (['ADMINISTRADOR', 'COORDENADOR'].includes(role)) return true;
-      if (['DELEGADO', 'SUPERINTENDENTE'].includes(role)) {
-        return contextData ? canManageDelegacia(contextData.id) : true;
-      }
-      return false;
-
-    case 'MANAGE_FERIADO_LOCAL':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    case 'MANAGE_FERIADO_NACIONAL_ESTADUAL':
-      return ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
-
-    case 'SHOW_BTN_INCLUIR_TROCAR_APJ':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO', 'APJ'].includes(role);
-
-    case 'SHOW_BTN_TROCAR_DELEGADO':
-      return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO'].includes(role);
-
-    default:
-      return false;
-  }
-}
-
-export function getAllowedRolesForCreation() {
-  const role = getCurrentUserRole();
-
-  if (role === 'ADMINISTRADOR') {
-    return ['ADMINISTRADOR', 'COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO', 'APJ', 'VISUALIZADOR'];
-  }
-  if (role === 'COORDENADOR') {
-    return ['COORDENADOR', 'SUPERINTENDENTE', 'DELEGADO', 'APJ', 'VISUALIZADOR'];
-  }
-  if (role === 'DELEGADO') {
-    return ['DELEGADO', 'SUPERINTENDENTE', 'APJ'];
-  }
-  if (role === 'SUPERINTENDENTE') {
-    return ['APJ'];
-  }
-
-  return [];
-}
-
-export function isProtectedAdminAccount(targetServidor) {
-  if (!targetServidor) return false;
-  const targetRole = (targetServidor.nivelAcesso || targetServidor.perfil || '').toUpperCase();
-  return targetRole.includes('ADMIN');
+export function podeModificarEscalaCrfGeral() {
+  const perfil = getPerfilUsuarioLogado();
+  return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
 }
 
 /**
- * Aplica as restrições na interface gráfica (DOM) em tempo real
+ * Permissão específica para o botão de Troca de Delegado na CRF
  */
-export function applyUIPermissions() {
-  const role = getCurrentUserRole();
-  const isLogged = !!appState.currentUser;
-  const userDelId = getCurrentUserDelegaciaId();
-
-  const btnGestaoCrf = document.getElementById('tab-btn-gestao-crf');
-  const btnGestaoDel = document.getElementById('tab-btn-gestao-del');
-  const btnServidores = document.getElementById('tab-btn-servidores');
-  const btnDelegacias = document.getElementById('tab-btn-unidades');
-  const btnFerias = document.getElementById('tab-btn-ferias');
-  const btnFeriados = document.getElementById('tab-btn-feriados');
-
-  if (btnGestaoCrf) btnGestaoCrf.style.display = hasPermission('VIEW_GESTAO_CRF') ? '' : 'none';
-  if (btnGestaoDel) btnGestaoDel.style.display = hasPermission('VIEW_GESTAO_DELEGACIAS') ? '' : 'none';
-  if (btnServidores) btnServidores.style.display = hasPermission('VIEW_SERVIDORES') ? '' : 'none';
-  if (btnDelegacias) btnDelegacias.style.display = hasPermission('VIEW_UNIDADES') ? '' : 'none';
-  if (btnFerias) btnFerias.style.display = isLogged ? '' : 'none';
-  
-  // Oculta a aba Feriados para o público geral (apenas utilizadores logados acedem)
-  if (btnFeriados) btnFeriados.style.display = isLogged ? '' : 'none';
-
-  if (['DELEGADO', 'SUPERINTENDENTE'].includes(role) && userDelId) {
-    const selectDelGestao = document.getElementById('gestao-del-select-unidade');
-    if (selectDelGestao) {
-      selectDelGestao.value = userDelId;
-      selectDelGestao.disabled = true;
-      appState.selectedDelegaciaId = userDelId;
-    }
-  }
-
-  if (!isLogged && ['gestao-crf', 'gestao-del', 'servidores', 'unidades', 'ferias', 'feriados'].includes(appState.activeTab)) {
-    if (window.switchTab) window.switchTab('crf');
-  } else if (role === 'APJ' && ['gestao-crf', 'gestao-del'].includes(appState.activeTab)) {
-    if (window.switchTab) window.switchTab('crf');
-  } else if (['DELEGADO', 'SUPERINTENDENTE'].includes(role) && appState.activeTab === 'gestao-crf') {
-    if (window.switchTab) window.switchTab('gestao-del');
-  }
+export function podeTrocarDelegadoCrf() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO].includes(perfil);
 }
+
+/**
+ * Permissão específica para o botão de Inclusão/Troca de APJ na CRF
+ */
+export function podeTrocarOuIncluirApjCrf() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE, PERFIS.APJ].includes(perfil);
+}
+
+// =========================================================================
+// 3. REGRAS DE MANIPULAÇÃO DE SERVIDORES E PERFIS
+// =========================================================================
+
+/**
+ * Verifica se pode modificar (incluir/editar/excluir) um servidor cadastrado
+ */
+export function podeModificarServidor(servidorAlvo) {
+  const perfil = getPerfilUsuarioLogado();
+
+  if (perfil === PERFIS.ADMINISTRADOR) return true;
+
+  if (perfil === PERFIS.COORDENADOR) {
+    const sdpUser = getSubdivisaoUsuarioLogado();
+    if (!sdpUser) return false;
+    const delAlvo = (appState.delegacias || []).find(d => d.id === servidorAlvo?.delegaciaId);
+    return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
+  }
+
+  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+    const userDelId = getDelegaciaIdUsuarioLogado();
+    return userDelId && servidorAlvo && String(userDelId) === String(servidorAlvo.delegaciaId);
+  }
+
+  return false;
+}
+
+/**
+ * Retorna a lista de perfis que o usuário logado tem o poder de atribuir a outro servidor
+ */
+export function obterPerfisAtribuiveis() {
+  const perfil = getPerfilUsuarioLogado();
+
+  if (perfil === PERFIS.ADMINISTRADOR) {
+    return [
+      PERFIS.ADMINISTRADOR,
+      PERFIS.COORDENADOR,
+      PERFIS.DELEGADO,
+      PERFIS.SUPERINTENDENTE,
+      PERFIS.APJ,
+      PERFIS.VISUALIZADOR
+    ];
+  }
+
+  if (perfil === PERFIS.COORDENADOR) {
+    // Não pode dar poderes de Administrador
+    return [
+      PERFIS.COORDENADOR,
+      PERFIS.DELEGADO,
+      PERFIS.SUPERINTENDENTE,
+      PERFIS.APJ,
+      PERFIS.VISUALIZADOR
+    ];
+  }
+
+  if (perfil === PERFIS.DELEG
