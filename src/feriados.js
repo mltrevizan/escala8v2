@@ -52,7 +52,7 @@ export function renderFeriadosModule(containerId) {
       </div>
 
       <!-- Formulário de Cadastro / Edição -->
-      <form onsubmit="window.salvarFeriado(event)" class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-3 text-xs">
+      <form id="form-feriados-main" onsubmit="window.salvarFeriado(event)" class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-3 text-xs">
         <input type="hidden" id="feriado-id-input" value="">
 
         <div class="flex items-center justify-between border-b-2 border-pcpr-gold pb-1.5">
