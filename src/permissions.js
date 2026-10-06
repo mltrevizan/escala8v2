@@ -178,7 +178,6 @@ export function obterPerfisAtribuiveis() {
   }
 
   if (perfil === PERFIS.COORDENADOR) {
-    // Não pode dar poderes de Administrador
     return [
       PERFIS.COORDENADOR,
       PERFIS.DELEGADO,
@@ -188,4 +187,69 @@ export function obterPerfisAtribuiveis() {
     ];
   }
 
-  if (perfil === PERFIS.DELEG
+  if (perfil === PERFIS.DELEGADO) {
+    return [
+      PERFIS.SUPERINTENDENTE,
+      PERFIS.APJ,
+      PERFIS.VISUALIZADOR
+    ];
+  }
+
+  if (perfil === PERFIS.SUPERINTENDENTE) {
+    return [
+      PERFIS.APJ,
+      PERFIS.VISUALIZADOR
+    ];
+  }
+
+  return [PERFIS.VISUALIZADOR];
+}
+
+/**
+ * Permissão para resetar senha do policial
+ */
+export function podeResetarSenhaPolicial(servidorAlvo) {
+  return podeModificarServidor(servidorAlvo);
+}
+
+// =========================================================================
+// 4. REGRAS DE FÉRIAS E FERIADOS
+// =========================================================================
+
+export function podeModificarFeriasServidor(servidorAlvo) {
+  return podeModificarServidor(servidorAlvo);
+}
+
+export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
+  const perfil = getPerfilUsuarioLogado();
+
+  if (perfil === PERFIS.ADMINISTRADOR) return true;
+
+  if (perfil === PERFIS.COORDENADOR) {
+    if (tipoFeriado === 'MUNICIPAL' && delegaciaAlvoId) {
+      const sdpUser = getSubdivisaoUsuarioLogado();
+      const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaAlvoId);
+      return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
+    }
+    return true;
+  }
+
+  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+    if (tipoFeriado === 'MUNICIPAL') {
+      const userDelId = getDelegaciaIdUsuarioLogado();
+      return userDelId && String(userDelId) === String(delegaciaAlvoId);
+    }
+    return false;
+  }
+
+  return false;
+}
+
+// =========================================================================
+// 5. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE
+// =========================================================================
+
+export function podeVisualizarTelefoneServidor() {
+  const perfil = getPerfilUsuarioLogado();
+  return perfil !== PERFIS.VISUALIZADOR;
+}
