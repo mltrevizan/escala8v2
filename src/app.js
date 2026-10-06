@@ -7,6 +7,7 @@ import { renderServidoresTable } from './servidores.js';
 import { renderDelegaciasCards } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
+import { renderFeriasModule } from './ferias.js'; // Importação do módulo completo de férias
 
 /**
  * Troca de aba ativa
@@ -59,7 +60,7 @@ window.switchTab = function(tabName) {
       renderFeriadosModule('feriados-container');
       break;
     case 'ferias':
-      renderFeriasModule('ferias-container');
+      renderFeriasModule('ferias-container'); // Chama a interface real do ferias.js
       break;
   }
 };
@@ -160,24 +161,6 @@ function renderFeriadosModule(containerId) {
         </thead>
         <tbody class="divide-y divide-slate-200">${linhas}</tbody>
       </table>
-    </div>
-  `;
-}
-
-/**
- * Módulo de Férias (Renderização Básica)
- */
-function renderFeriasModule(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="p-4 bg-slate-50 border-b border-slate-200 font-sans">
-      <h2 class="font-bold text-sm text-slate-800">Escala de Férias e Afastamentos</h2>
-      <p class="text-[11px] text-slate-500">Controle de licenças, férias regulamentares e impedimentos</p>
-    </div>
-    <div class="p-6 text-center text-slate-400 italic font-sans text-xs">
-      Módulo de Férias carregado e integrado à base de dados.
     </div>
   `;
 }
