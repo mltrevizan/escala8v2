@@ -11,7 +11,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
-  <title>8ª CRF - Sistema de Escalas v2 | PCPR</title>
+  <title>8ª CRF - ESCALAS DE PLANTÃO | PCPR</title>
   
   <!-- FONTE OFICIAL PCPR (EXO 2) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,8 +76,8 @@
         <img src="./logo-pcpr.png" alt="Logo PCPR" class="h-10 sm:h-12 w-auto object-contain">
         
         <div>
-          <h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">8ª CRF - Sistema de Escalas v2</h1>
-          <p class="text-xs font-semibold text-slate-500">Central de Regulação de Plantões e Gestão de Equipes</p>
+          <h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">8ª CRF - ESCALAS DE PLANTÃO</h1>
+          <p class="text-xs font-semibold text-slate-500">Controle de Escalas de Plantão da CRF e das Delegacias</p>
         </div>
       </div>
       
@@ -89,7 +89,7 @@
 
     <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
-      <!-- ABAS PÚBLICAS (Visíveis por padrão) -->
+      <!-- ABAS PÚBLICAS -->
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>📅</span> Escala CRF
       </button>
@@ -97,7 +97,7 @@
         <span>🏢</span> Escala por Delegacia
       </button>
 
-      <!-- ABAS RESTRITAS (Iniciam ocultas com 'hidden' e só abrem via login autorizado) -->
+      <!-- ABAS RESTRITAS -->
       <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>⚙️</span> Gestão CRF
       </button>
@@ -154,7 +154,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (v12.2.0) -->
-  <script type="module" src="./src/app.js?v=12.2.0"></script>
+  <!-- Script Principal ES6 -->
+  <script type="module" src="./src/app.js?v=12.3.0"></script>
 </body>
 </html>
