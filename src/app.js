@@ -7,16 +7,40 @@ import { renderServidoresTable } from './servidores.js';
 import { renderDelegaciasCards } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
-import { renderFeriasModule } from './ferias.js'; // Importação do módulo completo de férias
+import { renderFeriasModule } from './ferias.js';
+import { 
+  applyUIPermissions, 
+  podeAcessarAbaGestaoCrf, 
+  podeAcessarAbaGestaoDelegacias, 
+  podeAcessarAbaServidores, 
+  podeAcessarAbaDelegacias, 
+  podeAcessarAbaFérias, 
+  podeAcessarAbaFeriados 
+} from './permissions.js';
 
 /**
- * Troca de aba ativa
+ * Troca de aba ativa com validação estrita de permissões
  */
 window.switchTab = function(tabName) {
+  // Validação de acesso por aba antes de efetuar a troca
+  if (tabName === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
+    tabName = 'crf';
+  } else if ((tabName === 'gestao-del' || tabName === 'gestao-delegacias') && !podeAcessarAbaGestaoDelegacias()) {
+    tabName = 'delegacia';
+  } else if (tabName === 'servidores' && !podeAcessarAbaServidores()) {
+    tabName = 'delegacia';
+  } else if ((tabName === 'unidades' || tabName === 'delegacias') && !podeAcessarAbaDelegacias()) {
+    tabName = 'delegacia';
+  } else if (tabName === 'ferias' && !podeAcessarAbaFérias()) {
+    tabName = 'delegacia';
+  } else if (tabName === 'feriados' && !podeAcessarAbaFeriados()) {
+    tabName = 'delegacia';
+  }
+
   appState.activeTab = tabName;
 
-  // Atualiza estados dos botões
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  // Atualiza estados visuais dos botões das abas
+  document.querySelectorAll('.tab-btn, [id^="tab-btn-"]').forEach(btn => {
     btn.classList.remove('active', 'bg-black', 'text-white', 'shadow-sm');
   });
 
@@ -25,8 +49,8 @@ window.switchTab = function(tabName) {
     btnAtivo.classList.add('active');
   }
 
-  // Oculta todos os conteúdos
-  document.querySelectorAll('.tab-content').forEach(content => {
+  // Oculta todos os contêineres de conteúdo
+  document.querySelectorAll('.tab-content, [id^="tab-content-"]').forEach(content => {
     content.classList.add('hidden');
   });
 
@@ -48,20 +72,27 @@ window.switchTab = function(tabName) {
       renderGestaoCrfModule('gestao-crf-container');
       break;
     case 'gestao-del':
+    case 'gestao-delegacias':
       renderGestaoDelegaciasModule('gestao-delegacias-container');
       break;
     case 'servidores':
       renderServidoresTable('servidores-table-container');
       break;
     case 'unidades':
+    case 'delegacias':
       renderDelegaciasCards('delegacias-container');
       break;
     case 'feriados':
       renderFeriadosModule('feriados-container');
       break;
     case 'ferias':
-      renderFeriasModule('ferias-container'); // Chama a interface real do ferias.js
+      renderFeriasModule('ferias-container');
       break;
+  }
+
+  // Garante a aplicação contínua de permissões da UI
+  if (typeof applyUIPermissions === 'function') {
+    applyUIPermissions();
   }
 };
 
@@ -187,7 +218,12 @@ async function initApp() {
       initGeradorLoteModule();
     }
 
-    // 4. Define a aba padrão inicial
+    // 4. Aplica travas de permissão na interface
+    if (typeof applyUIPermissions === 'function') {
+      applyUIPermissions();
+    }
+
+    // 5. Define a aba padrão inicial protegida
     window.switchTab('crf');
 
   } catch (err) {
