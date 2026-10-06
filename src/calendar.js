@@ -10,6 +10,53 @@ export function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
+/**
+ * Função responsável por popular o dropdown de seleções de delegacias
+ * com filtragem inteligente para o modo público.
+ */
+function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
+  const isPublico = !appState.currentUser;
+  const { currentYear, currentMonth, escalas, delegacias } = appState;
+
+  let listaDelegacias = [...(delegacias || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  if (isPublico && scope === 'DELEGACIA') {
+    const mesPrefixo = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+
+    // Mapeia os IDs das delegacias que possuem ao menos uma escala registrada no mês ativo
+    const delegaciasComEscala = new Set(
+      (escalas || [])
+        .filter(e => e.scope === 'DELEGACIA' && e.data && e.data.startsWith(mesPrefixo))
+        .map(e => e.delegaciaId)
+    );
+
+    // Filtra para exibir apenas unidades que contêm escalas no modo sem login
+    listaDelegacias = listaDelegacias.filter(d => {
+      const bateuId = delegaciasComEscala.has(d.id);
+      const bateuUnificada = d.delegaciasIds && d.delegaciasIds.some(unfId => delegaciasComEscala.has(unfId));
+      return bateuId || bateuUnificada;
+    });
+
+    // Se a delegacia atualmente selecionada no estado não tiver escalas lançadas, redireciona para a primeira válida
+    if (listaDelegacias.length > 0) {
+      const selectedExiste = listaDelegacias.some(d => d.id === selectedDelegaciaId);
+      if (!selectedExiste) {
+        appState.selectedDelegaciaId = listaDelegacias[0].id;
+      }
+    }
+  }
+
+  if (listaDelegacias.length === 0) {
+    return `<option value="">Nenhuma delegacia com escala neste mês</option>`;
+  }
+
+  const targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
+
+  return listaDelegacias.map(d => 
+    `<option value="${d.id}" ${targetId === d.id ? 'selected' : ''}>${d.nome}</option>`
+  ).join('');
+}
+
 export function renderCalendarGrid(containerId, scope = 'CRF') {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -65,9 +112,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     delCrfOptions += `<option value="${d.id}" ${delFiltroAtual === d.id ? 'selected' : ''}>${d.nome}</option>`;
   });
 
-  let delegaciasOptionsEscala = (appState.delegacias || []).map(d => 
-    `<option value="${d.id}" ${selectedDelegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`
-  ).join('');
+  // Utiliza a função inteligente de renderização de opções
+  let delegaciasOptionsEscala = obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope);
 
   let html = `
     <!-- Topo de Controle -->
@@ -134,13 +180,15 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     html += `<div class="bg-slate-50/50 p-1"></div>`;
   }
 
+  const currentSelectedDelId = appState.selectedDelegaciaId || selectedDelegaciaId;
+
   for (let day = 1; day <= totalDays; day++) {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
-    const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+    const delObj = (appState.delegacias || []).find(d => d.id === currentSelectedDelId);
 
     const feriadoDoDia = (feriados || []).find(f => {
       if (f.data !== dateStr) return false;
@@ -149,7 +197,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       if (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL') return true;
       if (f.tipo === 'MUNICIPAL') {
         const ids = f.delegaciasIds || [];
-        const bateuId = ids.includes(selectedDelegaciaId);
+        const bateuId = ids.includes(currentSelectedDelId);
         const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(unfId => ids.includes(unfId));
         return bateuId || bateuUnificado;
       }
@@ -162,9 +210,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       
       if (scope === 'DELEGACIA') {
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
-          return e.delegaciaId === selectedDelegaciaId || delObj.delegaciasIds.includes(e.delegaciaId);
+          return e.delegaciaId === currentSelectedDelId || delObj.delegaciasIds.includes(e.delegaciaId);
         }
-        return e.delegaciaId === selectedDelegaciaId;
+        return e.delegaciaId === currentSelectedDelId;
       }
       return true;
     });
@@ -558,13 +606,11 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
 
       let btnDelHtml = '';
-      // TRAVA: Só exibe botão de troca de delegado se NÃO for extrajornada
       if (isDel && showBtnDel && !isExtra) {
         btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
       }
 
       let btnApjHtml = '';
-      // TRAVA: Só exibe botão de troca/inclusão de APJ se NÃO for extrajornada
       if (!isDel && showBtnApj && !isExtra) {
         btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">➕/🔄 Incluir / Trocar APJ</button>';
       }
