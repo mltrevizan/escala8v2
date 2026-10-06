@@ -20,7 +20,7 @@ export const PERFIS = {
  */
 export function getPerfilUsuarioLogado() {
   if (!appState.currentUser) return PERFIS.VISUALIZADOR;
-  const perfilStr = (appState.currentUser.perfil || appState.currentUser.cargo || '').toUpperCase().trim();
+  const perfilStr = (appState.currentUser.perfil || appState.currentUser.cargo || appState.currentUser.nivelAcesso || '').toUpperCase().trim();
   
   if (perfilStr.includes('ADMIN')) return PERFIS.ADMINISTRADOR;
   if (perfilStr.includes('COORDENADOR')) return PERFIS.COORDENADOR;
@@ -29,6 +29,13 @@ export function getPerfilUsuarioLogado() {
   if (perfilStr.includes('APJ') || perfilStr.includes('AGENTE')) return PERFIS.APJ;
 
   return PERFIS.VISUALIZADOR;
+}
+
+/**
+ * Alias em inglês para obter o perfil do usuário logado (exigido por servidores.js)
+ */
+export function getCurrentUserRole() {
+  return getPerfilUsuarioLogado();
 }
 
 /**
@@ -53,6 +60,21 @@ export function getSubdivisaoUsuarioLogado() {
   if (!userDelId || !appState.delegacias) return null;
   const delObj = appState.delegacias.find(d => d.id === userDelId);
   return delObj?.subdivisao ? delObj.subdivisao.trim().toUpperCase() : null;
+}
+
+/**
+ * Verifica de forma rigorosa se a conta de um servidor é a conta protegida de Administrador do Sistema
+ */
+export function isProtectedAdminAccount(servidorObj) {
+  if (!servidorObj) return false;
+  const nomeNorm = normalizeText(servidorObj.nome || '');
+  const loginNorm = normalizeText(servidorObj.login || '');
+  const perfilNorm = (servidorObj.nivelAcesso || servidorObj.perfil || '').toUpperCase();
+
+  const isNomeAdmin = nomeNorm === 'administrador do sistema' || nomeNorm === 'admin' || nomeNorm === 'administrador';
+  const isLoginAdmin = loginNorm === 'admin' || loginNorm === 'administrador';
+  
+  return isNomeAdmin || isLoginAdmin || (perfilNorm === 'ADMINISTRADOR' && isNomeAdmin);
 }
 
 // =========================================================================
@@ -248,55 +270,4 @@ export function canEditServidor(servidorAlvo) {
   return podeModificarServidor(servidorAlvo);
 }
 
-export function canResetPassword(servidorAlvo) {
-  return podeResetarSenhaPolicial(servidorAlvo);
-}
-
-export function hasPermission(permissionName, targetDelegaciaId = null) {
-  const perfil = getPerfilUsuarioLogado();
-  if (perfil === PERFIS.ADMINISTRADOR) return true;
-
-  switch (permissionName) {
-    case 'EDIT_DELEGACIA_SCHEDULE':
-    case 'EDIT_SCHEDULE':
-      return podeModificarEscalaDelegacia(targetDelegaciaId || appState.selectedDelegaciaId);
-
-    case 'EDIT_CRF_SCHEDULE':
-      return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
-
-    case 'VIEW_PHONE':
-    case 'VIEW_PHONE_NUMBER':
-      return podeVisualizarTelefoneServidor();
-
-    case 'MANAGE_SERVIDORES':
-      return podeAcessarAbaServidores();
-
-    case 'MANAGE_FERIAS':
-      return podeAcessarAbaFérias();
-
-    case 'MANAGE_FERIADOS':
-      return podeAcessarAbaFeriados();
-
-    case 'MANAGE_DELEGACIAS':
-      return podeAcessarAbaDelegacias();
-
-    default:
-      return perfil !== PERFIS.VISUALIZADOR;
-  }
-}
-
-export function canViewPhoneForDate() {
-  return podeVisualizarTelefoneServidor();
-}
-
-export function canEditSchedule(delegaciaId = null) {
-  return podeModificarEscalaDelegacia(delegaciaId || appState.selectedDelegaciaId);
-}
-
-export function canEditCRF() {
-  return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
-}
-
-export function isAdmin() {
-  return getPerfilUsuarioLogado() === PERFIS.ADMINISTRADOR;
-}
+export function canResetPassword(
