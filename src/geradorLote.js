@@ -5,6 +5,7 @@ import { renderCalendarGrid } from './calendar.js';
 
 let geradorState = {
   modo: 'INDIVIDUAL',
+  vtrIndividual: '', // Viatura/TAG para o modo Rotação Individual
   policiaisSelecionados: [],
   equipes: [
     { id: 1, nome: 'Equipe 1', vtr: '', membros: [] },
@@ -123,6 +124,7 @@ window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
 
   geradorState = {
     modo: delObj?.geradorConfig?.modo || 'INDIVIDUAL',
+    vtrIndividual: delObj?.geradorConfig?.vtrIndividual || '',
     policiaisSelecionados: delObj?.geradorConfig?.policiaisSelecionados ? [...delObj.geradorConfig.policiaisSelecionados] : [],
     equipes: delObj?.geradorConfig?.equipes && delObj.geradorConfig.equipes.length > 0 
       ? JSON.parse(JSON.stringify(delObj.geradorConfig.equipes)) 
@@ -189,7 +191,7 @@ window.atualizarInfoParametrizacaoUnidade = function() {
       </div>
 
       <button type="button" onclick="window.abrirModalDelegacia('${delObj.id}')" class="px-2.5 py-1.5 bg-sky-700 hover:bg-sky-800 text-white font-bold text-[11px] rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1 shrink-0">
-        <span>⚙️</span> Ajustar Padrão
+        <span>⚙️️</span> Ajustar Padrão
       </button>
     </div>
   `;
@@ -274,6 +276,10 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
     });
 }
 
+window.atualizarVtrIndividualGerador = function(vtrText) {
+  geradorState.vtrIndividual = vtrText.toUpperCase().trim();
+};
+
 function renderizarModoIndividual(container) {
   const servidoresFiltrados = filtrarServidoresComPersistencia(geradorState.policiaisSelecionados);
 
@@ -314,17 +320,24 @@ function renderizarModoIndividual(container) {
   }).join('');
 
   container.innerHTML = `
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="space-y-3">
       <div>
-        <label class="block font-bold text-slate-700 mb-1 text-xs">1. Selecione os Policiais (${servidoresFiltrados.length}):</label>
-        <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
-          ${htmlServidores}
-        </div>
+        <label class="block font-bold text-slate-800 text-xs mb-1">TAG ou VTR (livre digitação):</label>
+        <input type="text" value="${geradorState.vtrIndividual || ''}" placeholder="Ex: VTR 8011 / DUSTER..." onchange="window.atualizarVtrIndividualGerador(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 text-xs">
       </div>
-      <div>
-        <label class="block font-bold text-slate-700 mb-1 text-xs">2. Ordem da Rotação Individual:</label>
-        <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
-          ${htmlFilaOrdenada.length > 0 ? htmlFilaOrdenada : '<p class="text-[11px] text-slate-400 italic p-3 text-center">Marque os policiais ao lado para montar a fila de revezamento.</p>'}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1 text-xs">1. Selecione os Policiais (${servidoresFiltrados.length}):</label>
+          <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
+            ${htmlServidores}
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1 text-xs">2. Ordem da Rotação Individual:</label>
+          <div class="space-y-1.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50 rounded-xl border border-slate-200">
+            ${htmlFilaOrdenada.length > 0 ? htmlFilaOrdenada : '<p class="text-[11px] text-slate-400 italic p-3 text-center">Marque os policiais ao lado para montar a fila de revezamento.</p>'}
+          </div>
         </div>
       </div>
     </div>
@@ -395,11 +408,11 @@ function renderizarModoEquipesV1(container) {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
           <div>
             <label class="block font-bold text-slate-800 text-xs mb-1">Nome da Equipe:</label>
-            <input type="text" value="${equipeAtiva.nome}" onchange="window.atualizarNomeEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            <input type="text" value="${equipeAtiva.nome}" onchange="window.atualizarNomeEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 text-xs">
           </div>
           <div>
             <label class="block font-bold text-slate-800 text-xs mb-1">TAG ou VTR (livre digitação):</label>
-            <input type="text" value="${equipeAtiva.vtr || ''}" placeholder="Ex: VTR 801 / DUSTER..." onchange="window.atualizarVtrEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
+            <input type="text" value="${equipeAtiva.vtr || ''}" placeholder="Ex: VTR 8011 / DUSTER..." onchange="window.atualizarVtrEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500 text-xs">
           </div>
         </div>
 
@@ -455,7 +468,7 @@ window.atualizarNomeEquipeV1 = function(nome) {
 
 window.atualizarVtrEquipeV1 = function(vtrText) {
   if (geradorState.equipes[geradorState.equipeAtivaIdx]) {
-    geradorState.equipes[geradorState.equipeAtivaIdx].vtr = vtrText.toUpperCase();
+    geradorState.equipes[geradorState.equipeAtivaIdx].vtr = vtrText.toUpperCase().trim();
   }
 };
 
@@ -539,6 +552,7 @@ window.executarGeradorLote = async function(e) {
   if (delObj) {
     delObj.geradorConfig = {
       modo: geradorState.modo,
+      vtrIndividual: geradorState.vtrIndividual || '',
       policiaisSelecionados: [...geradorState.policiaisSelecionados],
       equipes: JSON.parse(JSON.stringify(geradorState.equipes))
     };
@@ -597,7 +611,8 @@ window.executarGeradorLote = async function(e) {
           delegaciaId: delegaciaId,
           scope: scope,
           tipo: tipoModalidade,
-          turno: turnoPadraoCalculado
+          turno: turnoPadraoCalculado,
+          vtr: geradorState.vtrIndividual || ''
         };
 
         if (!appState.escalas) appState.escalas = [];
