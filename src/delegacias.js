@@ -10,6 +10,60 @@ function limparSujeiraHorario(str) {
   return str.replace(/[\x00-\x1F\x7F-\x9F]/g, '').replace(/ert\{\}/gi, '').trim();
 }
 
+/**
+ * Preenche o dropdown da aba 'Escala por Delegacia' apenas com delegacias que possuem 
+ * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
+ * 
+ * @param {string} selectElementId - ID do elemento <select> na aba de Escalas por Delegacia.
+ * @returns {string|null} Retorna o ID da delegacia selecionada automaticamente ou null se vazia.
+ */
+export function popularDropdownDelegaciasComEscala(selectElementId = 'select-escala-delegacia') {
+  const select = document.getElementById(selectElementId);
+  if (!select) return null;
+
+  const escalas = appState.escalas || [];
+  const delegacias = appState.delegacias || [];
+
+  // Mapeia IDs ou nomes de delegacias que possuem escalas registradas
+  const idsComEscala = new Set(
+    escalas
+      .filter(e => e.delegaciaId || e.delegacia)
+      .map(e => String(e.delegaciaId || e.delegacia).trim())
+  );
+
+  // Filtra apenas as delegacias que possuem lançamentos vinculados
+  const delegaciasComEscala = delegacias.filter(d => 
+    idsComEscala.has(String(d.id)) || idsComEscala.has(String(d.nome).trim())
+  );
+
+  // Se não houver delegacias com escala cadastrada, exibe mensagem informativa
+  if (delegaciasComEscala.length === 0) {
+    select.innerHTML = `<option value="">Nenhuma delegacia com escala registrada</option>`;
+    select.disabled = true;
+    return null;
+  }
+
+  // Ordena alfabeticamente pelo nome da delegacia
+  delegaciasComEscala.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  // Gera as opções do dropdown
+  let optionsHTML = delegaciasComEscala
+    .map(del => `<option value="${del.id}">${del.nome}</option>`)
+    .join('');
+
+  select.innerHTML = optionsHTML;
+  select.disabled = false;
+
+  // Regra: Seleciona automaticamente a primeira delegacia válida da lista
+  const primeiraDelegaciaId = delegaciasComEscala[0].id;
+  select.value = primeiraDelegaciaId;
+
+  // Dispara o evento de 'change' para atualizar automaticamente a grade/calendário se houver listener
+  select.dispatchEvent(new Event('change'));
+
+  return primeiraDelegaciaId;
+}
+
 export function renderDelegaciasCards(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
