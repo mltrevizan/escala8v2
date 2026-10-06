@@ -398,7 +398,7 @@ function renderizarModoEquipesV1(container) {
             <input type="text" value="${equipeAtiva.nome}" onchange="window.atualizarNomeEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block font-bold text-slate-800 text-xs mb-1">🚘 Viatura / VTR (Livre Digitação):</label>
+            <label class="block font-bold text-slate-800 text-xs mb-1">TAG ou VTR (livre digitação):</label>
             <input type="text" value="${equipeAtiva.vtr || ''}" placeholder="Ex: VTR 801 / DUSTER..." onchange="window.atualizarVtrEquipeV1(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 bg-white font-bold text-indigo-900 focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
@@ -580,7 +580,6 @@ window.executarGeradorLote = async function(e) {
   const conflitosDetectados = [];
 
   let idxDia = 0;
-  // Permite que o loop processe o dia inicial se ele estiver dentro de diasValidos
   while (idxDia < diasValidos.length) {
     const dtIso = diasValidos[idxDia];
     const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
@@ -589,7 +588,6 @@ window.executarGeradorLote = async function(e) {
       const sId = geradorState.policiaisSelecionados[filaIndex % geradorState.policiaisSelecionados.length];
       filaIndex++;
 
-      // Extrapolação controlada: lança todos os dias do turno contínuo, mesmo que ultrapassem a dataFim
       for (const dataSubsequent of datasDoTurno) {
         const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const novaEscala = {
@@ -614,7 +612,6 @@ window.executarGeradorLote = async function(e) {
       filaIndex++;
 
       for (const sId of equipeAtiva.membros) {
-        // Extrapolação controlada para membros da equipe
         for (const dataSubsequent of datasDoTurno) {
           const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
           const novaEscala = {
