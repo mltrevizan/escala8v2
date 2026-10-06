@@ -56,11 +56,12 @@ export async function loadAllDataFromFirestore() {
       buscarColecaoSegura('ferias')
     ]);
 
+    // Atribuição ao estado global da aplicação
     appState.delegacias = delegaciasData;
     appState.escalas = escalasData;
     appState.feriados = feriadosData;
     appState.sdps = sdpsData;
-    appState.ferias = feriasData; // Mapeamento essencial para a verificação de afastamentos
+    appState.ferias = feriasData; // essencial para o correto cruzamento e bloqueio de escalas
 
     // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
     const datasOperacionais = obterDatasOperacionaisIso();
@@ -72,7 +73,7 @@ export async function loadAllDataFromFirestore() {
       }
     });
 
-    // Servidores (Sanitização Apenas do Telefone, mantendo Nomes, Cargos e Lotações)
+    // Sanitização e formatação dos dados dos servidores
     appState.servidores = servidoresData.map(srv => {
       const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(srv.id);
 
@@ -89,6 +90,11 @@ export async function loadAllDataFromFirestore() {
 
     if (appState.delegacias.length > 0 && !appState.selectedDelegaciaId) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
+    }
+
+    // Atualização de status visual
+    if (statusEl) {
+      statusEl.innerHTML = '';
     }
 
     console.log(`Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias e ${appState.ferias.length} registros de férias.`);
