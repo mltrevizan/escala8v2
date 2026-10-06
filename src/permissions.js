@@ -32,7 +32,7 @@ export function getPerfilUsuarioLogado() {
 }
 
 /**
- * Alias em inglês para obter o perfil do usuário logado (exigido por servidores.js)
+ * Alias em inglês para obter o perfil do usuário logado
  */
 export function getCurrentUserRole() {
   return getPerfilUsuarioLogado();
@@ -260,56 +260,58 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 export function applyUIPermissions() {
   const perfil = getPerfilUsuarioLogado();
 
-  // Mapeamento de abas do topo e de navegação gerencial
-  const abasMap = {
-    'tab-btn-gestao-crf': podeAcessarAbaGestaoCrf(),
-    'tab-btn-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
-    'tab-btn-servidores': podeAcessarAbaServidores(),
-    'tab-btn-ferias': podeAcessarAbaFérias(),
-    'tab-btn-feriados': podeAcessarAbaFeriados(),
-    'tab-btn-delegacias': podeAcessarAbaDelegacias(),
-    // Mapeamento alternativo por IDs comuns do DOM
-    'nav-gestao-crf': podeAcessarAbaGestaoCrf(),
-    'nav-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
-    'nav-servidores': podeAcessarAbaServidores(),
-    'nav-delegacias': podeAcessarAbaDelegacias(),
-    'nav-ferias': podeAcessarAbaFérias(),
-    'nav-feriados': podeAcessarAbaFeriados()
-  };
+  // Ocultar ou exibir botões do menu superior baseado no texto e atributos do botão
+  const navButtons = document.querySelectorAll('button, a, [role="tab"]');
 
-  Object.keys(abasMap).forEach(tabId => {
-    const el = document.getElementById(tabId);
-    if (el) {
-      if (abasMap[tabId]) {
-        el.classList.remove('hidden');
-        el.style.display = '';
-      } else {
-        el.classList.add('hidden');
-        el.style.display = 'none';
+  navButtons.forEach(btn => {
+    const txt = (btn.innerText || btn.textContent || '').toLowerCase().trim();
+    const id = (btn.id || '').toLowerCase();
+    const onclickAttr = (btn.getAttribute('onclick') || '').toLowerCase();
+
+    const isGestaoDel = txt.includes('gestão por delegacia') || txt.includes('gestão de delegacia') || id.includes('gestao-delegacia') || onclickAttr.includes('gestao-delegacias');
+    const isDelegacias = (txt === 'delegacias' || txt.includes('aba delegacias') || id === 'tab-btn-delegacias') && !isGestaoDel;
+    const isGestaoCrf = txt.includes('gestão crf') || id.includes('gestao-crf') || onclickAttr.includes('gestao-crf');
+    const isServidores = txt.includes('servidores') || txt.includes('policiais') || id.includes('servidores');
+    const isFerias = txt.includes('férias') || txt.includes('ferias');
+    const isFeriados = txt.includes('feriados');
+
+    let permitir = true;
+
+    if (isGestaoDel) permitir = podeAcessarAbaGestaoDelegacias();
+    else if (isDelegacias) permitir = podeAcessarAbaDelegacias();
+    else if (isGestaoCrf) permitir = podeAcessarAbaGestaoCrf();
+    else if (isServidores) permitir = podeAcessarAbaServidores();
+    else if (isFerias) permitir = podeAcessarAbaFérias();
+    else if (isFeriados) permitir = podeAcessarAbaFeriados();
+
+    if (!permitir) {
+      btn.style.display = 'none';
+      btn.classList.add('hidden');
+    } else if (isGestaoDel || isDelegacias || isGestaoCrf || isServidores || isFerias || isFeriados) {
+      btn.style.display = '';
+      btn.classList.remove('hidden');
+    }
+  });
+
+  // Se o usuário estivesse em uma aba restrita no modo público, força retorno para escala por delegacia
+  if (perfil === PERFIS.VISUALIZADOR) {
+    if (['gestao-crf', 'gestao-delegacias', 'servidores', 'delegacias', 'ferias', 'feriados'].includes(appState.activeTab)) {
+      if (typeof window.switchTab === 'function') {
+        window.switchTab('delegacia');
       }
     }
-  });
-
-  // Ocultar qualquer contêiner ou botão gerencial no modo público
-  const gerencialElements = document.querySelectorAll('.admin-only, .gerencial-only');
-  gerencialElements.forEach(el => {
-    if (perfil === PERFIS.VISUALIZADOR) {
-      el.classList.add('hidden');
-      el.style.display = 'none';
-    } else {
-      el.classList.remove('hidden');
-      el.style.display = '';
-    }
-  });
-
-  // Proteção de redirecionamento se o usuário público tentar navegar diretamente para uma aba restrita
-  const isAbaRestrita = ['gestao-crf', 'gestao-delegacias', 'servidores', 'delegacias', 'ferias', 'feriados'].includes(appState.activeTab);
-  
-  if (perfil === PERFIS.VISUALIZADOR && isAbaRestrita) {
-    if (typeof window.switchTab === 'function') {
-      window.switchTab('delegacia');
-    }
   }
+}
+
+// Executa a limpeza da interface no momento em que a página e os componentes DOM são carregados
+if (typeof window !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    applyUIPermissions();
+  });
+  // Executa uma segunda checagem em 500ms para pegar menus renderizados dinamicamente
+  setTimeout(() => {
+    applyUIPermissions();
+  }, 500);
 }
 
 // =========================================================================
