@@ -24,18 +24,12 @@ export function renderServidoresTable(containerId) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Cadastro de Policiais e Servidores</h2>
-          <p class="text-[11px] text-slate-500">Gestão de efetivo, cargos, permissões e vinculos de lotação</p>
+          <p class="text-[11px] text-slate-500">Gestão de efetivo, cargos, permissões e vínculos de lotação</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalServidor()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Servidor
           </button>
-
-          ${role === 'ADMINISTRADOR' ? `
-            <button id="btn-sync-auth-lote" onclick="window.sincronizarTodosServidoresAuth()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-              ⚡ Sincronizar Todos no Auth
-            </button>
-          ` : ''}
         </div>
       </div>
 
@@ -47,8 +41,8 @@ export function renderServidoresTable(containerId) {
         <div>
           <select id="srv-filtro-cargo" onchange="window.filtrarTabelaServidores()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
             <option value="TODOS">Todos os Cargos</option>
-            <option value="DELEGADO">DELEGADO</option>
-            <option value="APJ">APJ / AGENTE</option>
+            <option value="DELEGADO">DELEGADO DE POLÍCIA</option>
+            <option value="APJ">APJ (AGENTE DE POLÍCIA JUDICIÁRIA)</option>
           </select>
         </div>
         <div>
@@ -102,6 +96,11 @@ window.renderTabelaServidoresCorpo = function() {
   const isAdminOrCoord = ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
 
   let servidoresLista = (appState.servidores || []).filter(srv => {
+    // 1. Oculta a conta do Administrador do Sistema da listagem de servidores
+    if (isProtectedAdminAccount(srv)) {
+      return false;
+    }
+
     const nomeNorm = (srv.nome || '').toLowerCase();
     const cargoNorm = (srv.cargo || '').toLowerCase();
     const loginNorm = (srv.login || '').toLowerCase();
@@ -115,7 +114,7 @@ window.renderTabelaServidoresCorpo = function() {
       if (cargo === 'APJ' && cargoNorm.includes('delegado')) return false;
     }
 
-    // Se não for Admin/Coord, força filtro na própria delegacia
+    // Filtro por delegacia
     if (!isAdminOrCoord && userDelId) {
       if (srv.delegaciaId !== userDelId) return false;
     } else if (delegaciaId !== 'TODAS') {
@@ -133,6 +132,7 @@ window.renderTabelaServidoresCorpo = function() {
   tbody.innerHTML = servidoresLista.map(srv => {
     const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const nivel = srv.nivelAcesso || srv.perfil || 'APJ';
+    const cargoExibicao = (srv.cargo || '').toUpperCase().includes('DELEGADO') ? 'DELEGADO DE POLÍCIA' : 'APJ';
 
     let badgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
     if (nivel.toUpperCase() === 'ADMINISTRADOR') badgeClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
@@ -144,7 +144,7 @@ window.renderTabelaServidoresCorpo = function() {
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
         <td class="p-3 font-bold text-slate-900">${srv.nome}</td>
-        <td class="p-3 font-semibold text-slate-700">${srv.cargo || 'APJ'}</td>
+        <td class="p-3 font-semibold text-slate-700">${cargoExibicao}</td>
         <td class="p-3">
           <span class="px-2 py-0.5 text-[10px] rounded border ${badgeClass}">${nivel}</span>
         </td>
@@ -154,6 +154,9 @@ window.renderTabelaServidoresCorpo = function() {
           ${podeEditar ? `
             <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
               ✏️ Editar
+            </button>
+            <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Resetar senha para Central123" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
+              🔑 Resetar Senha
             </button>
             <button onclick="window.excluirServidorDirect('${srv.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
               🗑 Excluir
@@ -180,7 +183,7 @@ window.abrirModalServidor = function(srvId = null) {
   const userDelId = getCurrentUserDelegaciaId();
   const isAdminOrCoord = ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
 
-  // Preenche opções de permissão permitidas para quem está cadastrando
+  // Preenche opções de permissão permitidas
   const allowedRoles = getAllowedRolesForCreation();
   const selectNivel = document.getElementById('modal-srv-nivel');
   if (selectNivel) {
@@ -194,13 +197,26 @@ window.abrirModalServidor = function(srvId = null) {
       `<option value="${d.id}" ${(!isAdminOrCoord && d.id === userDelId) ? 'selected' : ''}>${d.nome}</option>`
     ).join('');
     selectDel.innerHTML = opts;
-    selectDel.disabled = !isAdminOrCoord; // Trava para própria delegacia se não for Admin/Coord
+    selectDel.disabled = !isAdminOrCoord;
+  }
+
+  // Trata o cargo padronizado (DELEGADO ou APJ)
+  let cargoPadrao = 'APJ';
+  if (srv && (srv.cargo || '').toUpperCase().includes('DELEGADO')) {
+    cargoPadrao = 'DELEGADO';
   }
 
   document.getElementById('modal-srv-id').value = srvId || '';
   document.getElementById('modal-srv-nome').value = srv ? srv.nome : '';
-  document.getElementById('modal-srv-cargo').value = srv ? (srv.cargo || 'APJ') : 'APJ';
+  document.getElementById('modal-srv-cargo').value = cargoPadrao;
   document.getElementById('modal-srv-telefone').value = srv ? (srv.telefone || '') : '';
+
+  // Oculta/Exibe o container de reset de senha dentro do modal de edição
+  const containerReset = document.getElementById('modal-container-btn-reset');
+  if (containerReset) {
+    if (srvId) containerReset.classList.remove('hidden');
+    else containerReset.classList.add('hidden');
+  }
 
   if (srv && selectNivel) selectNivel.value = srv.nivelAcesso || srv.perfil || 'APJ';
   if (srv && selectDel && isAdminOrCoord) selectDel.value = srv.delegaciaId || '';
@@ -227,7 +243,6 @@ window.salvarServidorModalSubmit = async function(e) {
     return;
   }
 
-  // Segurança: Impede que qualquer usuário altere o perfil do Administrador protegido
   if (idInput) {
     const srvExistente = (appState.servidores || []).find(s => s.id === idInput);
     if (isProtectedAdminAccount(srvExistente) && nivelAcesso !== 'ADMINISTRADOR') {
@@ -237,6 +252,7 @@ window.salvarServidorModalSubmit = async function(e) {
   }
 
   const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+  const isNovo = !idInput;
   const srvId = idInput || 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const loginCalc = normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
 
@@ -258,16 +274,50 @@ window.salvarServidorModalSubmit = async function(e) {
   if (idx >= 0) appState.servidores[idx] = novoServidor;
   else appState.servidores.push(novoServidor);
 
-  // 1. Salva no Firestore
+  // 1. Salva dados cadastrais no Firestore
   await syncDocToFirestore('servidores', srvId, novoServidor);
 
-  // 2. Garante a criação da conta no Firebase Auth com a senha padrão 'Central123'
-  await criarContaFirebaseAuth(novoServidor, 'Central123');
+  // 2. Se for um policial NOVO, cadastra a conta no Auth com a senha inicial Central123
+  if (isNovo) {
+    await criarContaFirebaseAuth(novoServidor, 'Central123');
+    alert(`Policial ${nome} cadastrado com sucesso!\n\nSenha Padrão Inicial: Central123`);
+  } else {
+    alert(`Cadastro de ${nome} atualizado com sucesso!`);
+  }
 
-  alert(`Policial ${nome} salvo e cadastrado no login com sucesso (Senha Padrão: Central123)!`);
   window.fecharModalServidor();
-
   renderServidoresTable('servidores-table-container');
+};
+
+/**
+ * Função de Reset de Senha individual
+ */
+window.resetarSenhaServidorDirect = async function(srvId = null) {
+  const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
+  if (!idUsar) return;
+
+  const srv = (appState.servidores || []).find(s => s.id === idUsar);
+  if (!srv) return;
+
+  if (isProtectedAdminAccount(srv)) {
+    alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada por este botão.");
+    return;
+  }
+
+  if (!confirm(`Deseja resetar a senha de acesso do servidor ${srv.nome} para a senha padrão 'Central123'?\n\nO servidor precisará alterar a senha no próximo login.`)) {
+    return;
+  }
+
+  try {
+    await criarContaFirebaseAuth(srv, 'Central123');
+    alert(`Senha do servidor ${srv.nome} resetada com sucesso para: Central123`);
+    if (document.getElementById('modal-cadastro-servidor')) {
+      window.fecharModalServidor();
+    }
+  } catch (err) {
+    console.error("Erro ao resetar senha:", err);
+    alert(`Erro ao redefinir senha: ${err.message}`);
+  }
 };
 
 window.excluirServidorDirect = async function(srvId) {
@@ -288,6 +338,8 @@ window.excluirServidorDirect = async function(srvId) {
 };
 
 function criarModalServidorDOM() {
+  document.getElementById('modal-cadastro-servidor')?.remove();
+
   const modalHTML = `
     <div id="modal-cadastro-servidor" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
@@ -308,10 +360,8 @@ function criarModalServidorDOM() {
             <div>
               <label class="block font-bold text-slate-700 mb-1">Cargo / Função:</label>
               <select id="modal-srv-cargo" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900">
-                <option value="APJ">APJ / AGENTE</option>
+                <option value="APJ">APJ (AGENTE DE POLÍCIA JUDICIÁRIA)</option>
                 <option value="DELEGADO">DELEGADO DE POLÍCIA</option>
-                <option value="INVESTIGADOR">INVESTIGADOR</option>
-                <option value="ESCRIVÃO">ESCRIVÃO</option>
               </select>
             </div>
 
@@ -329,6 +379,13 @@ function criarModalServidorDOM() {
           <div>
             <label class="block font-bold text-slate-700 mb-1">Telefone de Contato / Plantão:</label>
             <input type="text" id="modal-srv-telefone" placeholder="(44) 99999-9999" class="w-full border rounded-xl p-2 bg-slate-50 font-medium text-slate-900">
+          </div>
+
+          <!-- Botão de Reset de Senha dentro do modal de edição -->
+          <div id="modal-container-btn-reset" class="hidden pt-2 border-t">
+            <button type="button" onclick="window.resetarSenhaServidorDirect()" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1">
+              🔑 Resetar Senha para o Padrão (Central123)
+            </button>
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
