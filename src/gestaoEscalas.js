@@ -31,7 +31,6 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-// CÁLCULO AUTOMÁTICO DA DATA FIM COM BASE NA DURAÇÃO DO TURNO
 window.recalcularDataFimModalDelegacia = function() {
   const dataInicioInput = document.getElementById('ml-del-data')?.value;
   const turno = document.getElementById('ml-del-turno')?.value || '24h';
@@ -88,10 +87,10 @@ export function renderGestaoCrfModule(containerId) {
         </div>
       </div>
 
-      <!-- Filtros da Gestão CRF -->
+      <!-- Filtros da Gestão CRF com injeção do value -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
         <div>
-          <input type="text" id="gest-crf-busca" oninput="window.filtrarTabelaGestaoCrf()" placeholder="🔍 Filtrar por nome do policial..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          <input type="text" id="gest-crf-busca" value="${gestaoCrfFiltros.busca || ''}" oninput="window.filtrarTabelaGestaoCrf()" placeholder="🔍 Filtrar por nome do policial..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
         <div>
           <select id="gest-crf-sdp" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
@@ -133,7 +132,7 @@ window.popularFiltrosGestaoCrf = function() {
 
     let opts = `<option value="TODAS">Todas as SDPs</option>`;
     [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
-      opts += `<option value="${s}">${s}</option>`;
+      opts += `<option value="${s}" ${gestaoCrfFiltros.sdp === s ? 'selected' : ''}>${s}</option>`;
     });
     selectSdp.innerHTML = opts;
   }
@@ -142,7 +141,7 @@ window.popularFiltrosGestaoCrf = function() {
   if (selectDel) {
     let opts = `<option value="TODAS">Todas as Delegacias</option>`;
     (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
-      opts += `<option value="${d.id}">${d.nome}</option>`;
+      opts += `<option value="${d.id}" ${gestaoCrfFiltros.delegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`;
     });
     selectDel.innerHTML = opts;
   }
@@ -220,7 +219,7 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS (COM TRAVA E FILTRAGEM POR PERFIL)
+// 2. MÓDULO GESTÃO POR DELEGACIAS
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
@@ -230,7 +229,6 @@ export function renderGestaoDelegaciasModule(containerId) {
   const userDelId = getDelegaciaIdUsuarioLogado();
   const sdpUser = getSubdivisaoUsuarioLogado();
 
-  // Filtragem estrita de delegacias visíveis no menu conforme perfil do utilizador
   const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
     if (perfil === PERFIS.ADMINISTRADOR) return true;
     if (perfil === PERFIS.COORDENADOR) {
@@ -242,7 +240,6 @@ export function renderGestaoDelegaciasModule(containerId) {
     return false;
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
-  // Garante que a delegacia selecionada no appState pertença à lista de delegacias autorizadas do perfil
   if (delegaciasPermitidas.length > 0) {
     const estaAutorizado = delegaciasPermitidas.some(d => String(d.id) === String(appState.selectedDelegaciaId));
     if (!estaAutorizado) {
@@ -295,7 +292,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtros -->
+      <!-- Barra de Filtros com injeção do termo de busca -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Unidade Alvo:</label>
@@ -306,16 +303,16 @@ export function renderGestaoDelegaciasModule(containerId) {
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida (Letra a Letra):</label>
-          <input type="text" id="gest-del-busca" oninput="window.atualizarFiltrosGestaoDelList()" placeholder="Policial ou VTR..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          <input type="text" id="gest-del-busca" value="${gestaoDelTabelaState.busca || ''}" oninput="window.atualizarFiltrosGestaoDelList()" placeholder="Policial ou VTR..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
 
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏷 Modalidade:</label>
           <select id="gest-del-modalidade" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            <option value="TODAS">Todas as Modalidades</option>
-            <option value="PLANTÃO">PLANTÃO LOCAL</option>
-            <option value="SOBREAVISO">SOBREAVISO</option>
-            <option value="EXTRAJORNADA">EXTRAJORNADA</option>
+            <option value="TODAS" ${gestaoDelTabelaState.modalidade === 'TODAS' ? 'selected' : ''}>Todas as Modalidades</option>
+            <option value="PLANTÃO" ${gestaoDelTabelaState.modalidade === 'PLANTÃO' ? 'selected' : ''}>PLANTÃO LOCAL</option>
+            <option value="SOBREAVISO" ${gestaoDelTabelaState.modalidade === 'SOBREAVISO' ? 'selected' : ''}>SOBREAVISO</option>
+            <option value="EXTRAJORNADA" ${gestaoDelTabelaState.modalidade === 'EXTRAJORNADA' ? 'selected' : ''}>EXTRAJORNADA</option>
           </select>
         </div>
 
@@ -467,8 +464,10 @@ window.renderTabelaGestaoDelCorpo = function() {
     const tipoModalidade = normalizarTipoModalidade(esc.tipo);
 
     let badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A]';
-    if (tipoModalidade === 'SOBREAVISO' || tipoModalidade === 'EXTRAJORNADA') {
-      badgeClass = 'bg-black text-pcpr-gold border-pcpr-gold';
+    if (tipoModalidade === 'SOBREAVISO') {
+      badgeClass = 'bg-[#2A2B2D] text-[#F0F1F2] border-[#57585A]';
+    } else if (tipoModalidade === 'EXTRAJORNADA') {
+      badgeClass = 'bg-slate-700 text-pcpr-gold border-slate-800';
     }
 
     return `
@@ -744,7 +743,7 @@ function criarModalLancamentoCrfDOM() {
 
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
-                <input type="text" id="ml-crf-filtro-busca" oninput="window.atualizarFiltrosServidoresCrfModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+                <input type="text" id="ml-crf-filtro-busca" value="${modalCrfFiltros.busca || ''}" oninput="window.atualizarFiltrosServidoresCrfModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
               </div>
             </div>
 
@@ -795,7 +794,7 @@ function criarModalLancamentoCrfDOM() {
 }
 
 // =========================================================================
-// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA (ATUALIZADO)
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
 // =========================================================================
 window.abrirModalLancamentoDelegacia = function() {
   let modal = document.getElementById('modal-lancamento-delegacia');
@@ -807,7 +806,6 @@ window.abrirModalLancamentoDelegacia = function() {
   const perfil = getPerfilUsuarioLogado();
   const userDelId = getDelegaciaIdUsuarioLogado();
 
-  // Força a delegacia alvo para a lotação do próprio utilizador caso seja Delegado ou Superintendente
   if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
     appState.selectedDelegaciaId = userDelId;
   }
@@ -995,7 +993,6 @@ function criarModalLancamentoDelegaciaDOM() {
             <input type="text" id="ml-del-unidade-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-700 font-bold">
           </div>
 
-          <!-- 1. Modalidade e Duração do Turno -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
@@ -1021,13 +1018,11 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- 2. TAG ou VTR (livre digitação) -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">TAG ou VTR (livre digitação):</label>
             <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011 / DUSTER..." class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900 font-bold">
           </div>
 
-          <!-- 3. Seleção de Datas (Início e Fim Automático) -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
@@ -1039,7 +1034,6 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- 4. Seleção do Policial Escalado -->
           <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
@@ -1053,7 +1047,7 @@ function criarModalLancamentoDelegaciaDOM() {
 
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
-                <input type="text" id="ml-del-filtro-busca" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+                <input type="text" id="ml-del-filtro-busca" value="${modalDelFiltros.busca || ''}" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
               </div>
             </div>
 
@@ -1089,9 +1083,6 @@ window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
   }
 };
 
-// =========================================================================
-// EXPORTAÇÃO E IMPORTAÇÃO DE ARQUIVO CSV
-// =========================================================================
 window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
   const { currentYear, currentMonth, selectedDelegaciaId } = appState;
 
@@ -1382,11 +1373,11 @@ function criarModalVincularApjPontualDOM() {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 shrink-0">
           <div>
             <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Filtro Delegado:</label>
-            <input type="text" id="vinc-filtro-delegado-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do Delegado..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <input type="text" id="vinc-filtro-delegado-input" value="${vincularApjPontualState.filtroDelegado || ''}" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do Delegado..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
           <div>
             <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Filtro APJ:</label>
-            <input type="text" id="vinc-filtro-apj-input" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do APJ..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <input type="text" id="vinc-filtro-apj-input" value="${vincularApjPontualState.filtroApj || ''}" oninput="window.atualizarFiltrosVincularApj()" placeholder="Digite o nome do APJ..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-slate-50 font-medium focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
         </div>
 
