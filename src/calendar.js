@@ -11,6 +11,52 @@ export function getFirstDayOfWeek(year, month) {
 }
 
 /**
+ * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
+ */
+function obterHorarioTurnoTexto(esc) {
+  if (!esc) return '08:00 às 08:00';
+
+  const turno = (esc.turno || '24h').toLowerCase().trim();
+  const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+  const isSobreaviso = esc.tipo === 'SOBREAVISO';
+  const config = isSobreaviso ? del?.sobreavisoConfig : del?.plantaoConfig;
+
+  // Se o turno for 12h Diurno/Noturno específico da CRF
+  if (turno.includes('12h (d)')) return '07:30 às 19:30';
+  if (turno.includes('12h (n)')) return '19:30 às 07:30 (do dia seguinte)';
+
+  // Horários parametrizados da unidade
+  const hUteis = config?.uteis || del?.horarioUteis || '08:00 às 08:00';
+  const hNaoUteis = config?.naoUteis || del?.horarioNaoUteis || '08:00 às 08:00';
+
+  // Verifica se a data é final de semana
+  if (esc.data) {
+    const parts = esc.data.split('-').map(Number);
+    if (parts.length === 3) {
+      const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
+      const dayOfWeek = dObj.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        return hNaoUteis;
+      }
+    }
+  }
+
+  // Turnos em múltiplos dias (ex: 3 dias)
+  if (turno.includes('dias') || turno.includes('dia')) {
+    const numDias = parseInt(turno, 10) || 1;
+    const parts = esc.data.split('-').map(Number);
+    if (parts.length === 3) {
+      const dFim = new Date(parts[0], parts[1] - 1, parts[2] + numDias);
+      const dd = String(dFim.getDate()).padStart(2, '0');
+      const mm = String(dFim.getMonth() + 1).padStart(2, '0');
+      return `Entrada 08:00 (dia ${parts[2]}) às 08:00 (dia ${dd}/${mm})`;
+    }
+  }
+
+  return hUteis;
+}
+
+/**
  * Função responsável por popular o dropdown de seleções de delegacias
  * com filtragem inteligente para o modo público.
  */
@@ -23,21 +69,18 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
   if (isPublico && scope === 'DELEGACIA') {
     const mesPrefixo = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 
-    // Mapeia os IDs das delegacias que possuem ao menos uma escala registrada no mês ativo
     const delegaciasComEscala = new Set(
       (escalas || [])
         .filter(e => e.scope === 'DELEGACIA' && e.data && e.data.startsWith(mesPrefixo))
         .map(e => e.delegaciaId)
     );
 
-    // Filtra para exibir apenas unidades que contêm escalas no modo sem login
     listaDelegacias = listaDelegacias.filter(d => {
       const bateuId = delegaciasComEscala.has(d.id);
       const bateuUnificada = d.delegaciasIds && d.delegaciasIds.some(unfId => delegaciasComEscala.has(unfId));
       return bateuId || bateuUnificada;
     });
 
-    // Se a delegacia atualmente selecionada no estado não tiver escalas lançadas, redireciona para a primeira válida
     if (listaDelegacias.length > 0) {
       const selectedExiste = listaDelegacias.some(d => d.id === selectedDelegaciaId);
       if (!selectedExiste) {
@@ -112,7 +155,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     delCrfOptions += `<option value="${d.id}" ${delFiltroAtual === d.id ? 'selected' : ''}>${d.nome}</option>`;
   });
 
-  // Utiliza a função inteligente de renderização de opções
   let delegaciasOptionsEscala = obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope);
 
   let html = `
@@ -302,12 +344,17 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
+          // ESTILIZAÇÃO DE CORES DA PCPR (EXTRAJORNADA EM CINZA CHUMBO COM DETALHES DOURADOS)
           let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
-          if (isSobreaviso || isExtra) {
+          if (isSobreaviso) {
             cardStyle = 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs';
-            rotuloTipo = isSobreaviso ? 'SOBREAVISO' : 'EXTRA';
+            rotuloTipo = 'SOBREAVISO';
+          } else if (isExtra) {
+            // CINZA CHUMBO / GRAFITE ELEGANTE COM DOURADO PCPR (SEM USAR PRETO DE TAG NEM VERMELHO)
+            cardStyle = 'bg-slate-700 border-slate-800 text-slate-100 shadow-xs';
+            rotuloTipo = 'EXTRA';
           }
 
           const idsString = grupo.map(e => e.id).join(',');
@@ -317,7 +364,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
-            const corTexto = (isSobreaviso || isExtra) ? 'text-white font-semibold' : 'text-slate-900';
+            let corTexto = 'text-slate-900';
+            if (isSobreaviso) corTexto = 'text-white font-semibold';
+            else if (isExtra) corTexto = 'text-slate-100 font-bold';
 
             return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
           }).join('');
@@ -329,7 +378,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
                  class="p-1 rounded border ${cardStyle} font-semibold shadow-xs cursor-pointer hover:brightness-95 transition space-y-0.5">
               ${primeiraEsc.vtr ? `<div class="text-[8px] bg-black text-[#BEA55A] border border-[#BEA55A]/40 font-black px-1 py-0.2 rounded truncate uppercase">🚘 ${primeiraEsc.vtr}</div>` : ''}
               ${nomesHtml}
-              <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${(isSobreaviso || isExtra) ? 'border-white/20 text-slate-300' : 'border-black/10 text-slate-700'} pt-0.5">
+              <div class="text-[7.5px] font-mono flex items-center justify-between opacity-90 border-t ${isSobreaviso ? 'border-white/20 text-slate-300' : (isExtra ? 'border-slate-500/60 text-pcpr-gold font-bold' : 'border-black/10 text-slate-700')} pt-0.5">
                 <span>${primeiraEsc.turno || '24h'}</span>
                 <span class="font-bold uppercase tracking-tight">${rotuloTipo}</span>
               </div>
@@ -510,15 +559,17 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
 
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
       const telExibicao = podeVerTelefone ? (srv?.telefone || '-') : '🔒 [Acesso Restrito]';
+      const horarioEfetivo = obterHorarioTurnoTexto(esc);
 
       content += `
         <div class="pt-1 border-t border-slate-100 space-y-0.5">
-          <div class="font-bold ${isExtra ? 'text-amber-800' : 'text-slate-800'} text-xs flex items-center justify-between">
+          <div class="font-bold ${isExtra ? 'text-amber-700' : 'text-slate-800'} text-xs flex items-center justify-between">
             <span>${srv?.nome || 'Não informado'}</span>
-            ${isExtra ? '<span class="text-[8px] bg-black text-pcpr-gold border border-pcpr-gold px-1 rounded font-bold">EXTRA</span>' : ''}
+            ${isExtra ? '<span class="text-[8px] bg-slate-700 text-pcpr-gold border border-slate-800 px-1 rounded font-bold">EXTRA</span>' : ''}
           </div>
           <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
           <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
+          <div class="text-[10px] text-slate-600"><b>Horário do Turno:</b> ${horarioEfetivo}</div>
           <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${telExibicao}</div>
         </div>
       `;
@@ -601,9 +652,13 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   } else {
     let cardsHtml = escalasDoGrupo.map(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+      const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
+
       const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
+      const horarioEfetivo = obterHorarioTurnoTexto(esc);
 
       let btnDelHtml = '';
       if (isDel && showBtnDel && !isExtra) {
@@ -621,21 +676,27 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
             <span class="text-[10px] uppercase font-extrabold ${isDel ? 'text-[#5A4716]' : 'text-slate-500'}">
               ${isDel ? 'Delegado Responsável' : 'APJ / Agente Integrante'}
             </span>
-            <span class="text-[9px] ${isExtra ? 'bg-black text-pcpr-gold border border-pcpr-gold' : 'bg-slate-200 text-slate-700'} px-1.5 py-0.5 rounded font-mono font-bold uppercase">
+            <span class="text-[9px] ${isExtra ? 'bg-slate-700 text-pcpr-gold border border-slate-800 font-black' : 'bg-slate-200 text-slate-700 font-bold'} px-1.5 py-0.5 rounded font-mono uppercase">
               ${isExtra ? 'EXTRAJORNADA' : (esc.tipo || 'PLANTÃO')} • ${esc.turno || horarioGrupo}
             </span>
           </div>
 
-          <div class="flex items-center justify-between gap-2">
-            <div>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
               <span class="font-bold text-slate-900 text-xs block">${srv ? srv.nome : 'Policial Não Informado'}</span>
-              <span class="text-[11px] text-slate-600 font-mono">📞 ${telExibicao}</span>
+              <span class="text-[10px] text-slate-500 font-semibold">${srv ? srv.cargo : 'APJ'}</span>
             </div>
 
-            <div class="flex gap-1">
-              ${btnDelHtml}
-              ${btnApjHtml}
+            <div class="text-[11px] text-slate-600 space-y-0.5 font-medium border-t border-slate-200/60 pt-1">
+              <div><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
+              <div><b>Horário do Turno:</b> <span class="font-mono font-bold text-slate-800">${horarioEfetivo}</span></div>
+              <div><b>Telefone de Plantão:</b> <span class="font-mono text-slate-800">${telExibicao}</span></div>
             </div>
+          </div>
+
+          <div class="flex justify-end gap-1 pt-1 border-t border-slate-200">
+            ${btnDelHtml}
+            ${btnApjHtml}
           </div>
         </div>
       `;
