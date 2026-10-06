@@ -11,11 +11,11 @@ export function renderFeriadosModule(containerId) {
   const perfil = getPerfilUsuarioLogado();
   const userDelId = getDelegaciaIdUsuarioLogado();
   const sdpUser = getSubdivisaoUsuarioLogado();
-  const anoAtual = new Date().getFullYear();
+  const isAdmin = perfil === PERFIS.ADMINISTRADOR;
 
   // Filtra as delegacias que o usuário logado tem permissão para vincular a feriados municipais
   const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
-    if (perfil === PERFIS.ADMINISTRADOR) return true;
+    if (isAdmin) return true;
     if (perfil === PERFIS.COORDENADOR) {
       return d.subdivisao && d.subdivisao.trim().toUpperCase() === sdpUser;
     }
@@ -44,11 +44,13 @@ export function renderFeriadosModule(containerId) {
           <p class="text-[11px] text-slate-500">Gestão de feriados Nacionais, Estaduais e Municipais por abrangência de unidade</p>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="window.carregarFeriadosNacionaisAnoAtual()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5">
-            ⚡ Importar Feriados Nacionais (${anoAtual})
-          </button>
-        </div>
+        ${isAdmin ? `
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="window.carregarFeriadosNacionaisAnoAtual()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5">
+              ⚡ Importar Feriados Nacionais
+            </button>
+          </div>
+        ` : ''}
       </div>
 
       <!-- Formulário de Cadastro / Edição -->
@@ -78,9 +80,11 @@ export function renderFeriadosModule(containerId) {
           <div>
             <label class="block font-bold text-slate-700 mb-1">Tipo de Feriado:</label>
             <select id="feriado-tipo" onchange="window.toggleSelecaoDelegaciasFeriado(this.value)" class="w-full border border-slate-300 rounded-lg p-1.5 font-bold text-slate-800 bg-slate-50">
-              <option value="NACIONAL">Nacional (Todas as Unidades e CRF)</option>
-              <option value="ESTADUAL">Estadual (Todas as Unidades e CRF)</option>
-              <option value="MUNICIPAL">Municipal (Delegacias Específicas / Plantão Unificado)</option>
+              ${isAdmin ? `
+                <option value="NACIONAL">Nacional (Todas as Unidades e CRF)</option>
+                <option value="ESTADUAL">Estadual (Todas as Unidades e CRF)</option>
+              ` : ''}
+              <option value="MUNICIPAL" selected>Municipal (Delegacias Específicas / Plantão Unificado)</option>
             </select>
           </div>
 
@@ -124,6 +128,7 @@ export function renderFeriadosModule(containerId) {
   `;
 
   container.innerHTML = html;
+  window.toggleSelecaoDelegaciasFeriado(document.getElementById('feriado-tipo')?.value || 'MUNICIPAL');
   window.renderTabelaFeriados();
 }
 
@@ -150,6 +155,11 @@ window.renderTabelaFeriados = function() {
   const tbody = document.getElementById('tabela-feriados-corpo');
   if (!tbody) return;
 
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  const sdpUser = getSubdivisaoUsuarioLogado();
+  const isAdmin = perfil === PERFIS.ADMINISTRADOR;
+
   const lista = (appState.feriados || []).sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 
   if (lista.length === 0) {
@@ -174,6 +184,22 @@ window.renderTabelaFeriados = function() {
       }
     }
 
+    // Validação estrita de permissão de modificação (Edição / Exclusão)
+    let podeModificar = false;
+    if (isAdmin) {
+      podeModificar = true;
+    } else if (isMunicipal) {
+      const ids = (f.delegaciasIds || []).map(String);
+      if (perfil === PERFIS.COORDENADOR) {
+        podeModificar = ids.some(id => {
+          const d = (appState.delegacias || []).find(del => String(del.id) === String(id));
+          return d && d.subdivisao && d.subdivisao.trim().toUpperCase() === sdpUser;
+        });
+      } else if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+        podeModificar = ids.includes(String(userDelId));
+      }
+    }
+
     return `
       <tr class="hover:bg-slate-50 border-b border-slate-200 text-xs">
         <td class="p-3 font-mono font-bold text-slate-800">${formatarDataBr(f.data)}</td>
@@ -185,12 +211,16 @@ window.renderTabelaFeriados = function() {
         </td>
         <td class="p-3">${abrangenciaTexto}</td>
         <td class="p-3 text-right space-x-1">
-          <button onclick="window.editarFeriado('${f.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
-            ✏️ Editar
-          </button>
-          <button onclick="window.excluirFeriado('${f.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
-            🗑 Excluir
-          </button>
+          ${podeModificar ? `
+            <button onclick="window.editarFeriado('${f.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
+              ✏️ Editar
+            </button>
+            <button onclick="window.excluirFeriado('${f.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+              🗑 Excluir
+            </button>
+          ` : `
+            <span class="text-[10px] text-slate-400 italic">Somente leitura</span>
+          `}
         </td>
       </tr>
     `;
@@ -209,7 +239,7 @@ window.editarFeriado = function(id) {
   if (idInput) idInput.value = feriado.id;
   if (dataInput) dataInput.value = feriado.data || '';
   if (descInput) descInput.value = feriado.descricao || '';
-  if (tipoInput) tipoInput.value = feriado.tipo || 'NACIONAL';
+  if (tipoInput) tipoInput.value = feriado.tipo || 'MUNICIPAL';
 
   window.toggleSelecaoDelegaciasFeriado(feriado.tipo);
 
@@ -231,6 +261,9 @@ window.editarFeriado = function(id) {
 };
 
 window.limparFormularioFeriado = function() {
+  const perfil = getPerfilUsuarioLogado();
+  const isAdmin = perfil === PERFIS.ADMINISTRADOR;
+
   const idInput = document.getElementById('feriado-id-input');
   const dataInput = document.getElementById('feriado-data');
   const descInput = document.getElementById('feriado-desc');
@@ -239,159 +272,12 @@ window.limparFormularioFeriado = function() {
   if (idInput) idInput.value = '';
   if (dataInput) dataInput.value = '';
   if (descInput) descInput.value = '';
-  if (tipoInput) tipoInput.value = 'NACIONAL';
+  if (tipoInput) tipoInput.value = isAdmin ? 'NACIONAL' : 'MUNICIPAL';
 
-  window.toggleSelecaoDelegaciasFeriado('NACIONAL');
+  window.toggleSelecaoDelegaciasFeriado(isAdmin ? 'NACIONAL' : 'MUNICIPAL');
 
   const checkboxes = document.querySelectorAll('input[name="feriado_delegacias_ids"]');
   checkboxes.forEach(cb => cb.checked = false);
 
   const tituloEl = document.getElementById('feriado-form-titulo');
-  const btnCancelar = document.getElementById('btn-cancelar-edicao-feriado');
-  const btnSalvar = document.getElementById('btn-salvar-feriado');
-
-  if (tituloEl) tituloEl.innerHTML = '<span>🎉</span> Cadastrar Novo Feriado';
-  if (btnCancelar) btnCancelar.classList.add('hidden');
-  if (btnSalvar) btnSalvar.innerHTML = '➕ Salvar Feriado';
-};
-
-window.carregarFeriadosNacionaisAnoAtual = async function() {
-  const anoAtual = new Date().getFullYear();
-
-  if (!confirm(`Deseja importar automaticamente os feriados nacionais oficiais do ano de ${anoAtual}?`)) {
-    return;
-  }
-
-  try {
-    const res = await fetch(`https://brasilapi.com.br/api/feriados/v1/${anoAtual}`);
-    if (!res.ok) {
-      throw new Error(`Erro de resposta da API (${res.status})`);
-    }
-
-    const feriadosApi = await res.json();
-    if (!Array.isArray(feriadosApi) || feriadosApi.length === 0) {
-      alert(`Nenhum feriado localizado para o ano de ${anoAtual}.`);
-      return;
-    }
-
-    if (!appState.feriados) appState.feriados = [];
-
-    let adicionados = 0;
-
-    for (const item of feriadosApi) {
-      const jaExiste = appState.feriados.some(f => f.data === item.date && f.tipo === 'NACIONAL');
-      if (!jaExiste) {
-        const ferId = 'feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        const novoObj = {
-          id: ferId,
-          data: item.date,
-          descricao: item.name,
-          tipo: 'NACIONAL',
-          delegaciasIds: []
-        };
-
-        appState.feriados.push(novoObj);
-        await syncDocToFirestore('feriados', ferId, novoObj);
-        adicionados++;
-      }
-    }
-
-    window.renderTabelaFeriados();
-    if (window.renderCalendarGrid) {
-      renderCalendarGrid('calendar-crf-container', 'CRF');
-      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-    }
-
-    alert(`Importação concluída com sucesso!\n\n• Ano: ${anoAtual}\n• Novos Feriados Importados: ${adicionados}`);
-
-  } catch (err) {
-    console.error("Erro ao importar feriados:", err);
-    alert(`Não foi possível carregar os feriados automaticamente (${err.message}). Verifique sua conexão.`);
-  }
-};
-
-window.salvarFeriado = async function(e) {
-  if (e && e.preventDefault) e.preventDefault();
-
-  const idExistente = document.getElementById('feriado-id-input')?.value || '';
-  const data = document.getElementById('feriado-data')?.value;
-  const descricao = (document.getElementById('feriado-desc')?.value || '').trim();
-  const tipo = document.getElementById('feriado-tipo')?.value || 'NACIONAL';
-
-  if (!data || !descricao) {
-    alert("Preencha a data e a descrição do feriado.");
-    return;
-  }
-
-  let delegaciasIds = [];
-  if (tipo === 'MUNICIPAL') {
-    const selecionados = document.querySelectorAll('input[name="feriado_delegacias_ids"]:checked');
-    delegaciasIds = Array.from(selecionados).map(cb => cb.value);
-
-    if (delegaciasIds.length === 0) {
-      alert("Para feriados municipais, selecione pelo menos uma delegacia afetada.");
-      return;
-    }
-  }
-
-  const ferId = idExistente || ('feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
-
-  const novoFeriado = {
-    id: ferId,
-    data: data,
-    descricao: descricao,
-    tipo: tipo,
-    delegaciasIds: delegaciasIds
-  };
-
-  if (!appState.feriados) appState.feriados = [];
-
-  const idx = appState.feriados.findIndex(f => String(f.id) === String(ferId));
-  if (idx >= 0) {
-    appState.feriados[idx] = novoFeriado;
-  } else {
-    appState.feriados.push(novoFeriado);
-  }
-
-  // 1. Atualização instantânea na tela
-  window.limparFormularioFeriado();
-  window.renderTabelaFeriados();
-
-  if (window.renderCalendarGrid) {
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  }
-
-  // 2. Gravação em segundo plano no Firestore
-  try {
-    await syncDocToFirestore('feriados', ferId, novoFeriado);
-    alert(idExistente ? "Feriado atualizado com sucesso!" : "Feriado cadastrado com sucesso!");
-  } catch (err) {
-    console.error("Erro ao salvar feriado no Firestore:", err);
-  }
-};
-
-window.excluirFeriado = async function(id) {
-  if (!confirm("Deseja realmente remover este feriado?")) return;
-
-  appState.feriados = (appState.feriados || []).filter(f => String(f.id) !== String(id));
-
-  window.renderTabelaFeriados();
-
-  if (window.renderCalendarGrid) {
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  }
-
-  try {
-    await syncDocToFirestore('feriados', id, null, true);
-  } catch (err) {
-    console.error("Erro ao remover feriado no Firestore:", err);
-  }
-};
-
-function formatarDataBr(dataIso) {
-  if (!dataIso) return '-';
-  const parts = dataIso.split('-');
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
-}
+  const btnCancelar = document
