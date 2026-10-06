@@ -17,7 +17,7 @@ let geradorState = {
 };
 
 /**
- * Normaliza qualquer formato de data (ISO, Timestamp ou YYYY-MM-DD) para YYYY-MM-DD limpo
+ * Normaliza qualquer formato de data (ISO, Timestamp ou YYYY-MM-DD) para YYYY-MM-DD limpo.
  */
 function normalizarDataParaIso(dataInput) {
   if (!dataInput) return '';
