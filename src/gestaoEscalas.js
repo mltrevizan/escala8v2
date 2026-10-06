@@ -2,6 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
+import { getPerfilUsuarioLogado, getDelegaciaIdUsuarioLogado, getSubdivisaoUsuarioLogado, PERFIS } from './permissions.js';
 
 let gestaoCrfFiltros = { busca: '', sdp: 'TODAS', delegaciaId: 'TODAS' };
 
@@ -219,19 +220,48 @@ window.renderTabelaGestaoCrfCorpo = function() {
 };
 
 // =========================================================================
-// 2. MÓDULO GESTÃO POR DELEGACIAS (COM GERAÇÃO EM LOTE RECONECTADA AO GERADORLOTE.JS)
+// 2. MÓDULO GESTÃO POR DELEGACIAS (COM TRAVA E FILTRAGEM POR PERFIL)
 // =========================================================================
 export function renderGestaoDelegaciasModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { selectedDelegaciaId } = appState;
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+  const sdpUser = getSubdivisaoUsuarioLogado();
+
+  // Filtragem estrita de delegacias visíveis no menu conforme perfil do utilizador
+  const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
+    if (perfil === PERFIS.ADMINISTRADOR) return true;
+    if (perfil === PERFIS.COORDENADOR) {
+      return d.subdivisao && d.subdivisao.trim().toUpperCase() === sdpUser;
+    }
+    if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+      return String(d.id) === String(userDelId);
+    }
+    return false;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  // Garante que a delegacia selecionada no appState pertença à lista de delegacias autorizadas do perfil
+  if (delegaciasPermitidas.length > 0) {
+    const estaAutorizado = delegaciasPermitidas.some(d => String(d.id) === String(appState.selectedDelegaciaId));
+    if (!estaAutorizado) {
+      appState.selectedDelegaciaId = delegaciasPermitidas[0].id;
+    }
+  }
+
+  const isRestritoMesmaDelegacia = (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE);
+
+  let optsDelegacias = delegaciasPermitidas.map(d => 
+    `<option value="${d.id}" ${String(d.id) === String(appState.selectedDelegaciaId) ? 'selected' : ''}>${d.nome}</option>`
+  ).join('');
+
+  if (delegaciasPermitidas.length === 0) {
+    optsDelegacias = `<option value="">Nenhuma delegacia sob sua gestão</option>`;
+  }
+
   gestaoDelTabelaState.mes = appState.currentMonth;
   gestaoDelTabelaState.ano = appState.currentYear;
-
-  let optsDelegacias = (appState.delegacias || []).map(d => 
-    `<option value="${d.id}" ${d.id === selectedDelegaciaId ? 'selected' : ''}>${d.nome}</option>`
-  ).join('');
 
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
   let optsMeses = monthNames.map((m, idx) => `<option value="${idx}" ${idx === gestaoDelTabelaState.mes ? 'selected' : ''}>${m}</option>`).join('');
@@ -250,7 +280,6 @@ export function renderGestaoDelegaciasModule(containerId) {
           <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Lançamento Local
           </button>
-          <!-- CHAMA O GERADORLOTE.JS OFICIAL -->
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerar em Lote
           </button>
@@ -270,7 +299,7 @@ export function renderGestaoDelegaciasModule(containerId) {
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Unidade Alvo:</label>
-          <select id="gestao-del-select-unidade" onchange="window.mudarUnidadeGestaoDel(this.value)" class="w-full text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs">
+          <select id="gestao-del-select-unidade" ${isRestritoMesmaDelegacia ? 'disabled' : ''} onchange="window.mudarUnidadeGestaoDel(this.value)" class="w-full text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs">
             ${optsDelegacias}
           </select>
         </div>
@@ -379,7 +408,7 @@ window.obterEscalasFiltradasGestaoDel = function() {
   const { busca, modalidade, mes, ano } = gestaoDelTabelaState;
 
   return (appState.escalas || []).filter(e => {
-    if (e.scope !== 'DELEGACIA' || e.delegaciaId !== selectedDelegaciaId) return false;
+    if (e.scope !== 'DELEGACIA' || String(e.delegaciaId) !== String(selectedDelegaciaId)) return false;
     const [a, m] = e.data.split('-').map(Number);
     if (a !== ano || (m - 1) !== mes) return false;
 
@@ -468,7 +497,16 @@ window.renderTabelaGestaoDelCorpo = function() {
 };
 
 window.mudarUnidadeGestaoDel = function(id) {
-  appState.selectedDelegaciaId = id;
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+
+  if ((perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) && String(id) !== String(userDelId)) {
+    alert("Operação Bloqueada: O seu perfil permite gerenciar apenas a sua delegacia de lotação.");
+    appState.selectedDelegaciaId = userDelId;
+  } else {
+    appState.selectedDelegaciaId = id;
+  }
+
   renderGestaoDelegaciasModule('gestao-delegacias-container');
 };
 
@@ -766,8 +804,16 @@ window.abrirModalLancamentoDelegacia = function() {
     modal = document.getElementById('modal-lancamento-delegacia');
   }
 
+  const perfil = getPerfilUsuarioLogado();
+  const userDelId = getDelegaciaIdUsuarioLogado();
+
+  // Força a delegacia alvo para a lotação do próprio utilizador caso seja Delegado ou Superintendente
+  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
+    appState.selectedDelegaciaId = userDelId;
+  }
+
   const { selectedDelegaciaId } = appState;
-  const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(selectedDelegaciaId));
 
   const inputDelNome = document.getElementById('ml-del-unidade-nome');
   if (inputDelNome) inputDelNome.value = delObj ? delObj.nome : 'Unidade Selecionada';
@@ -800,7 +846,7 @@ function obterPrimeiraDataLivreDelegacia(delId) {
     const dtIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     if (dtIso < hojeIso) continue;
 
-    const temEscala = (appState.escalas || []).some(e => e.scope === 'DELEGACIA' && e.delegaciaId === delId && e.data === dtIso);
+    const temEscala = (appState.escalas || []).some(e => e.scope === 'DELEGACIA' && String(e.delegaciaId) === String(delId) && e.data === dtIso);
     if (!temEscala) return dtIso;
   }
 
@@ -816,7 +862,7 @@ window.aoMudarModalidadeDelegacia = function(tipo) {
   if (!selectTurno) return;
 
   const { selectedDelegaciaId } = appState;
-  const delObj = (appState.delegacias || []).find(d => d.id === selectedDelegaciaId);
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(selectedDelegaciaId));
 
   if (tipo === 'SOBREAVISO') {
     const duracaoPref = delObj?.sobreavisoConfig?.intervalo || '24h';
@@ -860,8 +906,8 @@ window.atualizarOptionsServidoresDelModal = function() {
     return true;
   });
 
-  const servidoresUnidade = srvs.filter(s => s.delegaciaId === selectedDelegaciaId).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-  const demaisServidores = srvs.filter(s => s.delegaciaId !== selectedDelegaciaId).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const servidoresUnidade = srvs.filter(s => String(s.delegaciaId) === String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const demaisServidores = srvs.filter(s => String(s.delegaciaId) !== String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   let optsSrv = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
 
@@ -1051,7 +1097,7 @@ window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
 
   const escalasFiltradas = (appState.escalas || []).filter(e => {
     if (e.scope !== scopeTarget) return false;
-    if (scopeTarget === 'DELEGACIA' && e.delegaciaId !== selectedDelegaciaId) return false;
+    if (scopeTarget === 'DELEGACIA' && String(e.delegaciaId) !== String(selectedDelegaciaId)) return false;
     const [ano, mes] = e.data.split('-').map(Number);
     return ano === currentYear && (mes - 1) === currentMonth;
   });
