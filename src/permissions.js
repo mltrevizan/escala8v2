@@ -257,13 +257,9 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 // 5. APLICAÇÃO DE PERMISSÕES NA INTERFACE (UI)
 // =========================================================================
 
-/**
- * Atualiza a visibilidade dos elementos e abas da tela conforme as permissões do usuário logado
- */
 export function applyUIPermissions() {
   const perfil = getPerfilUsuarioLogado();
 
-  // Mapeamento de abas e visibilidade
   const abasMap = {
     'tab-btn-gestao-crf': podeAcessarAbaGestaoCrf(),
     'tab-btn-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
@@ -284,7 +280,6 @@ export function applyUIPermissions() {
     }
   });
 
-  // Se a aba ativa não puder ser acessada pelo perfil atual, volta para a aba pública de escala por delegacia
   if (appState.activeTab === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
     if (window.switchTab) window.switchTab('delegacia');
   } else if (appState.activeTab === 'gestao-delegacias' && !podeAcessarAbaGestaoDelegacias()) {
@@ -297,13 +292,57 @@ export function applyUIPermissions() {
 }
 
 // =========================================================================
-// 6. COMPATIBILIDADE INTEGRAL (SERVIDORES / CALENDAR / MODALS / AUTH)
+// 6. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE
 // =========================================================================
 
-export function podeVisualizarTelefoneServidor() {
+/**
+ * Libera a visualização de telefone:
+ * - Sempre liberado para usuários logados.
+ * - No modo público (VISUALIZADOR), liberado se a data do plantão for ONTÉM, HOJE ou AMANHÃ.
+ */
+export function podeVisualizarTelefoneServidor(dataPlantaoIso = null) {
   const perfil = getPerfilUsuarioLogado();
-  return perfil !== PERFIS.VISUALIZADOR;
+
+  // Usuários autenticados (Admin, Coord, Del, Super, APJ) visualizam sempre
+  if (perfil !== PERFIS.VISUALIZADOR) {
+    return true;
+  }
+
+  // Se não foi informada uma data específica, por padrão bloqueia no modo público
+  if (!dataPlantaoIso) {
+    return false;
+  }
+
+  try {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const ontem = new Date(hoje);
+    ontem.setDate(hoje.getDate() - 1);
+
+    const amanha = new Date(hoje);
+    amanha.setDate(hoje.getDate() + 1);
+
+    const parts = String(dataPlantaoIso).split('T')[0].split('-').map(Number);
+    if (parts.length !== 3) return false;
+
+    const dataAlvo = new Date(parts[0], parts[1] - 1, parts[2]);
+    dataAlvo.setHours(0, 0, 0, 0);
+
+    // Retorna verdadeiro se a data for ontem, hoje ou amanhã
+    return dataAlvo >= ontem && dataAlvo <= amanha;
+  } catch (e) {
+    return false;
+  }
 }
+
+export function canViewPhoneForDate(dataPlantaoIso = null) {
+  return podeVisualizarTelefoneServidor(dataPlantaoIso);
+}
+
+// =========================================================================
+// 7. COMPATIBILIDADE INTEGRAL (SERVIDORES / CALENDAR / MODALS / AUTH)
+// =========================================================================
 
 export function getAllowedRolesForCreation() {
   return obterPerfisAtribuiveis();
@@ -348,10 +387,6 @@ export function hasPermission(permissionName, targetDelegaciaId = null) {
     default:
       return perfil !== PERFIS.VISUALIZADOR;
   }
-}
-
-export function canViewPhoneForDate() {
-  return podeVisualizarTelefoneServidor();
 }
 
 export function canEditSchedule(delegaciaId = null) {
