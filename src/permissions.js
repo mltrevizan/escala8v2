@@ -39,6 +39,13 @@ export function getDelegaciaIdUsuarioLogado() {
 }
 
 /**
+ * Alias em inglês exigido pelo servidores.js
+ */
+export function getCurrentUserDelegaciaId() {
+  return getDelegaciaIdUsuarioLogado();
+}
+
+/**
  * Retorna a Subdivisão (SDP) da delegacia do usuário logado
  */
 export function getSubdivisaoUsuarioLogado() {
