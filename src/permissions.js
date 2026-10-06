@@ -225,12 +225,24 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 }
 
 // =========================================================================
-// 5. COMPATIBILIDADE INTEGRAL (INTERFACE / CALENDAR / MODALS / SERVIDORES)
+// 5. COMPATIBILIDADE INTEGRAL (INTERFACE / SERVIDORES / CALENDAR / MODALS)
 // =========================================================================
 
 export function podeVisualizarTelefoneServidor() {
   const perfil = getPerfilUsuarioLogado();
   return perfil !== PERFIS.VISUALIZADOR;
+}
+
+export function getAllowedRolesForCreation() {
+  return obterPerfisAtribuiveis();
+}
+
+export function canEditServidor(servidorAlvo) {
+  return podeModificarServidor(servidorAlvo);
+}
+
+export function canResetPassword(servidorAlvo) {
+  return podeResetarSenhaPolicial(servidorAlvo);
 }
 
 export function hasPermission(permissionName, targetDelegaciaId = null) {
