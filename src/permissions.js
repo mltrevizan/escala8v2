@@ -260,13 +260,21 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 export function applyUIPermissions() {
   const perfil = getPerfilUsuarioLogado();
 
+  // Mapeamento de abas do topo e de navegação gerencial
   const abasMap = {
     'tab-btn-gestao-crf': podeAcessarAbaGestaoCrf(),
     'tab-btn-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
     'tab-btn-servidores': podeAcessarAbaServidores(),
     'tab-btn-ferias': podeAcessarAbaFérias(),
     'tab-btn-feriados': podeAcessarAbaFeriados(),
-    'tab-btn-delegacias': podeAcessarAbaDelegacias()
+    'tab-btn-delegacias': podeAcessarAbaDelegacias(),
+    // Mapeamento alternativo por IDs comuns do DOM
+    'nav-gestao-crf': podeAcessarAbaGestaoCrf(),
+    'nav-gestao-delegacias': podeAcessarAbaGestaoDelegacias(),
+    'nav-servidores': podeAcessarAbaServidores(),
+    'nav-delegacias': podeAcessarAbaDelegacias(),
+    'nav-ferias': podeAcessarAbaFérias(),
+    'nav-feriados': podeAcessarAbaFeriados()
   };
 
   Object.keys(abasMap).forEach(tabId => {
@@ -274,20 +282,33 @@ export function applyUIPermissions() {
     if (el) {
       if (abasMap[tabId]) {
         el.classList.remove('hidden');
+        el.style.display = '';
       } else {
         el.classList.add('hidden');
+        el.style.display = 'none';
       }
     }
   });
 
-  if (appState.activeTab === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
-    if (window.switchTab) window.switchTab('delegacia');
-  } else if (appState.activeTab === 'gestao-delegacias' && !podeAcessarAbaGestaoDelegacias()) {
-    if (window.switchTab) window.switchTab('delegacia');
-  } else if (appState.activeTab === 'servidores' && !podeAcessarAbaServidores()) {
-    if (window.switchTab) window.switchTab('delegacia');
-  } else if (appState.activeTab === 'delegacias' && !podeAcessarAbaDelegacias()) {
-    if (window.switchTab) window.switchTab('delegacia');
+  // Ocultar qualquer contêiner ou botão gerencial no modo público
+  const gerencialElements = document.querySelectorAll('.admin-only, .gerencial-only');
+  gerencialElements.forEach(el => {
+    if (perfil === PERFIS.VISUALIZADOR) {
+      el.classList.add('hidden');
+      el.style.display = 'none';
+    } else {
+      el.classList.remove('hidden');
+      el.style.display = '';
+    }
+  });
+
+  // Proteção de redirecionamento se o usuário público tentar navegar diretamente para uma aba restrita
+  const isAbaRestrita = ['gestao-crf', 'gestao-delegacias', 'servidores', 'delegacias', 'ferias', 'feriados'].includes(appState.activeTab);
+  
+  if (perfil === PERFIS.VISUALIZADOR && isAbaRestrita) {
+    if (typeof window.switchTab === 'function') {
+      window.switchTab('delegacia');
+    }
   }
 }
 
@@ -295,20 +316,13 @@ export function applyUIPermissions() {
 // 6. REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE
 // =========================================================================
 
-/**
- * Libera a visualização de telefone:
- * - Sempre liberado para usuários logados.
- * - No modo público (VISUALIZADOR), liberado se a data do plantão for ONTÉM, HOJE ou AMANHÃ.
- */
 export function podeVisualizarTelefoneServidor(dataPlantaoIso = null) {
   const perfil = getPerfilUsuarioLogado();
 
-  // Usuários autenticados (Admin, Coord, Del, Super, APJ) visualizam sempre
   if (perfil !== PERFIS.VISUALIZADOR) {
     return true;
   }
 
-  // Se não foi informada uma data específica, por padrão bloqueia no modo público
   if (!dataPlantaoIso) {
     return false;
   }
@@ -329,7 +343,6 @@ export function podeVisualizarTelefoneServidor(dataPlantaoIso = null) {
     const dataAlvo = new Date(parts[0], parts[1] - 1, parts[2]);
     dataAlvo.setHours(0, 0, 0, 0);
 
-    // Retorna verdadeiro se a data for ontem, hoje ou amanhã
     return dataAlvo >= ontem && dataAlvo <= amanha;
   } catch (e) {
     return false;
