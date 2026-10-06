@@ -270,4 +270,55 @@ export function canEditServidor(servidorAlvo) {
   return podeModificarServidor(servidorAlvo);
 }
 
-export function canResetPassword(
+export function canResetPassword(servidorAlvo) {
+  return podeResetarSenhaPolicial(servidorAlvo);
+}
+
+export function hasPermission(permissionName, targetDelegaciaId = null) {
+  const perfil = getPerfilUsuarioLogado();
+  if (perfil === PERFIS.ADMINISTRADOR) return true;
+
+  switch (permissionName) {
+    case 'EDIT_DELEGACIA_SCHEDULE':
+    case 'EDIT_SCHEDULE':
+      return podeModificarEscalaDelegacia(targetDelegaciaId || appState.selectedDelegaciaId);
+
+    case 'EDIT_CRF_SCHEDULE':
+      return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
+
+    case 'VIEW_PHONE':
+    case 'VIEW_PHONE_NUMBER':
+      return podeVisualizarTelefoneServidor();
+
+    case 'MANAGE_SERVIDORES':
+      return podeAcessarAbaServidores();
+
+    case 'MANAGE_FERIAS':
+      return podeAcessarAbaFérias();
+
+    case 'MANAGE_FERIADOS':
+      return podeAcessarAbaFeriados();
+
+    case 'MANAGE_DELEGACIAS':
+      return podeAcessarAbaDelegacias();
+
+    default:
+      return perfil !== PERFIS.VISUALIZADOR;
+  }
+}
+
+export function canViewPhoneForDate() {
+  return podeVisualizarTelefoneServidor();
+}
+
+export function canEditSchedule(delegaciaId = null) {
+  return podeModificarEscalaDelegacia(delegaciaId || appState.selectedDelegaciaId);
+}
+
+export function canEditCRF() {
+  return podeModificarEscalaCrfGeral() || podeTrocarDelegadoCrf() || podeTrocarOuIncluirApjCrf();
+}
+
+export function isAdmin() {
+  return getPerfilUsuarioLogado() === PERFIS.ADMINISTRADOR;
+}
