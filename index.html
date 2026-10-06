@@ -89,28 +89,31 @@
 
     <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
+      <!-- ABAS PÚBLICAS (Visíveis por padrão) -->
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>📅</span> Escala CRF
       </button>
       <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>🏢</span> Escala por Delegacia
       </button>
-      <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+
+      <!-- ABAS RESTRITAS (Iniciam ocultas com 'hidden' e só abrem via login autorizado) -->
+      <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>⚙️</span> Gestão CRF
       </button>
-      <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+      <button id="tab-btn-gestao-del" onclick="window.switchTab('gestao-del')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>⚙</span> Gestão por Delegacias
       </button>
-      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+      <button id="tab-btn-feriados" onclick="window.switchTab('feriados')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>🎉</span> Feriados
       </button>
-      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+      <button id="tab-btn-unidades" onclick="window.switchTab('unidades')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>🚔</span> Delegacias
       </button>
-      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+      <button id="tab-btn-servidores" onclick="window.switchTab('servidores')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>👮</span> Servidores
       </button>
-      <button id="tab-btn-ferias" onclick="window.switchTab('ferias')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+      <button id="tab-btn-ferias" onclick="window.switchTab('ferias')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>🏖️</span> Férias
       </button>
     </nav>
