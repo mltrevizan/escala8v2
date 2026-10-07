@@ -281,9 +281,6 @@ window.salvarServidorModalSubmit = async function(e) {
   renderServidoresTable('servidores-table-container');
 };
 
-/**
- * Função de Reset de Senha via Cloud Function (Admin SDK)
- */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
   if (!idUsar) return;
@@ -296,27 +293,16 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  if (!confirm(`Deseja realmente resetar a senha do servidor ${srv.nome} no Firebase Auth para 'Central123'?`)) {
+  if (!confirm(`Deseja marcar a conta de ${srv.nome} para redefinição de senha no próximo acesso?`)) {
     return;
   }
 
   try {
-    const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
-    const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
-
-    // 1. Sinaliza no Firestore
     srv.senhaResetada = true;
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    // 2. Dispara a Cloud Function publicada no Firebase
-    if (window.firebase && firebase.functions) {
-      const resetarFn = firebase.functions().httpsCallable('resetarSenhaServidorAdmin');
-      const res = await resetarFn({ email: emailCalculado });
-      alert(`Sucesso! ${res.data.message}`);
-    } else {
-      alert(`Sinalização gravada no banco! A nova senha padrão é 'Central123'.`);
-    }
+    alert(`Sucesso! A conta de ${srv.nome} foi marcada para redefinição. No próximo acesso, o sistema exigirá que o policial cadastre uma nova senha pessoal.`);
 
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
@@ -327,8 +313,8 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     }
 
   } catch (err) {
-    console.error("Erro ao resetar senha via Cloud Function:", err);
-    alert(`Erro ao redefinir senha no Firebase Auth: ${err.message}`);
+    console.error("Erro ao resetar senha no banco:", err);
+    alert(`Erro ao salvar no banco de dados: ${err.message}`);
   }
 };
 
