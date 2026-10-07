@@ -24,7 +24,7 @@ export function renderFeriasModule(containerId) {
 
   let delOptionsHtml = `<option value="">Todas as Delegacias</option>`;
   delegacias.forEach(d => {
-    delOptionsHtml += `<option value="${d.id}" ${isRestritoDelegacia && d.id === userDelId ? 'selected' : ''}>${d.nome}</option>`;
+    delOptionsHtml += `<option value="${d.id}" ${isRestritoDelegacia && String(d.id) === String(userDelId) ? 'selected' : ''}>${d.nome}</option>`;
   });
 
   const html = `
@@ -166,12 +166,12 @@ window.atualizarSelectServidoresCadastro = function() {
     }
 
     if (isRestritoDelegacia && userDelId) {
-      if (s.delegaciaId !== userDelId) return false;
+      if (String(s.delegaciaId) !== String(userDelId)) return false;
     }
 
     const atendeNome = !termoBusca || (s.nome || '').toLowerCase().includes(termoBusca);
     const atendeSdp = !sdpFiltro || s.subdivisao === sdpFiltro;
-    const atendeDel = !delegaciaFiltro || s.delegaciaId === delegaciaFiltro;
+    const atendeDel = !delegaciaFiltro || String(s.delegaciaId) === String(delegaciaFiltro);
     return atendeNome && atendeSdp && atendeDel;
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
@@ -200,7 +200,7 @@ window.renderTabelaFerias = function() {
   let listaFerias = (appState.ferias || []).slice();
 
   let listaCompletada = listaFerias.map(fer => {
-    const srv = (appState.servidores || []).find(s => s.id === fer.servidorId) || {};
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(fer.servidorId)) || {};
     const cargoExibicao = (srv.cargo || '').toUpperCase().includes('DELEGADO') ? 'DELEGADO DE POLÍCIA' : 'APJ';
 
     return {
@@ -214,7 +214,7 @@ window.renderTabelaFerias = function() {
 
   listaCompletada = listaCompletada.filter(f => {
     if (isRestritoDelegacia && userDelId) {
-      if (f.delegaciaId !== userDelId) return false;
+      if (String(f.delegaciaId) !== String(userDelId)) return false;
     }
 
     const atendeBusca = !termoBusca || 
@@ -222,7 +222,7 @@ window.renderTabelaFerias = function() {
       f.cargo.toLowerCase().includes(termoBusca) ||
       (f.tipo || '').toLowerCase().includes(termoBusca);
     const atendeSdp = !sdpFiltro || f.subdivisao === sdpFiltro;
-    const atendeDel = !delegaciaFiltro || f.delegaciaId === delegaciaFiltro;
+    const atendeDel = !delegaciaFiltro || String(f.delegaciaId) === String(delegaciaFiltro);
 
     return atendeBusca && atendeSdp && atendeDel;
   });
@@ -248,7 +248,7 @@ window.renderTabelaFerias = function() {
 
   tbody.innerHTML = listaCompletada.map(fer => {
     const escalasEmConflito = (appState.escalas || []).filter(e => {
-      return e.servidorId === fer.servidorId && e.data >= fer.dataInicio && e.data <= fer.dataFim;
+      return String(e.servidorId) === String(fer.servidorId) && e.data >= fer.dataInicio && e.data <= fer.dataFim;
     });
 
     const temConflito = escalasEmConflito.length > 0;
@@ -335,32 +335,40 @@ window.salvarFerias = async function(e) {
     dataFim: dataFim
   };
 
-  if (!appState.ferias) appState.ferias = [];
-  appState.ferias.push(novoAfastamento);
-
-  window.renderTabelaFerias();
-
-  document.getElementById('ferias-servidor-id').value = '';
-  document.getElementById('ferias-data-inicio').value = '';
-  document.getElementById('ferias-data-fim').value = '';
-
   try {
+    // 1. Gravação síncrona obrigatória no Firestore PRIMEIRO
     await syncDocToFirestore('ferias', newFerId, novoAfastamento);
+
+    // 2. Atualização local apenas após confirmação do banco de dados
+    if (!appState.ferias) appState.ferias = [];
+    appState.ferias.push(novoAfastamento);
+
+    document.getElementById('ferias-servidor-id').value = '';
+    document.getElementById('ferias-data-inicio').value = '';
+    document.getElementById('ferias-data-fim').value = '';
+
+    window.renderTabelaFerias();
+    alert("Afastamento cadastrado e salvo com sucesso no banco de dados!");
   } catch (err) {
-    console.error("Erro ao sincronizar férias no banco de dados:", err);
+    console.error("Erro ao salvar férias no banco de dados:", err);
+    alert(`Erro ao salvar no banco de dados: ${err.message}`);
   }
 };
 
 window.excluirFerias = async function(id) {
   if (!confirm("Deseja realmente remover este registro de afastamento?")) return;
 
-  appState.ferias = (appState.ferias || []).filter(f => f.id !== id);
-  window.renderTabelaFerias();
-
   try {
+    // 1. Remoção síncrona obrigatória no Firestore PRIMEIRO
     await syncDocToFirestore('ferias', id, null, true);
+
+    // 2. Atualização local
+    appState.ferias = (appState.ferias || []).filter(f => String(f.id) !== String(id));
+    window.renderTabelaFerias();
+    alert("Registro de afastamento removido com sucesso!");
   } catch (err) {
     console.error("Erro ao excluir férias no banco de dados:", err);
+    alert(`Erro ao excluir do banco de dados: ${err.message}`);
   }
 };
 
@@ -371,7 +379,7 @@ window.exibirDetalhesConflitoFerias = function(nomeServidor, idsEscalasStr) {
   let detalheMsg = `⚠️ DATAS EM CONFLITO DE AFASTAMENTO\n\nPolicial: ${nomeServidor}\n\nEste servidor possui os seguintes lançamentos agendados durante seu afastamento:\n\n`;
 
   escalas.forEach(esc => {
-    const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(esc.delegaciaId));
     detalheMsg += `• Data: ${formatarDataBr(esc.data)} | Tipo: ${esc.tipo || 'PLANTÃO'} | Unidade: ${del ? del.nome : 'Unidade Local'}\n`;
   });
 
