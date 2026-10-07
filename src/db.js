@@ -46,14 +46,15 @@ export async function loadAllDataFromFirestore() {
       }
     };
 
-    // Buscas paralelas seguras (Incluindo a coleção 'ferias')
-    const [delegaciasData, escalasData, feriadosData, sdpsData, servidoresData, feriasData] = await Promise.all([
+    // Buscas paralelas seguras (Incluindo as coleções 'ferias' e 'logs')
+    const [delegaciasData, escalasData, feriadosData, sdpsData, servidoresData, feriasData, logsData] = await Promise.all([
       buscarColecaoSegura('delegacias'),
       buscarColecaoSegura('escalas'),
       buscarColecaoSegura('feriados'),
       buscarColecaoSegura('sdps'),
       buscarColecaoSegura('servidores'),
-      buscarColecaoSegura('ferias')
+      buscarColecaoSegura('ferias'),
+      buscarColecaoSegura('logs')
     ]);
 
     // Atribuição ao estado global da aplicação
@@ -62,6 +63,7 @@ export async function loadAllDataFromFirestore() {
     appState.feriados = feriadosData;
     appState.sdps = sdpsData;
     appState.ferias = feriasData; // essencial para o correto cruzamento e bloqueio de escalas
+    appState.logs = logsData;     // essencial para persistência do histórico de auditoria
 
     // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
     const datasOperacionais = obterDatasOperacionaisIso();
@@ -69,13 +71,13 @@ export async function loadAllDataFromFirestore() {
 
     appState.escalas.forEach(e => {
       if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
-        idsPlantonistasOperacionais.add(e.servidorId);
+        idsPlantonistasOperacionais.add(String(e.servidorId));
       }
     });
 
     // Sanitização e formatação dos dados dos servidores
     appState.servidores = servidoresData.map(srv => {
-      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(srv.id);
+      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
 
       return {
         ...srv,
@@ -97,7 +99,7 @@ export async function loadAllDataFromFirestore() {
       statusEl.innerHTML = '';
     }
 
-    console.log(`Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias e ${appState.ferias.length} registros de férias.`);
+    console.log(`Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias, ${appState.ferias.length} férias e ${appState.logs.length} logs de auditoria.`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
