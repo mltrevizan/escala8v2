@@ -41,7 +41,8 @@ export function initAuthModule() {
         cargo: srv ? srv.cargo : 'DELEGADO',
         perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
         delegaciaId: srv ? srv.delegaciaId : null,
-        subdivisao: srv ? srv.subdivisao : '8ª SDP'
+        subdivisao: srv ? srv.subdivisao : '8ª SDP',
+        forcarTrocaSenha: srv?.forcarTrocaSenha || srv?.senhaResetada || false
       };
     } else {
       appState.currentUser = null;
@@ -220,10 +221,13 @@ window.executarLoginFirebase = async function(e) {
     const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
 
-    if (password === 'Central123') {
+    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
+
+    // CHECAGEM DE RETORNO OBRIGATÓRIO PARA TROCA DE SENHA CASO SEJA A SENHA PADRÃO OU BANCO INDIQUE RESET
+    if (password === 'Central123' || srv?.forcarTrocaSenha || srv?.senhaResetada) {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
-      const nomeSrv = loginSearchState.servidorSelecionado?.nome || 'Usuário';
+      const nomeSrv = loginSearchState.servidorSelecionado?.nome || srv?.nome || 'Usuário';
       alert(`Bem-vindo, ${nomeSrv}!`);
     }
 
@@ -320,6 +324,16 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
     await user.updatePassword(nova);
+
+    // REMOVE OS SINALIZADORES DE RESET DO BANCO DE DADOS APÓS A TROCA CONCLUÍDA
+    if (appState.currentUser?.servidorId) {
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(appState.currentUser.servidorId));
+      if (srv) {
+        srv.senhaResetada = false;
+        srv.forcarTrocaSenha = false;
+        await syncDocToFirestore('servidores', srv.id, srv);
+      }
+    }
 
     alert("Senha alterada com sucesso! Utilize a sua nova senha nos próximos acessos.");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
