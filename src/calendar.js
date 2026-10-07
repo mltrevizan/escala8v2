@@ -11,6 +11,12 @@ export function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
+function formatarDataBr(dataIso) {
+  if (!dataIso) return '-';
+  const parts = dataIso.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
+}
+
 /**
  * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
  */
@@ -651,7 +657,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   const podeVerTelefone = canViewPhoneForDate(dataIso);
   const perfilUser = getPerfilUsuarioLogado();
 
-  // PERMISSÕES DE EXIBIÇÃO DOS BOTÕES
   const podeTrocarDel = [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO].includes(perfilUser);
   const podeTrocarApj = [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfilUser);
   const podeVincularApj = scopeAtual === 'CRF' && [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfilUser);
@@ -667,11 +672,8 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // REGRA DE IGNORAR EXTRAJORNADA PARA O BOTÃO VINCULAR APJ:
-    // Filtra apenas o plantão regular (ignora EXTRAJORNADA/SDP)
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
-    // Checa se no plantão regular existe algum APJ
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       return srv && !(srv.cargo || '').toUpperCase().includes('DELEGADO');
@@ -692,7 +694,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
         btnDelHtml = `<button onclick="window.abrirModalTrocarDelegado('${esc.id}', '${dataIso}', '${esc.turno || horarioGrupo}')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>`;
       }
 
-      // EXIBE VINCULAR APJ SE O PLANTÃO REGULAR NÃO TIVER APJ (MESMO QUE HAJA APJ NA EXTRAJORNADA)
       let btnVincularApjHtml = '';
       if (isDel && !temApjNoPlantaoRegular && podeVincularApj && !isExtra) {
         btnVincularApjHtml = `<button onclick="window.abrirModalVincularApjAcao('${esc.id}', '${dataIso}', '${esc.turno || horarioGrupo}')" class="px-2 py-1 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-lg text-[10px] cursor-pointer shadow-xs">🔗 Vincular APJ</button>`;
@@ -736,12 +737,19 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       `;
     }).join('');
 
+    cardsHtml += `
+      <div class="pt-2 flex justify-between items-center border-t border-slate-200">
+        <button type="button" onclick="window.fecharModalDetalhesPlantao(); abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
+          📋 Logs de Alterações
+        </button>
+      </div>
+    `;
+
     containerConteudo.innerHTML = `<div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">${cardsHtml}</div>`;
   }
 
   modal.classList.remove('hidden');
 };
-
 window.fecharModalDetalhesPlantao = function() {
   document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
 };
