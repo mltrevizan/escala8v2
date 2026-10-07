@@ -4,7 +4,7 @@ import { syncDocToFirestore } from './db.js';
 import { getPerfilUsuarioLogado } from './permissions.js';
 
 /**
- * Grava um registro de auditoria no Firestore
+ * Grava um registro de auditoria no Firestore e aguarda a confirmação do banco
  */
 export async function registrarLogTroca({ scope, delegaciaId = null, tipoAcao, detalhes, dataPlantao, turno }) {
   try {
@@ -18,8 +18,8 @@ export async function registrarLogTroca({ scope, delegaciaId = null, tipoAcao, d
       usuarioPerfil: getPerfilUsuarioLogado(),
       usuarioLogin: user.login || user.email || 'sistema',
       scope: scope, // 'CRF' ou 'DELEGACIA'
-      delegaciaId: delegaciaId || null,
-      tipoAcao: tipoAcao, // 'TROCA_DELEGADO', 'TROCA_APJ', 'VINCULAR_APJ'
+      delegaciaId: delegaciaId ? String(delegaciaId) : null,
+      tipoAcao: tipoAcao,
       detalhes: detalhes,
       dataPlantao: dataPlantao || null,
       turno: turno || null
@@ -28,6 +28,7 @@ export async function registrarLogTroca({ scope, delegaciaId = null, tipoAcao, d
     if (!appState.logs) appState.logs = [];
     appState.logs.push(logEntry);
 
+    // Gravação síncrona obrigatória no banco de dados
     await syncDocToFirestore('logs', logId, logEntry);
   } catch (err) {
     console.error("Erro ao registrar log no Firestore:", err);
@@ -55,12 +56,11 @@ export function abrirModalHistoricoLogs(scope, delegaciaId = null) {
     tituloEl.innerText = `📋 Histórico de Alterações de Escala — ${nomeUnidade}`;
   }
 
-  // Filtra logs por escopo e por delegacia (se aplicável)
   let logsFiltrados = (appState.logs || []).filter(l => {
     if (l.scope !== scope) return false;
     if (scope === 'DELEGACIA' && delegaciaId) {
       if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
-        return String(l.delegaciaId) === String(delegaciaId) || delObj.delegaciasIds.includes(l.delegaciaId);
+        return String(l.delegaciaId) === String(delegaciaId) || delObj.delegaciasIds.some(unfId => String(unfId) === String(l.delegaciaId));
       }
       return String(l.delegaciaId) === String(delegaciaId);
     }
