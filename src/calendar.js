@@ -102,8 +102,13 @@ function obterHorarioTurnoTexto(esc) {
 }
 
 /**
- * Monta as opções do seletor de delegacias garantindo que a escolha do usuário seja mantida
+ * Função global para alteração direta da delegacia no filtro do calendário
  */
+window.mudarDelegaciaCalendario = function(delegaciaId) {
+  appState.selectedDelegaciaId = String(delegaciaId);
+  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+};
+
 function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
   const isPublico = !appState.currentUser;
   const { currentYear, currentMonth, escalas, delegacias } = appState;
@@ -124,21 +129,22 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
       const bateuUnificada = d.delegaciasIds && d.delegaciasIds.some(unfId => delegaciasComEscala.has(String(unfId)));
       return bateuId || bateuUnificada;
     });
-
-    if (listaDelegacias.length > 0) {
-      const selectedExiste = listaDelegacias.some(d => String(d.id) === String(selectedDelegaciaId));
-      if (!selectedExiste) {
-        appState.selectedDelegaciaId = listaDelegacias[0].id;
-      }
-    }
   }
 
   if (listaDelegacias.length === 0) {
-    return `<option value="">Nenhuma delegacia com escala neste mês</option>`;
+    return `<option value="">Nenhuma delegacia disponível</option>`;
   }
 
-  // Target prioritário: appState.selectedDelegaciaId -> selectedDelegaciaId -> lotação do usuário logado -> primeira da lista
-  const targetId = appState.selectedDelegaciaId || selectedDelegaciaId || (!isPublico ? appState.currentUser?.delegaciaId : '') || listaDelegacias[0].id;
+  // Determina qual ID deve vir selecionado
+  let targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
+  
+  if (!targetId && !isPublico && appState.currentUser?.delegaciaId) {
+    targetId = String(appState.currentUser.delegaciaId);
+    appState.selectedDelegaciaId = targetId;
+  } else if (!targetId && listaDelegacias.length > 0) {
+    targetId = String(listaDelegacias[0].id);
+    appState.selectedDelegaciaId = targetId;
+  }
 
   return listaDelegacias.map(d => 
     `<option value="${d.id}" ${String(targetId) === String(d.id) ? 'selected' : ''}>${d.nome}</option>`
@@ -151,7 +157,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // Define a delegacia inicial do usuário logado APENAS se ainda não houver nenhuma delegacia selecionada no estado
+  // Garante inicialização padrão da delegacia do usuário logado se ainda não houver seleção
   if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId) {
     if (!appState.selectedDelegaciaId) {
       appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
@@ -235,7 +241,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
         ${scope === 'DELEGACIA' ? `
           <div class="flex items-center gap-1.5">
             <label class="text-xs font-medium text-slate-600">Unidade / Plantão:</label>
-            <select id="select-calendar-delegacia" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
+            <select id="select-calendar-delegacia" onchange="window.mudarDelegaciaCalendario(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
               ${delegaciasOptionsEscala}
             </select>
           </div>
@@ -559,15 +565,6 @@ window.mudarFiltroDelCrf = function(valor) {
 function setupCalendarEvents(containerId, scope) {
   const container = document.getElementById(containerId);
   if (!container) return;
-
-  const selectDel = container.querySelector('#select-calendar-delegacia');
-  if (selectDel) {
-    selectDel.addEventListener('change', (e) => {
-      // GRAVAÇÃO DA NOVA SELEÇÃO DO USUÁRIO NO ESTADO GLOBAL
-      appState.selectedDelegaciaId = e.target.value;
-      renderCalendarGrid(containerId, scope);
-    });
-  }
 
   const btnPrev = container.querySelector('#btn-prev-month');
   if (btnPrev) {
@@ -1211,7 +1208,7 @@ function criarModalAcaoTrocarDelegadoDOM() {
 
           <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="document.getElementById('modal-acao-trocar-delegado').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Confirmar Troca</button>
+            <button type="submit" class="px-4 py-2 bg-black text-[#BEA55A] hover:bg-slate-800 border border-[#BEA55A] rounded-xl font-bold cursor-pointer">Confirmar Troca</button>
           </div>
         </form>
       </div>
@@ -1252,7 +1249,7 @@ function criarModalAcaoTrocarApjDOM() {
 
           <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="document.getElementById('modal-acao-trocar-apj').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Confirmar Troca</button>
+            <button type="submit" class="px-4 py-2 bg-black text-[#BEA55A] hover:bg-slate-800 border border-[#BEA55A] rounded-xl font-bold cursor-pointer">Confirmar Troca</button>
           </div>
         </form>
       </div>
