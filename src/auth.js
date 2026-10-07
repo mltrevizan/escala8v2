@@ -215,27 +215,12 @@ window.executarLoginFirebase = async function(e) {
 
   try {
     msgErro?.classList.add('hidden');
-    let userCredential = null;
-
-    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
-    const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
-
-    try {
-      userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-    } catch (authErr) {
-      if (password === 'Central123' && estaComResetPendente) {
-        if (msgErro) {
-          msgErro.innerText = "A senha foi marcada para redefinição no banco de dados. Digite sua senha pessoal de acesso para autorizar a redefinição de nova senha.";
-          msgErro.classList.remove('hidden');
-        }
-        return;
-      }
-      throw authErr;
-    }
-
+    const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     window.fecharModalLoginApp();
 
-    if (password === 'Central123' || estaComResetPendente) {
+    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
+
+    if (password === 'Central123' || srv?.forcarTrocaSenha || srv?.senhaResetada) {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
       const nomeSrv = loginSearchState.servidorSelecionado?.nome || srv?.nome || 'Usuário';
