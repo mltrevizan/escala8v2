@@ -107,6 +107,8 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
 
   let listaDelegacias = [...(delegacias || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
+  // REGRA PARA PERFIL PÚBLICO (SEM LOGIN):
+  // Exibe na lista apenas as delegacias que possuem escala cadastrada no mês atual
   if (isPublico && scope === 'DELEGACIA') {
     const mesPrefixo = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 
@@ -128,13 +130,24 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
         appState.selectedDelegaciaId = listaDelegacias[0].id;
       }
     }
+  } 
+  // REGRA PARA PERFIL AUTENTICADO (LOGADO):
+  // Se ainda não houver uma delegacia selecionada manualmente, define por padrão a lotação do usuário logado
+  else if (!isPublico && scope === 'DELEGACIA' && appState.currentUser?.delegaciaId) {
+    if (!appState.selectedDelegaciaId) {
+      const lotacaoExiste = listaDelegacias.some(d => String(d.id) === String(appState.currentUser.delegaciaId));
+      if (lotacaoExiste) {
+        appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
+      }
+    }
   }
 
   if (listaDelegacias.length === 0) {
     return `<option value="">Nenhuma delegacia com escala neste mês</option>`;
   }
 
-  const targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
+  // Define a delegacia alvo a ser pré-selecionada no dropdown
+  const targetId = appState.selectedDelegaciaId || selectedDelegaciaId || (!isPublico ? appState.currentUser?.delegaciaId : '');
 
   return listaDelegacias.map(d => 
     `<option value="${d.id}" ${String(targetId) === String(d.id) ? 'selected' : ''}>${d.nome}</option>`
@@ -147,10 +160,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // SELEÇÃO AUTOMÁTICA DA DELEGACIA DE LOTAÇÃO PARA USUÁRIOS LOGADOS
+  // FIX: Se o usuário estiver logado e acessar a aba DELEGACIA, 
+  // define por padrão a sua delegacia de lotação antes de calcular as opções.
   if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId) {
-    if (!appState.selectedDelegaciaId) {
-      appState.selectedDelegaciaId = appState.currentUser.delegaciaId;
+    // Garante a atribuição caso ainda não tenha sido selecionada manualmente
+    if (!appState.selectedDelegaciaId || appState.selectedDelegaciaId === '') {
+      appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
     }
   }
 
