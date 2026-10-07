@@ -146,6 +146,14 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   if (!container) return;
 
   appState.calendarScope = scope;
+
+  // SELEÇÃO AUTOMÁTICA DA DELEGACIA DE LOTAÇÃO PARA USUÁRIOS LOGADOS
+  if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId) {
+    if (!appState.selectedDelegaciaId) {
+      appState.selectedDelegaciaId = appState.currentUser.delegaciaId;
+    }
+  }
+
   const { currentYear, currentMonth, selectedDelegaciaId, feriados } = appState;
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
@@ -693,9 +701,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   const perfilUser = getPerfilUsuarioLogado();
   const userDelId = appState.currentUser?.delegaciaId;
 
-  // REGRA ATUALIZADA DO SUPERINTENDENTE:
-  // No Calendário CRF: Acesso total para vincular e trocar APJ.
-  // No Calendário por Delegacia: Liberado para trocar Delegado, APJ e vincular APJ APENAS na sua própria delegacia.
   const eMesmaDelegaciaSuper = scopeAtual === 'DELEGACIA' && String(selectedDelId) === String(userDelId);
 
   const podeTrocarDel = [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO].includes(perfilUser) || (perfilUser === PERFIS.SUPERINTENDENTE && eMesmaDelegaciaSuper);
@@ -713,7 +718,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // IGNORA APJs ESCALADOS EM EXTRAJORNADA/SDP PARA A REGRA DE EXIBIÇÃO DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
@@ -852,8 +856,6 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
     const cargoU = (s.cargo || '').toUpperCase();
     if (!cargoU.includes('DELEGADO')) return false;
 
-    // REGRA DE LIMITAÇÃO PARA O PERFIL DELEGADO:
-    // Se o próprio delegado logado NÃO for o titular escalado neste card, a opção fica travada nele
     if (isPerfilDelegado && !souEuEscalado) {
       return saoMesmoPolicial(s.id, userSrvId);
     }
@@ -972,8 +974,6 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
-    // REGRA DE LIMITAÇÃO PARA O PERFIL APJ:
-    // Se o APJ logado NÃO for o próprio escalado no card, força a trava nele
     if (isPerfilApj && !souEuEscalado) {
       return saoMesmoPolicial(s.id, userSrvId);
     }
@@ -981,7 +981,8 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
     if (busca && !(s.nome || '').toLowerCase().includes(busca)) return false;
 
-    return true;}).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+    return true;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
