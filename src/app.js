@@ -8,7 +8,7 @@ import { renderDelegaciasCards } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
 import { renderFeriasModule } from './ferias.js';
-import { renderFeriadosModule } from './feriados.js'; // IMPORTAÇÃO DO MÓDULO REAL DE FERIADOS
+import { renderFeriadosModule } from './feriados.js';
 import { 
   applyUIPermissions, 
   podeAcessarAbaGestaoCrf, 
@@ -19,11 +19,7 @@ import {
   podeAcessarAbaFeriados 
 } from './permissions.js';
 
-/**
- * Troca de aba ativa com validação estrita de permissões
- */
 window.switchTab = function(tabName) {
-  // Validação de acesso por aba antes de efetuar a troca
   if (tabName === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
     tabName = 'crf';
   } else if ((tabName === 'gestao-del' || tabName === 'gestao-delegacias') && !podeAcessarAbaGestaoDelegacias()) {
@@ -40,7 +36,6 @@ window.switchTab = function(tabName) {
 
   appState.activeTab = tabName;
 
-  // Atualiza estados visuais dos botões das abas
   document.querySelectorAll('.tab-btn, [id^="tab-btn-"]').forEach(btn => {
     btn.classList.remove('active', 'bg-black', 'text-white', 'shadow-sm');
   });
@@ -50,18 +45,15 @@ window.switchTab = function(tabName) {
     btnAtivo.classList.add('active');
   }
 
-  // Oculta todos os contêineres de conteúdo
   document.querySelectorAll('.tab-content, [id^="tab-content-"]').forEach(content => {
     content.classList.add('hidden');
   });
 
-  // Exibe o conteúdo selecionado
   const targetContent = document.getElementById(`tab-content-${tabName}`);
   if (targetContent) {
     targetContent.classList.remove('hidden');
   }
 
-  // Renderiza o módulo específico da aba
   switch (tabName) {
     case 'crf':
       renderCalendarGrid('calendar-crf-container', 'CRF');
@@ -84,22 +76,18 @@ window.switchTab = function(tabName) {
       renderDelegaciasCards('delegacias-container');
       break;
     case 'feriados':
-      renderFeriadosModule('feriados-container'); // EXECUTA O MÓDULO DO FERIADOS.JS
+      renderFeriadosModule('feriados-container');
       break;
     case 'ferias':
       renderFeriasModule('ferias-container');
       break;
   }
 
-  // Garante a aplicação contínua de permissões da UI
   if (typeof applyUIPermissions === 'function') {
     applyUIPermissions();
   }
 };
 
-/**
- * Função de migração em lote com trava de segurança
- */
 window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
   const role = (appState.currentUser?.perfil || appState.currentUser?.nivelAcesso || '').toUpperCase();
   
@@ -157,28 +145,20 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-/**
- * Boot da Aplicação
- */
 async function initApp() {
   try {
-    // 1. Carrega dados do Firestore
     await loadAllDataFromFirestore();
 
-    // 2. Inicializa o observador do Firebase Auth e o botão/modal de Login
     initAuthModule();
 
-    // 3. Inicializa o DOM do Gerador em Lote Completo
     if (typeof initGeradorLoteModule === 'function') {
       initGeradorLoteModule();
     }
 
-    // 4. Aplica travas de permissão na interface
     if (typeof applyUIPermissions === 'function') {
       applyUIPermissions();
     }
 
-    // 5. Define a aba padrão inicial protegida
     window.switchTab('crf');
 
   } catch (err) {
@@ -186,5 +166,4 @@ async function initApp() {
   }
 }
 
-// Inicia ao carregar a página
 document.addEventListener('DOMContentLoaded', initApp);
