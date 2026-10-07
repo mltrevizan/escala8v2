@@ -11,6 +11,9 @@ export function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
+/**
+ * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
+ */
 function obterHorarioTurnoTexto(esc) {
   if (!esc) return '08:00 às 08:00';
 
@@ -99,6 +102,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const totalDays = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
+  const isPublico = !appState.currentUser;
+  const usuarioLogadoSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+
   const hoje = new Date();
   const hojeAno = hoje.getFullYear();
   const hojeMes = hoje.getMonth();
@@ -166,12 +172,20 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês + Filtros -->
+    <!-- Navegação de Mês + Botão de Log e Filtros -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
-      <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
-        <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
-        <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
-        <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">Próximo ▶</button>
+      <div class="flex items-center gap-2">
+        ${!isPublico ? `
+          <button type="button" onclick="abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
+            📋 Logs
+          </button>
+        ` : ''}
+
+        <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
+          <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
+          <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
+          <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">Próximo ▶</button>
+        </div>
       </div>
 
       ${scope === 'CRF' ? `
@@ -267,6 +281,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       }
     }
 
+    // CHECAGEM SE O POLICIAL LOGADO ESTÁ ESCALADO NESTE DIA PARA APLICAR BORDA DOURADA PCPR
+    const usuarioEstaEscaladoNoDia = !isPublico && usuarioLogadoSrvId && escalasDoDia.some(e => String(e.servidorId) === String(usuarioLogadoSrvId));
+
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
       bgDayClass = 'bg-rose-50/60';
@@ -274,9 +291,13 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       bgDayClass = 'bg-amber-50/40';
     }
 
-    const hojeBorderClass = isHoje 
-      ? 'border-2 border-black bg-slate-100/50 shadow-inner z-10' 
-      : 'border-t border-l border-slate-200/80';
+    let hojeBorderClass = 'border-t border-l border-slate-200/80';
+    if (isHoje) {
+      hojeBorderClass = 'border-2 border-black bg-slate-100/50 shadow-inner z-10';
+    } else if (usuarioEstaEscaladoNoDia) {
+      // Borda em Dourado PCPR para destacar o dia do plantão do policial logado
+      hojeBorderClass = 'border-2 border-[#BEA55A] bg-[#F7F3E8]/40 shadow-xs z-10';
+    }
 
     html += `
       <div class="${bgDayClass} ${hojeBorderClass} p-1 flex flex-col justify-between relative min-h-[115px] h-auto">
@@ -286,6 +307,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
               ${day}
             </span>
             ${isHoje ? '<span class="text-[7px] bg-black text-pcpr-gold font-extrabold px-1 rounded uppercase tracking-tighter">HOJE</span>' : ''}
+            ${(!isHoje && usuarioEstaEscaladoNoDia) ? '<span class="text-[7px] bg-[#BEA55A] text-black font-extrabold px-1 rounded uppercase tracking-tighter" title="Seu Plantão">MEU PLANTÃO</span>' : ''}
           </div>
 
           ${feriadoDoDia ? `
@@ -627,10 +649,11 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   const escalasDoGrupo = (appState.escalas || []).filter(e => ids.includes(e.id));
   
   const podeVerTelefone = canViewPhoneForDate(dataIso);
-  const showBtnApj = hasPermission('SHOW_BTN_INCLUIR_TROCAR_APJ');
-  const showBtnDel = hasPermission('SHOW_BTN_TROCAR_DELEGADO');
-  
   const perfilUser = getPerfilUsuarioLogado();
+
+  // PERMISSÕES DE EXIBIÇÃO DOS BOTÕES
+  const podeTrocarDel = [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO].includes(perfilUser);
+  const podeTrocarApj = [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfilUser);
   const podeVincularApj = scopeAtual === 'CRF' && [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfilUser);
 
   if (tituloModalEl) {
@@ -644,8 +667,12 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // Verifica se no turno da CRF não há nenhum APJ cadastrado
-    const temApjNoTurno = escalasDoGrupo.some(esc => {
+    // REGRA DE IGNORAR EXTRAJORNADA PARA O BOTÃO VINCULAR APJ:
+    // Filtra apenas o plantão regular (ignora EXTRAJORNADA/SDP)
+    const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
+
+    // Checa se no plantão regular existe algum APJ
+    const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       return srv && !(srv.cargo || '').toUpperCase().includes('DELEGADO');
     });
@@ -661,19 +688,19 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       const horarioEfetivo = obterHorarioTurnoTexto(esc);
 
       let btnDelHtml = '';
-      if (isDel && showBtnDel && !isExtra) {
-        btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
+      if (isDel && podeTrocarDel && !isExtra) {
+        btnDelHtml = `<button onclick="window.abrirModalTrocarDelegado('${esc.id}', '${dataIso}', '${esc.turno || horarioGrupo}')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>`;
       }
 
-      // BOTÃO DE VINCULAR APJ: DOURADO PCPR, APENAS NA CRF QUANDO O TURNO NÃO TIVER APJ
+      // EXIBE VINCULAR APJ SE O PLANTÃO REGULAR NÃO TIVER APJ (MESMO QUE HAJA APJ NA EXTRAJORNADA)
       let btnVincularApjHtml = '';
-      if (isDel && !temApjNoTurno && podeVincularApj && !isExtra) {
-        btnVincularApjHtml = '<button onclick="window.abrirModalVincularApjSimplificado(\'' + esc.id + '\', \'' + dataIso + '\', \'' + (esc.turno || horarioGrupo) + '\')" class="px-2 py-1 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-lg text-[10px] cursor-pointer shadow-xs">🔗 Vincular APJ</button>';
+      if (isDel && !temApjNoPlantaoRegular && podeVincularApj && !isExtra) {
+        btnVincularApjHtml = `<button onclick="window.abrirModalVincularApjAcao('${esc.id}', '${dataIso}', '${esc.turno || horarioGrupo}')" class="px-2 py-1 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-lg text-[10px] cursor-pointer shadow-xs">🔗 Vincular APJ</button>`;
       }
 
       let btnApjHtml = '';
-      if (!isDel && showBtnApj && !isExtra) {
-        btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar APJ</button>';
+      if (!isDel && podeTrocarApj && !isExtra) {
+        btnApjHtml = `<button onclick="window.abrirModalTrocarApj('${esc.id}', '${dataIso}', '${esc.turno || horarioGrupo}')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar APJ</button>`;
       }
 
       return `
@@ -709,15 +736,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       `;
     }).join('');
 
-    // Botão de acesso rápido aos Logs no rodapé do Modal
-    cardsHtml += `
-      <div class="pt-2 flex justify-between items-center border-t border-slate-200">
-        <button type="button" onclick="window.fecharModalDetalhesPlantao(); abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
-          📋 Logs de Alterações
-        </button>
-      </div>
-    `;
-
     containerConteudo.innerHTML = `<div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">${cardsHtml}</div>`;
   }
 
@@ -728,10 +746,465 @@ window.fecharModalDetalhesPlantao = function() {
   document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
 };
 
-function formatarDataBr(dataIso) {
-  if (!dataIso) return '-';
-  const parts = dataIso.split('-');
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
+// =========================================================================
+// MODAIS DE AÇÃO COM LIMITAÇÕES POR PERFIL (TROCAR DEL, TROCAR APJ, VINCULAR APJ)
+// =========================================================================
+
+// --- A) MODAL TROCAR DELEGADO ---
+window.abrirModalTrocarDelegado = function(escalaId, dataIso, turnoStr) {
+  let modal = document.getElementById('modal-acao-trocar-delegado');
+  if (!modal) {
+    criarModalAcaoTrocarDelegadoDOM();
+    modal = document.getElementById('modal-acao-trocar-delegado');
+  }
+
+  const esc = (appState.escalas || []).find(e => e.id === escalaId);
+  if (!esc) return;
+
+  const srvAtual = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const perfil = getPerfilUsuarioLogado();
+  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+
+  document.getElementById('m-del-escala-id').value = escalaId;
+  document.getElementById('m-del-filtro-busca').value = '';
+  
+  const selectDelModal = document.getElementById('m-del-filtro-delegacia');
+  if (selectDelModal) {
+    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+      opts += `<option value="${d.id}">${d.nome}</option>`;
+    });
+    selectDelModal.innerHTML = opts;
+  }
+
+  window.atualizarSelectTrocarDelegadoModal(esc, srvAtual, perfil, userSrvId);
+  modal.classList.remove('hidden');
+};
+
+window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, userSrvId) {
+  const selectNovo = document.getElementById('m-del-novo-id');
+  if (!selectNovo) return;
+
+  const busca = (document.getElementById('m-del-filtro-busca')?.value || '').toLowerCase().trim();
+  const delFiltro = document.getElementById('m-del-filtro-delegacia')?.value || 'TODAS';
+
+  // LIMITAÇÃO DO PERFIL DELEGADO:
+  // 1) Se no turno o próprio delegado está escalado (srvAtual.id === userSrvId) -> Pode escolher qualquer outro.
+  // 2) Se no turno outro delegado está escalado -> Apenas pode selecionar a si próprio (sugestão fixa).
+  const isPerfilDelegado = perfil === PERFIS.DELEGADO;
+  const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
+
+  let poolDelegados = (appState.servidores || []).filter(s => {
+    const cargoU = (s.cargo || '').toUpperCase();
+    if (!cargoU.includes('DELEGADO')) return false;
+
+    if (isPerfilDelegado && !souEuEscalado) {
+      return String(s.id) === String(userSrvId); // Força aparecer apenas ele mesmo
+    }
+
+    if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
+    if (busca && !(s.nome || '').toLowerCase().includes(busca)) return false;
+
+    return true;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let opts = `<option value="">Selecione o Novo Delegado (${poolDelegados.length})...</option>`;
+  poolDelegados.forEach(d => {
+    opts += `<option value="${d.id}" ${isPerfilDelegado && !souEuEscalado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
+  });
+
+  selectNovo.innerHTML = opts;
+  if (isPerfilDelegado && !souEuEscalado) {
+    selectNovo.disabled = true; // Trava a seleção no nome dele
+  } else {
+    selectNovo.disabled = false;
+  }
+};
+
+window.salvarTrocaDelegadoSubmit = async function(e) {
+  e.preventDefault();
+
+  const escId = document.getElementById('m-del-escala-id').value;
+  const novoServidorId = document.getElementById('m-del-novo-id').value;
+
+  if (!novoServidorId) {
+    alert("Selecione o novo Delegado para efetuar a troca.");
+    return;
+  }
+
+  const esc = (appState.escalas || []).find(e => e.id === escId);
+  if (!esc) return;
+
+  const srvAnterior = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const srvNovo = (appState.servidores || []).find(s => s.id === novoServidorId);
+
+  esc.servidorId = novoServidorId;
+  await syncDocToFirestore('escalas', esc.id, esc);
+
+  // REGISTRO DE AUDITORIA NO LOG
+  await registrarLogTroca({
+    scope: esc.scope,
+    delegaciaId: esc.delegaciaId,
+    tipoAcao: 'TROCA_DELEGADO',
+    detalhes: `Troca do Delegado ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo DEL. ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
+    dataPlantao: esc.data,
+    turno: esc.turno
+  });
+
+  alert(`Troca efetuada com sucesso! Substituído por DEL. ${srvNovo ? srvNovo.nome : ''}.`);
+  document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+};
+
+// --- B) MODAL TROCAR APJ ---
+window.abrirModalTrocarApj = function(escalaId, dataIso, turnoStr) {
+  let modal = document.getElementById('modal-acao-trocar-apj');
+  if (!modal) {
+    criarModalAcaoTrocarApjDOM();
+    modal = document.getElementById('modal-acao-trocar-apj');
+  }
+
+  const esc = (appState.escalas || []).filter(e => e.id === escalaId)[0];
+  if (!esc) return;
+
+  const srvAtual = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const perfil = getPerfilUsuarioLogado();
+  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+
+  document.getElementById('m-apj-escala-id').value = escalaId;
+  document.getElementById('m-apj-filtro-busca').value = '';
+
+  const selectDelModal = document.getElementById('m-apj-filtro-delegacia');
+  if (selectDelModal) {
+    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+      opts += `<option value="${d.id}">${d.nome}</option>`;
+    });
+    selectDelModal.innerHTML = opts;
+  }
+
+  window.atualizarSelectTrocarApjModal(esc, srvAtual, perfil, userSrvId);
+  modal.classList.remove('hidden');
+};
+
+window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId) {
+  const selectNovo = document.getElementById('m-apj-novo-id');
+  if (!selectNovo) return;
+
+  const busca = (document.getElementById('m-apj-filtro-busca')?.value || '').toLowerCase().trim();
+  const delFiltro = document.getElementById('m-apj-filtro-delegacia')?.value || 'TODAS';
+
+  // LIMITAÇÃO DO PERFIL APJ:
+  // 1) Se no turno o próprio APJ já está escalado -> Pode escolher qualquer outro APJ.
+  // 2) Se no turno outro APJ está escalado -> Apenas pode selecionar a si próprio (sugestão fixa).
+  const isPerfilApj = perfil === PERFIS.APJ;
+  const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
+
+  let poolApjs = (appState.servidores || []).filter(s => {
+    const cargoU = (s.cargo || '').toUpperCase();
+    if (cargoU.includes('DELEGADO')) return false;
+
+    if (isPerfilApj && !souEuEscalado) {
+      return String(s.id) === String(userSrvId);
+    }
+
+    if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
+    if (busca && !(s.nome || '').toLowerCase().includes(busca)) return false;
+
+    return true;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
+  poolApjs.forEach(a => {
+    opts += `<option value="${a.id}" ${isPerfilApj && !souEuEscalado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
+  });
+
+  selectNovo.innerHTML = opts;
+  if (isPerfilApj && !souEuEscalado) {
+    selectNovo.disabled = true;
+  } else {
+    selectNovo.disabled = false;
+  }
+};
+
+window.salvarTrocaApjSubmit = async function(e) {
+  e.preventDefault();
+
+  const escId = document.getElementById('m-apj-escala-id').value;
+  const novoServidorId = document.getElementById('m-apj-novo-id').value;
+
+  if (!novoServidorId) {
+    alert("Selecione o novo APJ para efetuar a troca.");
+    return;
+  }
+
+  const esc = (appState.escalas || []).find(e => e.id === escId);
+  if (!esc) return;
+
+  const srvAnterior = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const srvNovo = (appState.servidores || []).find(s => s.id === novoServidorId);
+
+  esc.servidorId = novoServidorId;
+  await syncDocToFirestore('escalas', esc.id, esc);
+
+  await registrarLogTroca({
+    scope: esc.scope,
+    delegaciaId: esc.delegaciaId,
+    tipoAcao: 'TROCA_APJ',
+    detalhes: `Troca do APJ ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo APJ ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
+    dataPlantao: esc.data,
+    turno: esc.turno
+  });
+
+  alert(`Troca efetuada com sucesso! Substituído por APJ ${srvNovo ? srvNovo.nome : ''}.`);
+  document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+};
+
+// --- C) MODAL VINCULAR APJ ---
+window.abrirModalVincularApjAcao = function(escalaDelegadoId, dataIso, turnoStr) {
+  let modal = document.getElementById('modal-acao-vincular-apj');
+  if (!modal) {
+    criarModalAcaoVincularApjDOM();
+    modal = document.getElementById('modal-acao-vincular-apj');
+  }
+
+  const perfil = getPerfilUsuarioLogado();
+  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+
+  document.getElementById('m-vinc-escala-id').value = escalaDelegadoId;
+  document.getElementById('m-vinc-data-iso').value = dataIso;
+  document.getElementById('m-vinc-turno-str').value = turnoStr;
+  document.getElementById('m-vinc-filtro-busca').value = '';
+
+  const selectDelModal = document.getElementById('m-vinc-filtro-delegacia');
+  if (selectDelModal) {
+    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+      opts += `<option value="${d.id}">${d.nome}</option>`;
+    });
+    selectDelModal.innerHTML = opts;
+  }
+
+  window.atualizarSelectVincularApjModal(perfil, userSrvId);
+  modal.classList.remove('hidden');
+};
+
+window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
+  const selectApj = document.getElementById('m-vinc-apj-id');
+  if (!selectApj) return;
+
+  const busca = (document.getElementById('m-vinc-filtro-busca')?.value || '').toLowerCase().trim();
+  const delFiltro = document.getElementById('m-vinc-filtro-delegacia')?.value || 'TODAS';
+
+  // LIMITAÇÃO DO PERFIL APJ AO VINCULAR:
+  // Somente poderá selecionar a si próprio (sugestão fixa no seu nome)
+  const isPerfilApj = perfil === PERFIS.APJ;
+
+  let poolApjs = (appState.servidores || []).filter(s => {
+    const cargoU = (s.cargo || '').toUpperCase();
+    if (cargoU.includes('DELEGADO')) return false;
+
+    if (isPerfilApj) {
+      return String(s.id) === String(userSrvId);
+    }
+
+    if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
+    if (busca && !(s.nome || '').toLowerCase().includes(busca)) return false;
+
+    return true;
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  let opts = `<option value="">Selecione o APJ a Vincular (${poolApjs.length})...</option>`;
+  poolApjs.forEach(a => {
+    opts += `<option value="${a.id}" ${isPerfilApj ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
+  });
+
+  selectApj.innerHTML = opts;
+  if (isPerfilApj) {
+    selectApj.disabled = true;
+  } else {
+    selectApj.disabled = false;
+  }
+};
+
+window.salvarVincularApjSubmit = async function(e) {
+  e.preventDefault();
+
+  const escDelId = document.getElementById('m-vinc-escala-id').value;
+  const dataIso = document.getElementById('m-vinc-data-iso').value;
+  const turnoStr = document.getElementById('m-vinc-turno-str').value;
+  const apjId = document.getElementById('m-vinc-apj-id').value;
+
+  if (!apjId) {
+    alert("Selecione um APJ para vincular ao plantão.");
+    return;
+  }
+
+  const escDel = (appState.escalas || []).find(e => e.id === escDelId);
+  const srvApj = (appState.servidores || []).find(s => s.id === apjId);
+  const srvDel = escDel ? (appState.servidores || []).find(s => s.id === escDel.servidorId) : null;
+
+  const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  const novaEscala = {
+    id: newEscId,
+    data: dataIso,
+    servidorId: apjId,
+    delegaciaId: srvApj ? srvApj.delegaciaId : '',
+    scope: 'CRF',
+    tipo: 'PLANTÃO',
+    turno: turnoStr
+  };
+
+  if (!appState.escalas) appState.escalas = [];
+  appState.escalas.push(novaEscala);
+  await syncDocToFirestore('escalas', newEscId, novaEscala);
+
+  // REGISTRO DE AUDITORIA NO LOG
+  await registrarLogTroca({
+    scope: 'CRF',
+    delegaciaId: null,
+    tipoAcao: 'VINCULAR_APJ',
+    detalhes: `Inclusão/Vinculação do APJ ${srvApj ? srvApj.nome : 'Policial'} ao plantão CRF do dia ${formatarDataBr(dataIso)} (${turnoStr}) junto com o DEL. ${srvDel ? srvDel.nome : 'Delegado'}.`,
+    dataPlantao: dataIso,
+    turno: turnoStr
+  });
+
+  alert(`Sucesso! APJ ${srvApj ? srvApj.nome : ''} vinculado ao plantão CRF de ${formatarDataBr(dataIso)}.`);
+  document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid('calendar-crf-container', 'CRF');
+};
+
+// --- CRIAÇÃO DOS DOMs DOS MODAIS DE AÇÃO ---
+function criarModalAcaoTrocarDelegadoDOM() {
+  const html = `
+    <div id="modal-acao-trocar-delegado" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 font-sans border-t-4 border-pcpr-gold">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h3 class="font-bold text-slate-900 text-sm">🔄 Substituir Delegado no Plantão</h3>
+          <button type="button" onclick="document.getElementById('modal-acao-trocar-delegado').classList.add('hidden')" class="text-slate-400 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarTrocaDelegadoSubmit(event)" class="space-y-3 text-xs">
+          <input type="hidden" id="m-del-escala-id">
+
+          <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Delegacia:</label>
+                <select id="m-del-filtro-delegacia" onchange="window.atualizarSelectTrocarDelegadoModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca por Digitação:</label>
+                <input type="text" id="m-del-filtro-busca" oninput="window.atualizarSelectTrocarDelegadoModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-800 mb-1">Selecione o Novo Delegado:</label>
+              <select id="m-del-novo-id" required class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="document.getElementById('modal-acao-trocar-delegado').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Confirmar Troca</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function criarModalAcaoTrocarApjDOM() {
+  const html = `
+    <div id="modal-acao-trocar-apj" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 font-sans border-t-4 border-pcpr-gold">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h3 class="font-bold text-slate-900 text-sm">🔄 Substituir APJ no Plantão</h3>
+          <button type="button" onclick="document.getElementById('modal-acao-trocar-apj').classList.add('hidden')" class="text-slate-400 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarTrocaApjSubmit(event)" class="space-y-3 text-xs">
+          <input type="hidden" id="m-apj-escala-id">
+
+          <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Delegacia:</label>
+                <select id="m-apj-filtro-delegacia" onchange="window.atualizarSelectTrocarApjModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca por Digitação:</label>
+                <input type="text" id="m-apj-filtro-busca" oninput="window.atualizarSelectTrocarApjModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-800 mb-1">Selecione o Novo APJ:</label>
+              <select id="m-apj-novo-id" required class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="document.getElementById('modal-acao-trocar-apj').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Confirmar Troca</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function criarModalAcaoVincularApjDOM() {
+  const html = `
+    <div id="modal-acao-vincular-apj" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 font-sans border-t-4 border-pcpr-gold">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h3 class="font-bold text-slate-900 text-sm">🔗 Vincular APJ ao Plantão CRF</h3>
+          <button type="button" onclick="document.getElementById('modal-acao-vincular-apj').classList.add('hidden')" class="text-slate-400 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarVincularApjSubmit(event)" class="space-y-3 text-xs">
+          <input type="hidden" id="m-vinc-escala-id">
+          <input type="hidden" id="m-vinc-data-iso">
+          <input type="hidden" id="m-vinc-turno-str">
+
+          <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Delegacia:</label>
+                <select id="m-vinc-filtro-delegacia" onchange="window.atualizarSelectVincularApjModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca por Digitação:</label>
+                <input type="text" id="m-vinc-filtro-busca" oninput="window.atualizarSelectVincularApjModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-800 mb-1">Selecione o APJ a Vincular:</label>
+              <select id="m-vinc-apj-id" required class="w-full border rounded-xl p-2 bg-white font-bold text-slate-900"></select>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="document.getElementById('modal-acao-vincular-apj').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-xl shadow-xs cursor-pointer">Confirmar Vinculação</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
 }
 
 function criarModalDetalhesPlantaoDOM() {
