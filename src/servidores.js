@@ -282,7 +282,7 @@ window.salvarServidorModalSubmit = async function(e) {
 };
 
 /**
- * Função de Reset de Senha usando Cloud Function (Admin SDK)
+ * Função de Reset de Senha via Cloud Function (Admin SDK)
  */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
@@ -304,18 +304,18 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
     const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
 
-    // 1. Marca no Firestore
+    // 1. Sinaliza no Firestore
     srv.senhaResetada = true;
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    // 2. Dispara a Cloud Function de Admin
+    // 2. Dispara a Cloud Function publicada no Firebase
     if (window.firebase && firebase.functions) {
       const resetarFn = firebase.functions().httpsCallable('resetarSenhaServidorAdmin');
       const res = await resetarFn({ email: emailCalculado });
       alert(`Sucesso! ${res.data.message}`);
     } else {
-      alert(`Status atualizado no banco! A senha padrão será 'Central123'.`);
+      alert(`Sinalização gravada no banco! A nova senha padrão é 'Central123'.`);
     }
 
     if (document.getElementById('modal-cadastro-servidor')) {
