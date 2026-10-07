@@ -1,28 +1,31 @@
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-exports.resetarSenhaServidorAdmin = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
+exports.resetarSenhaServidorAdmin = onCall({ cors: true }, async (request) => {
+  // 1. Garante que quem chama está autenticado
+  if (!request.auth) {
+    throw new HttpsError(
       "unauthenticated",
       "Apenas usuários autenticados podem solicitar o reset de senha."
     );
   }
 
-  const { email } = data;
+  const { email } = request.data || {};
 
   if (!email) {
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       "invalid-argument",
       "O e-mail do servidor é obrigatório."
     );
   }
 
   try {
+    // 2. Localiza o utilizador pelo e-mail
     const user = await admin.auth().getUserByEmail(email);
 
+    // 3. Redefine a senha no Firebase Auth diretamente para Central123
     await admin.auth().updateUser(user.uid, {
       password: "Central123"
     });
@@ -33,7 +36,7 @@ exports.resetarSenhaServidorAdmin = functions.https.onCall(async (data, context)
     };
   } catch (error) {
     console.error("Erro ao resetar senha no Admin SDK:", error);
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       "internal",
       `Erro ao redefinir senha no Firebase Auth: ${error.message}`
     );
