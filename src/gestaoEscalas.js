@@ -4,19 +4,32 @@ import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { getPerfilUsuarioLogado, getDelegaciaIdUsuarioLogado, getSubdivisaoUsuarioLogado, PERFIS } from './permissions.js';
 
-let gestaoCrfFiltros = { busca: '', sdp: 'TODAS', delegaciaId: 'TODAS' };
+let gestaoCrfFiltros = {
+  busca: '',
+  sdp: 'TODAS',
+  delegaciaId: 'TODAS',
+  modalidade: 'TODAS',
+  mes: appState.currentMonth,
+  ano: appState.currentYear,
+  dataInicio: '',
+  dataFim: '',
+  sortColuna: 'DATA',
+  sortDirecao: 'ASC'
+};
 
 let gestaoDelTabelaState = {
   busca: '',
   modalidade: 'TODAS',
   mes: appState.currentMonth,
   ano: appState.currentYear,
+  dataInicio: '',
+  dataFim: '',
   sortColuna: 'DATA',
   sortDirecao: 'ASC'
 };
 
 let modalCrfFiltros = { cargo: 'DELEGADO', busca: '' };
-let modalDelFiltros = { cargo: 'TODOS', busca: '' };
+let modalDelFiltros = { delegaciaId: 'SISTEMA_TARGET', cargo: 'TODOS', busca: '' };
 
 function normalizarTipoModalidade(tipo) {
   if (!tipo) return 'PLANTÃO';
@@ -54,14 +67,17 @@ window.recalcularDataFimModalDelegacia = function() {
 };
 
 // =========================================================================
-// 1. MÓDULO GESTÃO CRF
+// 1. MÓDULO GESTÃO CRF (COM FILTROS AVANÇADOS, ORDENAÇÃO E EXCLUSÃO EM LOTE)
 // =========================================================================
 export function renderGestaoCrfModule(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
-  const { currentYear, currentMonth } = appState;
-  const mesExtenso = new Date(currentYear, currentMonth, 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  let optsMeses = monthNames.map((m, idx) => `<option value="${idx}" ${idx === gestaoCrfFiltros.mes ? 'selected' : ''}>${m}</option>`).join('');
+
+  let optsAnos = [gestaoCrfFiltros.ano - 1, gestaoCrfFiltros.ano, gestaoCrfFiltros.ano + 1]
+    .map(a => `<option value="${a}" ${a === gestaoCrfFiltros.ano ? 'selected' : ''}>${a}</option>`).join('');
 
   container.innerHTML = `
     <!-- Topo Gerencial -->
@@ -69,7 +85,7 @@ export function renderGestaoCrfModule(containerId) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-bold text-sm text-slate-800">Gestão Geral de Escalas da CRF</h2>
-          <p class="text-[11px] text-slate-500">Controle de lançamentos, turnos, equipes e substituições (${mesExtenso})</p>
+          <p class="text-[11px] text-slate-500">Controle de lançamentos, turnos, equipes e substituições</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalLancamentoCrf()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
@@ -84,20 +100,56 @@ export function renderGestaoCrfModule(containerId) {
           <button onclick="window.importarEscalaCrfCsv('CRF')" class="px-3 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📥 Importar CSV
           </button>
+          <button onclick="window.excluirTodosFiltradosCrf()" class="px-3 py-2 bg-[#E2001A] hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            🚨 Excluir Filtrados
+          </button>
         </div>
       </div>
 
-      <!-- Filtros da Gestão CRF com injeção do value -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+      <!-- Filtros da Gestão CRF -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 pt-2 border-t border-slate-200 text-xs">
         <div>
-          <input type="text" id="gest-crf-busca" value="${gestaoCrfFiltros.busca || ''}" oninput="window.filtrarTabelaGestaoCrf()" placeholder="🔍 Filtrar por nome do policial..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Policial:</label>
+          <input type="text" id="gest-crf-busca" value="${gestaoCrfFiltros.busca || ''}" oninput="window.filtrarTabelaGestaoCrf()" placeholder="Filtrar nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
         <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ SDP:</label>
           <select id="gest-crf-sdp" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
         </div>
         <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Delegacia:</label>
           <select id="gest-crf-del" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
         </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏷 Modalidade:</label>
+          <select id="gest-crf-modalidade" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+            <option value="TODAS" ${gestaoCrfFiltros.modalidade === 'TODAS' ? 'selected' : ''}>Todas</option>
+            <option value="PLANTÃO" ${gestaoCrfFiltros.modalidade === 'PLANTÃO' ? 'selected' : ''}>PLANTÃO</option>
+            <option value="EXTRAJORNADA" ${gestaoCrfFiltros.modalidade === 'EXTRAJORNADA' ? 'selected' : ''}>EXTRAJORNADA</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📅 Mês/Ano:</label>
+          <div class="flex gap-1">
+            <select id="gest-crf-mes" onchange="window.filtrarTabelaGestaoCrf()" class="w-1/2 text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">${optsMeses}</select>
+            <select id="gest-crf-ano" onchange="window.filtrarTabelaGestaoCrf()" class="w-1/2 text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">${optsAnos}</select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Data Início:</label>
+          <input type="date" id="gest-crf-data-inicio" value="${gestaoCrfFiltros.dataInicio || ''}" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Data Fim:</label>
+          <input type="date" id="gest-crf-data-fim" value="${gestaoCrfFiltros.dataFim || ''}" onchange="window.filtrarTabelaGestaoCrf()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1">
+        <span id="gest-crf-total-count" class="font-bold text-slate-700 bg-slate-200/80 px-2.5 py-0.5 rounded-md">
+          Exibindo 0 Registros
+        </span>
+        <span class="text-[10px] text-slate-400 italic">Dica: clique nos cabeçalhos para reordenar (A-Z / Z-A)</span>
       </div>
     </div>
 
@@ -105,13 +157,25 @@ export function renderGestaoCrfModule(containerId) {
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
-          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-            <th class="p-3">Data</th>
-            <th class="p-3">Policial Escalado</th>
-            <th class="p-3">Cargo</th>
-            <th class="p-3">Lotação de Origem</th>
-            <th class="p-3">Turno</th>
-            <th class="p-3">Modalidade</th>
+          <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px] select-none">
+            <th onclick="window.ordenarTabelaGestaoCrf('DATA')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Data <span id="sort-crf-icon-DATA">⬆</span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoCrf('POLICIAL')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Policial Escalado <span id="sort-crf-icon-POLICIAL"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoCrf('CARGO')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Cargo <span id="sort-crf-icon-CARGO"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoCrf('LOTACAO')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Lotação de Origem <span id="sort-crf-icon-LOTACAO"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoCrf('TURNO')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Turno <span id="sort-crf-icon-TURNO"></span>
+            </th>
+            <th onclick="window.ordenarTabelaGestaoCrf('MODALIDADE')" class="p-3 cursor-pointer hover:bg-slate-200 transition">
+              Modalidade <span id="sort-crf-icon-MODALIDADE"></span>
+            </th>
             <th class="p-3 text-right">Ações</th>
           </tr>
         </thead>
@@ -151,21 +215,51 @@ window.filtrarTabelaGestaoCrf = function() {
   gestaoCrfFiltros.busca = document.getElementById('gest-crf-busca')?.value?.toLowerCase() || '';
   gestaoCrfFiltros.sdp = document.getElementById('gest-crf-sdp')?.value || 'TODAS';
   gestaoCrfFiltros.delegaciaId = document.getElementById('gest-crf-del')?.value || 'TODAS';
+  gestaoCrfFiltros.modalidade = document.getElementById('gest-crf-modalidade')?.value || 'TODAS';
+  gestaoCrfFiltros.mes = parseInt(document.getElementById('gest-crf-mes')?.value || appState.currentMonth);
+  gestaoCrfFiltros.ano = parseInt(document.getElementById('gest-crf-ano')?.value || appState.currentYear);
+  gestaoCrfFiltros.dataInicio = document.getElementById('gest-crf-data-inicio')?.value || '';
+  gestaoCrfFiltros.dataFim = document.getElementById('gest-crf-data-fim')?.value || '';
 
   window.renderTabelaGestaoCrfCorpo();
 };
 
-window.renderTabelaGestaoCrfCorpo = function() {
-  const tbody = document.getElementById('tabela-gestao-crf-corpo');
-  if (!tbody) return;
+window.ordenarTabelaGestaoCrf = function(coluna) {
+  if (gestaoCrfFiltros.sortColuna === coluna) {
+    gestaoCrfFiltros.sortDirecao = gestaoCrfFiltros.sortDirecao === 'ASC' ? 'DESC' : 'ASC';
+  } else {
+    gestaoCrfFiltros.sortColuna = coluna;
+    gestaoCrfFiltros.sortDirecao = 'ASC';
+  }
 
-  const { currentYear, currentMonth } = appState;
-  const { busca, sdp, delegaciaId } = gestaoCrfFiltros;
+  ['DATA', 'POLICIAL', 'CARGO', 'LOTACAO', 'TURNO', 'MODALIDADE'].forEach(col => {
+    const el = document.getElementById(`sort-crf-icon-${col}`);
+    if (el) {
+      el.innerText = (col === gestaoCrfFiltros.sortColuna) ? (gestaoCrfFiltros.sortDirecao === 'ASC' ? '⬆' : '⬇️') : '';
+    }
+  });
 
-  let escalasCrf = (appState.escalas || []).filter(e => {
+  window.renderTabelaGestaoCrfCorpo();
+};
+
+window.obterEscalasFiltradasGestaoCrf = function() {
+  const { busca, sdp, delegaciaId, modalidade, mes, ano, dataInicio, dataFim } = gestaoCrfFiltros;
+
+  return (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF') return false;
-    const [ano, mes] = e.data.split('-').map(Number);
-    if (ano !== currentYear || (mes - 1) !== currentMonth) return false;
+
+    // Filtro por Data Inicial e Final
+    if (dataInicio && e.data < dataInicio) return false;
+    if (dataFim && e.data > dataFim) return false;
+
+    // Se não informou faixa de data, aplica filtro de Mês e Ano
+    if (!dataInicio && !dataFim) {
+      const [a, m] = e.data.split('-').map(Number);
+      if (a !== ano || (m - 1) !== mes) return false;
+    }
+
+    const tipoModalidade = normalizarTipoModalidade(e.tipo);
+    if (modalidade !== 'TODAS' && tipoModalidade !== modalidade) return false;
 
     const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
     if (busca && !srv?.nome?.toLowerCase().includes(busca)) return false;
@@ -178,7 +272,36 @@ window.renderTabelaGestaoCrfCorpo = function() {
     if (delegaciaId !== 'TODAS' && e.delegaciaId !== delegaciaId && srv?.delegaciaId !== delegaciaId) return false;
 
     return true;
-  }).sort((a, b) => a.data.localeCompare(b.data));
+  });
+};
+
+window.renderTabelaGestaoCrfCorpo = function() {
+  const tbody = document.getElementById('tabela-gestao-crf-corpo');
+  if (!tbody) return;
+
+  const { sortColuna, sortDirecao } = gestaoCrfFiltros;
+  let escalasCrf = window.obterEscalasFiltradasGestaoCrf();
+
+  escalasCrf.sort((a, b) => {
+    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
+    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
+    const delA = (appState.delegacias || []).find(d => d.id === srvA?.delegaciaId);
+    const delB = (appState.delegacias || []).find(d => d.id === srvB?.delegaciaId);
+
+    let valA = '', valB = '';
+    if (sortColuna === 'DATA') { valA = a.data || ''; valB = b.data || ''; }
+    else if (sortColuna === 'POLICIAL') { valA = srvA?.nome || ''; valB = srvB?.nome || ''; }
+    else if (sortColuna === 'CARGO') { valA = srvA?.cargo || ''; valB = srvB?.cargo || ''; }
+    else if (sortColuna === 'LOTACAO') { valA = delA?.nome || ''; valB = delB?.nome || ''; }
+    else if (sortColuna === 'TURNO') { valA = a.turno || ''; valB = b.turno || ''; }
+    else if (sortColuna === 'MODALIDADE') { valA = normalizarTipoModalidade(a.tipo); valB = normalizarTipoModalidade(b.tipo); }
+
+    const res = valA.localeCompare(valB, undefined, { numeric: true });
+    return sortDirecao === 'ASC' ? res : -res;
+  });
+
+  const totalEl = document.getElementById('gest-crf-total-count');
+  if (totalEl) totalEl.innerText = `Exibindo ${escalasCrf.length} Registros`;
 
   if (escalasCrf.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400 italic">Nenhum lançamento localizado.</td></tr>`;
@@ -216,6 +339,31 @@ window.renderTabelaGestaoCrfCorpo = function() {
       </tr>
     `;
   }).join('');
+};
+
+window.excluirTodosFiltradosCrf = async function() {
+  const filtrados = window.obterEscalasFiltradasGestaoCrf();
+  if (filtrados.length === 0) {
+    alert("Não há registros filtrados para excluir na CRF.");
+    return;
+  }
+
+  const confirm1 = confirm(`ATENÇÃO - CENTRAL CRF:\nDeseja realmente EXCLUIR TODOS OS ${filtrados.length} REGISTROS FILTRADOS exibidos na tabela da CRF?`);
+  if (!confirm1) return;
+
+  const confirm2 = confirm(`Confirmação final: Esta ação removerá ${filtrados.length} plantões da CRF do banco de dados permanentemente.`);
+  if (!confirm2) return;
+
+  const idsParaRemover = new Set(filtrados.map(e => e.id));
+  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(e.id));
+
+  for (const escId of idsParaRemover) {
+    await syncDocToFirestore('escalas', escId, null, true);
+  }
+
+  alert(`Sucesso! ${filtrados.length} lançamentos da CRF foram excluídos.`);
+  renderGestaoCrfModule('gestao-crf-container');
+  renderCalendarGrid('calendar-crf-container', 'CRF');
 };
 
 // =========================================================================
@@ -275,10 +423,10 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ➕ Novo Lançamento Local
+            ➕ Novo Lançamento
           </button>
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
-            ⚡ Gerar em Lote
+            ⚡ Gerador Automático
           </button>
           <button onclick="window.exportarEscalaCrfCsv('DELEGACIA')" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             📤 Exportar CSV
@@ -292,8 +440,8 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
       </div>
 
-      <!-- Barra de Filtros com injeção do termo de busca -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 border-t border-slate-200">
+      <!-- Barra de Filtros por Data, Mês, Modalidade e Unidade -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2 pt-2 border-t border-slate-200 text-xs">
         <div>
           <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏢 Unidade Alvo:</label>
           <select id="gestao-del-select-unidade" ${isRestritoMesmaDelegacia ? 'disabled' : ''} onchange="window.mudarUnidadeGestaoDel(this.value)" class="w-full text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs">
@@ -302,7 +450,7 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida (Letra a Letra):</label>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Busca Rápida:</label>
           <input type="text" id="gest-del-busca" value="${gestaoDelTabelaState.busca || ''}" oninput="window.atualizarFiltrosGestaoDelList()" placeholder="Policial ou VTR..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
         </div>
 
@@ -317,17 +465,21 @@ export function renderGestaoDelegaciasModule(containerId) {
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📅 Mês:</label>
-          <select id="gest-del-mes" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${optsMeses}
-          </select>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📅 Mês/Ano:</label>
+          <div class="flex gap-1">
+            <select id="gest-del-mes" onchange="window.atualizarFiltrosGestaoDelList()" class="w-1/2 text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">${optsMeses}</select>
+            <select id="gest-del-ano" onchange="window.atualizarFiltrosGestaoDelList()" class="w-1/2 text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">${optsAnos}</select>
+          </div>
         </div>
 
         <div>
-          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Ano:</label>
-          <select id="gest-del-ano" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-            ${optsAnos}
-          </select>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Data Início:</label>
+          <input type="date" id="gest-del-data-inicio" value="${gestaoDelTabelaState.dataInicio || ''}" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-slate-600 mb-0.5">📆 Data Fim:</label>
+          <input type="date" id="gest-del-data-fim" value="${gestaoDelTabelaState.dataFim || ''}" onchange="window.atualizarFiltrosGestaoDelList()" class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium">
         </div>
       </div>
 
@@ -378,6 +530,8 @@ window.atualizarFiltrosGestaoDelList = function() {
   gestaoDelTabelaState.modalidade = document.getElementById('gest-del-modalidade')?.value || 'TODAS';
   gestaoDelTabelaState.mes = parseInt(document.getElementById('gest-del-mes')?.value || appState.currentMonth);
   gestaoDelTabelaState.ano = parseInt(document.getElementById('gest-del-ano')?.value || appState.currentYear);
+  gestaoDelTabelaState.dataInicio = document.getElementById('gest-del-data-inicio')?.value || '';
+  gestaoDelTabelaState.dataFim = document.getElementById('gest-del-data-fim')?.value || '';
 
   window.renderTabelaGestaoDelCorpo();
 };
@@ -402,12 +556,20 @@ window.ordenarTabelaGestaoDel = function(coluna) {
 
 window.obterEscalasFiltradasGestaoDel = function() {
   const { selectedDelegaciaId } = appState;
-  const { busca, modalidade, mes, ano } = gestaoDelTabelaState;
+  const { busca, modalidade, mes, ano, dataInicio, dataFim } = gestaoDelTabelaState;
 
   return (appState.escalas || []).filter(e => {
     if (e.scope !== 'DELEGACIA' || String(e.delegaciaId) !== String(selectedDelegaciaId)) return false;
-    const [a, m] = e.data.split('-').map(Number);
-    if (a !== ano || (m - 1) !== mes) return false;
+
+    // Filtro de Data Inicial e Final
+    if (dataInicio && e.data < dataInicio) return false;
+    if (dataFim && e.data > dataFim) return false;
+
+    // Se não utilizou o filtro de datas, aplica filtro por mês e ano
+    if (!dataInicio && !dataFim) {
+      const [a, m] = e.data.split('-').map(Number);
+      if (a !== ano || (m - 1) !== mes) return false;
+    }
 
     const tipoModalidade = normalizarTipoModalidade(e.tipo);
     if (modalidade !== 'TODAS' && tipoModalidade !== modalidade) return false;
@@ -463,6 +625,7 @@ window.renderTabelaGestaoDelCorpo = function() {
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
     const tipoModalidade = normalizarTipoModalidade(esc.tipo);
 
+    // BADGE PADRONIZADA COM AS CORES DA PCPR (CINZA CHUMBO COM DOURADO PARA EXTRAJORNADA)
     let badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A]';
     if (tipoModalidade === 'SOBREAVISO') {
       badgeClass = 'bg-[#2A2B2D] text-[#F0F1F2] border-[#57585A]';
@@ -794,7 +957,7 @@ function criarModalLancamentoCrfDOM() {
 }
 
 // =========================================================================
-// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA (REORGANIZADO COM ALERTAS)
 // =========================================================================
 window.abrirModalLancamentoDelegacia = function() {
   let modal = document.getElementById('modal-lancamento-delegacia');
@@ -816,8 +979,19 @@ window.abrirModalLancamentoDelegacia = function() {
   const inputDelNome = document.getElementById('ml-del-unidade-nome');
   if (inputDelNome) inputDelNome.value = delObj ? delObj.nome : 'Unidade Selecionada';
 
+  // Define por padrão a delegacia da unidade alvo no filtro do modal
+  modalDelFiltros.delegaciaId = selectedDelegaciaId || 'TODAS';
   modalDelFiltros.cargo = 'TODOS';
   modalDelFiltros.busca = '';
+
+  const selectFiltroDelModal = document.getElementById('ml-del-filtro-delegacia');
+  if (selectFiltroDelModal) {
+    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+      opts += `<option value="${d.id}" ${String(d.id) === String(selectedDelegaciaId) ? 'selected' : ''}>${d.nome}</option>`;
+    });
+    selectFiltroDelModal.innerHTML = opts;
+  }
 
   document.getElementById('ml-del-filtro-cargo').value = 'TODOS';
   document.getElementById('ml-del-filtro-busca').value = '';
@@ -873,6 +1047,7 @@ window.aoMudarModalidadeDelegacia = function(tipo) {
 };
 
 window.atualizarFiltrosServidoresDelModal = function() {
+  modalDelFiltros.delegaciaId = document.getElementById('ml-del-filtro-delegacia')?.value || 'TODAS';
   modalDelFiltros.cargo = document.getElementById('ml-del-filtro-cargo')?.value || 'TODOS';
   modalDelFiltros.busca = document.getElementById('ml-del-filtro-busca')?.value?.toLowerCase().trim() || '';
 
@@ -884,11 +1059,15 @@ window.atualizarOptionsServidoresDelModal = function() {
   if (!selectSrv) return;
 
   const { selectedDelegaciaId } = appState;
-  const { cargo, busca } = modalDelFiltros;
+  const { delegaciaId, cargo, busca } = modalDelFiltros;
 
   let srvs = [...(appState.servidores || [])].filter(s => {
     const n = normalizeText(s.nome || '');
     if (n === 'administrador do sistema' || n === 'admin') return false;
+
+    if (delegaciaId !== 'TODAS') {
+      if (String(s.delegaciaId) !== String(delegaciaId)) return false;
+    }
 
     if (cargo !== 'TODOS') {
       const cargoPol = (s.cargo || '').toUpperCase();
@@ -904,20 +1083,23 @@ window.atualizarOptionsServidoresDelModal = function() {
     return true;
   });
 
-  const servidoresUnidade = srvs.filter(s => String(s.delegaciaId) === String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const servidoresUnidadeAlvo = srvs.filter(s => String(s.delegaciaId) === String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
   const demaisServidores = srvs.filter(s => String(s.delegaciaId) !== String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   let optsSrv = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
 
-  if (servidoresUnidade.length > 0) {
-    optsSrv += `<optgroup label="Efetivo da Unidade">`;
-    servidoresUnidade.forEach(s => { optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`; });
+  if (servidoresUnidadeAlvo.length > 0) {
+    optsSrv += `<optgroup label="Efetivo da Unidade Alvo">`;
+    servidoresUnidadeAlvo.forEach(s => { optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`; });
     optsSrv += `</optgroup>`;
   }
 
   if (demaisServidores.length > 0) {
-    optsSrv += `<optgroup label="Demais Unidades">`;
-    demaisServidores.forEach(s => { optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'})</option>`; });
+    optsSrv += `<optgroup label="Outras Delegacias">`;
+    demaisServidores.forEach(s => {
+      const delOrigem = (appState.delegacias || []).find(d => String(d.id) === String(s.delegaciaId));
+      optsSrv += `<option value="${s.id}">${s.nome} (${s.cargo || 'APJ'}) - ${delOrigem ? delOrigem.nome : 'Outra Unidade'}</option>`;
+    });
     optsSrv += `</optgroup>`;
   }
 
@@ -932,10 +1114,31 @@ window.salvarLancamentoDelegaciaModal = async function(e) {
   const tipo = document.getElementById('ml-del-tipo').value;
   const turno = document.getElementById('ml-del-turno').value;
   const vtr = document.getElementById('ml-del-vtr').value.toUpperCase().trim();
+  const targetDelId = appState.selectedDelegaciaId;
 
   if (!servidorId || !dataInicioIso) {
     alert("Selecione a data e o policial antes de salvar.");
     return;
+  }
+
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(servidorId));
+  const delAlvoObj = (appState.delegacias || []).find(d => String(d.id) === String(targetDelId));
+
+  // VERIFICAÇÃO DE LOTAÇÃO / PLANTÃO UNIFICADO
+  if (srv && String(srv.delegaciaId) !== String(targetDelId)) {
+    const idsUnificados = delAlvoObj?.delegaciasIds || [];
+    const pertenceAoUnificado = idsUnificados.includes(srv.delegaciaId);
+
+    if (!pertenceAoUnificado) {
+      const delOrigemPolicial = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
+      const confirmacaoOutraDel = confirm(
+        `⚠️ ATENÇÃO - CONFIRMAÇÃO DE LOTAÇÃO:\n\n` +
+        `O policial ${srv.nome} pertence originalmente à unidade "${delOrigemPolicial ? delOrigemPolicial.nome : 'Outra Delegacia'}" e esta unidade NÃO faz parte do plantão unificado de "${delAlvoObj ? delAlvoObj.nome : 'Unidade Alvo'}".\n\n` +
+        `Deseja realmente confirmar o lançamento deste policial nesta escala local?`
+      );
+
+      if (!confirmacaoOutraDel) return;
+    }
   }
 
   let duracaoDias = 1;
@@ -958,7 +1161,7 @@ window.salvarLancamentoDelegaciaModal = async function(e) {
       id: newEscId,
       data: dataSubsequent,
       servidorId: servidorId,
-      delegaciaId: appState.selectedDelegaciaId,
+      delegaciaId: targetDelId,
       scope: 'DELEGACIA',
       tipo: tipo,
       turno: turno,
@@ -993,6 +1196,7 @@ function criarModalLancamentoDelegaciaDOM() {
             <input type="text" id="ml-del-unidade-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-700 font-bold">
           </div>
 
+          <!-- 1. Modalidade e Duração do Turno -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
@@ -1018,11 +1222,13 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
+          <!-- 2. TAG ou VTR -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">TAG ou VTR (livre digitação):</label>
             <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011 / DUSTER..." class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900 font-bold">
           </div>
 
+          <!-- 3. Seleção de Datas -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
@@ -1034,8 +1240,15 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
+          <!-- 4. Painel de Filtros e Seleção do Policial Escalado -->
           <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
+            <!-- Filtro por Delegacia e Filtro por Cargo lado a lado acima da busca -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Delegacia:</label>
+                <select id="ml-del-filtro-delegacia" onchange="window.atualizarFiltrosServidoresDelModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800"></select>
+              </div>
+
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Cargo:</label>
                 <select id="ml-del-filtro-cargo" onchange="window.atualizarFiltrosServidoresDelModal()" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
@@ -1044,11 +1257,12 @@ function criarModalLancamentoDelegaciaDOM() {
                   <option value="APJ">APJ / AGENTE</option>
                 </select>
               </div>
+            </div>
 
-              <div>
-                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
-                <input type="text" id="ml-del-filtro-busca" value="${modalDelFiltros.busca || ''}" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
-              </div>
+            <!-- Busca Rápida Letra a Letra -->
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
+              <input type="text" id="ml-del-filtro-busca" value="${modalDelFiltros.busca || ''}" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
             </div>
 
             <div>
