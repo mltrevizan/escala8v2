@@ -356,19 +356,26 @@ export function isAdmin() {
 // NOVAS PERMISSÕES PARA BOTÕES DO CALENDÁRIO E LOGS DE AUDITORIA
 // =========================================================================
 
-/**
- * Verifica se o perfil pode utilizar o botão "Vincular APJ" na CRF
- */
-export function podeVincularApjCrf() {
-  const perfil = getPerfilUsuarioLogado();
-  // Autorizado para ADMINISTRADOR, COORDENADOR, DELEGADO e APJ (Inacessível para SUPERINTENDENTE)
-  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfil);
-}
 
-/**
- * Verifica se o perfil pode visualizar o histórico de logs
- */
 export function podeVisualizarLogs() {
   const perfil = getPerfilUsuarioLogado();
   return perfil !== PERFIS.VISUALIZADOR;
+}
+
+// novas permissões
+
+export function podeVincularApjCrf() {
+  const perfil = getPerfilUsuarioLogado();
+  // Permite Administrador, Coordenador, Delegado, APJ e Superintendente
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE, PERFIS.APJ].includes(perfil);
+}
+
+export function podeTrocarApj() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE, PERFIS.APJ].includes(perfil);
+}
+
+export function podeTrocarDelegado() {
+  const perfil = getPerfilUsuarioLogado();
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE].includes(perfil);
 }
