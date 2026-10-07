@@ -157,11 +157,12 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // Garante inicialização padrão da delegacia do usuário logado se ainda não houver seleção
-  if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId) {
-    if (!appState.selectedDelegaciaId) {
-      appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
-    }
+  // Preserva o valor atual selecionado na tela se já existir um <select> ativo
+  const selectExistente = document.getElementById('select-calendar-delegacia');
+  if (selectExistente && selectExistente.value && scope === 'DELEGACIA') {
+    appState.selectedDelegaciaId = selectExistente.value;
+  } else if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId && !appState.selectedDelegaciaId) {
+    appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
   }
 
   const { currentYear, currentMonth, selectedDelegaciaId, feriados } = appState;
