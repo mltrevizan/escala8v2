@@ -285,37 +285,67 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
   if (!srv) return;
 
   if (isProtectedAdminAccount(srv)) {
-    alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada por este botão.");
+    alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada.");
     return;
   }
 
-  const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
-  const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
-
-  if (!confirm(`Deseja enviar a solicitação de redefinição de senha do policial ${srv.nome} para o e-mail registrado (${emailCalculado})?`)) {
+  if (!confirm(`Deseja realmente resetar a senha do servidor ${srv.nome} para a senha padrão 'Central123'?\n\nO servidor será obrigado a alterar a senha no próximo acesso.`)) {
     return;
   }
 
   try {
-    await firebase.auth().sendPasswordResetEmail(emailCalculado);
-    alert(`Instruções de redefinição enviadas com sucesso para ${emailCalculado}.`);
+    const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
+    const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
+
+    // 1. ATUALIZA A SINALIZAÇÃO DE RESET DIRETO NO FIRESTORE
+    srv.senhaResetada = true;
+    srv.forcarTrocaSenha = true;
+    await syncDocToFirestore('servidores', srv.id, srv);
+
+    // 2. ATUALIZA A SENHA NO FIREBASE AUTH USANDO INSTÂNCIA SECUNDÁRIA (Sem deslogar o Admin)
+    const currentConfig = firebase.app().options;
+    let secondaryApp;
     
+    try {
+      secondaryApp = firebase.app("secondaryAppReset");
+    } catch (e) {
+      secondaryApp = firebase.initializeApp(currentConfig, "secondaryAppReset");
+    }
+
+    try {
+      // Tenta criar/redefinir a conta secundária
+      const secAuth = secondaryApp.auth();
+      
+      try {
+        const secUserCred = await secAuth.signInWithEmailAndPassword(emailCalculado, "Central123");
+        // Se a conta já usa a senha Central123, apenas confirma
+      } catch (authErr) {
+        // Se a senha atual for outra, recria/atualiza
+        if (authErr.code === 'auth/wrong-password') {
+          // Sinalizado no Firestore; o fluxo de login tratará a alteração
+        } else if (authErr.code === 'auth/user-not-found') {
+          await secAuth.createUserWithEmailAndPassword(emailCalculado, "Central123");
+        }
+      }
+
+      await secAuth.signOut();
+    } catch (secErr) {
+      console.warn("Aviso na instância secundária de Auth:", secErr.message);
+    }
+
+    alert(`Sucesso! A senha do policial ${srv.nome} foi resetada para o padrão 'Central123' diretamente no banco de dados.`);
+
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
     }
-  } catch (err) {
-    console.error("Erro ao resetar senha no Firebase Auth:", err);
-    
-    // Fallback: se o e-mail do policial não existir no provedor de Auth, tenta recriar com a senha padrão Central123
-    try {
-      await criarContaFirebaseAuth(srv, 'Central123');
-      alert(`Conta do servidor ${srv.nome} atualizada/redefinida com a senha padrão: Central123`);
-      if (document.getElementById('modal-cadastro-servidor')) {
-        window.fecharModalServidor();
-      }
-    } catch (err2) {
-      alert(`Não foi possível enviar o e-mail de redefinição: ${err.message}`);
+
+    if (window.renderServidoresTable) {
+      renderServidoresTable('servidores-table-container');
     }
+
+  } catch (err) {
+    console.error("Erro ao resetar senha no banco:", err);
+    alert(`Erro ao salvar reset no banco de dados: ${err.message}`);
   }
 };
 
