@@ -351,3 +351,24 @@ export function canEditCRF() {
 export function isAdmin() {
   return getPerfilUsuarioLogado() === PERFIS.ADMINISTRADOR;
 }
+
+// =========================================================================
+// NOVAS PERMISSÕES PARA BOTÕES DO CALENDÁRIO E LOGS DE AUDITORIA
+// =========================================================================
+
+/**
+ * Verifica se o perfil pode utilizar o botão "Vincular APJ" na CRF
+ */
+export function podeVincularApjCrf() {
+  const perfil = getPerfilUsuarioLogado();
+  // Autorizado para ADMINISTRADOR, COORDENADOR, DELEGADO e APJ (Inacessível para SUPERINTENDENTE)
+  return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfil);
+}
+
+/**
+ * Verifica se o perfil pode visualizar o histórico de logs
+ */
+export function podeVisualizarLogs() {
+  const perfil = getPerfilUsuarioLogado();
+  return perfil !== PERFIS.VISUALIZADOR;
+}
