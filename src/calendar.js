@@ -20,23 +20,38 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
+/**
+ * Localiza de forma ultra-robusta o ID do servidor correspondente ao usuário logado
+ */
 function obterServidorIdUsuarioLogado() {
-  const user = appState.currentUser || {};
-  if (user.servidorId) return String(user.servidorId);
-  if (user.id) {
-    const srvPorId = (appState.servidores || []).find(s => String(s.id) === String(user.id));
-    if (srvPorId) return String(srvPorId.id);
+  const user = appState.currentUser;
+  if (!user) return '';
+
+  const listaServidores = appState.servidores || [];
+
+  // 1. Busca por servidorId direto
+  if (user.servidorId) {
+    const srv = listaServidores.find(s => String(s.id) === String(user.servidorId));
+    if (srv) return String(srv.id);
   }
-  
+
+  // 2. Busca por ID direto
+  if (user.id) {
+    const srv = listaServidores.find(s => String(s.id) === String(user.id));
+    if (srv) return String(srv.id);
+  }
+
+  // 3. Busca por login ou e-mail sanitizado
   const loginUser = normalizeText(user.login || user.email || user.nome || '');
-  if (!loginUser) return '';
+  if (loginUser) {
+    const srv = listaServidores.find(s => {
+      const loginSrv = normalizeText(s.login || s.email || s.nome || '');
+      return loginSrv && loginSrv === loginUser;
+    });
+    if (srv) return String(srv.id);
+  }
 
-  const srvPorLogin = (appState.servidores || []).find(s => {
-    const loginSrv = normalizeText(s.login || s.email || s.nome || '');
-    return loginSrv && loginSrv === loginUser;
-  });
-
-  return srvPorLogin ? String(srvPorLogin.id) : String(user.id || '');
+  return String(user.id || user.servidorId || '');
 }
 
 function obterHorarioTurnoTexto(esc) {
@@ -220,6 +235,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           </div>
         `}
 
+        <!-- BOTÃO DE LOG REAVALIADO DINAMICAMENTE -->
         ${!isPublico ? `
           <button type="button" onclick="window.abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-3 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
             📋 Logs
@@ -684,6 +700,7 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
+    // REGRA DE IGNORAR EXTRAJORNADA/SDP PARA A EXIBIÇÃO DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
@@ -770,7 +787,7 @@ window.fecharModalDetalhesPlantao = function() {
 };
 
 // =========================================================================
-// MODAIS DE AÇÃO COM GRAVAÇÃO SÍNCRONA
+// MODAIS DE AÇÃO COM RECORREÇÃO DE POOL E GRAVAÇÃO SÍNCRONA
 // =========================================================================
 
 // --- A) MODAL TROCAR DELEGADO ---
@@ -793,7 +810,7 @@ window.abrirModalTrocarDelegado = function(escalaId, dataIso, turnoStr) {
   
   const selectDelModal = document.getElementById('m-del-filtro-delegacia');
   if (selectDelModal) {
-    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    let opts = `<option value="TODAS" selected>Todas as Delegacias</option>`;
     (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
       opts += `<option value="${d.id}">${d.nome}</option>`;
     });
@@ -822,6 +839,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
     const cargoU = (s.cargo || '').toUpperCase();
     if (!cargoU.includes('DELEGADO')) return false;
 
+    // Se é Delegado e NÃO é o responsável escalado no card, força aparecer Apenas Ele Mesmo
     if (isPerfilDelegado && !souEuEscalado) {
       return String(s.id) === String(userSrvId);
     }
@@ -834,14 +852,14 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   let opts = `<option value="">Selecione o Novo Delegado (${poolDelegados.length})...</option>`;
   poolDelegados.forEach(d => {
-    const isSelecionado = (isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId)) || (userSrvId && String(d.id) === String(userSrvId));
+    const isSelecionado = (isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId));
     opts += `<option value="${d.id}" ${isSelecionado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
   });
 
   selectNovo.innerHTML = opts;
 
   if (isPerfilDelegado && !souEuEscalado) {
-    selectNovo.value = userSrvId;
+    if (userSrvId) selectNovo.value = userSrvId;
     selectNovo.disabled = true;
   } else {
     selectNovo.disabled = false;
@@ -868,7 +886,6 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
 
   esc.servidorId = novoServidorId;
 
-  // Sincronização e gravação obrigatória antes de fechar a janela
   try {
     await syncDocToFirestore('escalas', esc.id, esc);
 
@@ -912,7 +929,7 @@ window.abrirModalTrocarApj = function(escalaId, dataIso, turnoStr) {
 
   const selectDelModal = document.getElementById('m-apj-filtro-delegacia');
   if (selectDelModal) {
-    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    let opts = `<option value="TODAS" selected>Todas as Delegacias</option>`;
     (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
       opts += `<option value="${d.id}">${d.nome}</option>`;
     });
@@ -941,6 +958,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
+    // Se é APJ e NÃO é o próprio policial escalado no card, força aparecer Apenas Ele Mesmo
     if (isPerfilApj && !souEuEscalado) {
       return String(s.id) === String(userSrvId);
     }
@@ -953,14 +971,14 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    const isSelecionado = (isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId)) || (userSrvId && String(a.id) === String(userSrvId));
+    const isSelecionado = (isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId));
     opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
   selectNovo.innerHTML = opts;
 
   if (isPerfilApj && !souEuEscalado) {
-    selectNovo.value = userSrvId;
+    if (userSrvId) selectNovo.value = userSrvId;
     selectNovo.disabled = true;
   } else {
     selectNovo.disabled = false;
@@ -1028,7 +1046,7 @@ window.abrirModalVincularApjAcao = function(escalaDelegadoId, dataIso, turnoStr)
 
   const selectDelModal = document.getElementById('m-vinc-filtro-delegacia');
   if (selectDelModal) {
-    let opts = `<option value="TODAS">Todas as Delegacias</option>`;
+    let opts = `<option value="TODAS" selected>Todas as Delegacias</option>`;
     (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
       opts += `<option value="${d.id}">${d.nome}</option>`;
     });
@@ -1056,6 +1074,7 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
+    // Se é perfil APJ, força aparecer Ele Mesmo na lista
     if (isPerfilApj) {
       return String(s.id) === String(userSrvId);
     }
