@@ -13,7 +13,6 @@ export function renderFeriadosModule(containerId) {
   const sdpUser = getSubdivisaoUsuarioLogado();
   const isAdmin = perfil === PERFIS.ADMINISTRADOR;
 
-  // Filtra as delegacias que o usuário logado tem permissão para vincular a feriados municipais
   const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
     if (isAdmin) return true;
     if (perfil === PERFIS.COORDENADOR) {
@@ -95,7 +94,6 @@ export function renderFeriadosModule(containerId) {
           </div>
         </div>
 
-        <!-- PAINEL DE DELEGACIAS AFETADAS (EXIBIDO SE MUNICIPAL) -->
         <div id="container-feriado-delegacias" class="hidden pt-2 border-t border-slate-200 space-y-2">
           <div class="flex items-center justify-between">
             <label class="block font-bold text-slate-800 text-xs">Selecione as Delegacias Afetadas por este Feriado Municipal:</label>
@@ -110,7 +108,6 @@ export function renderFeriadosModule(containerId) {
       </form>
     </div>
 
-    <!-- Tabela de Feriados Cadastrados -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -184,7 +181,6 @@ window.renderTabelaFeriados = function() {
       }
     }
 
-    // Validação estrita de permissão de modificação (Edição / Exclusão)
     let podeModificar = false;
     if (isAdmin) {
       podeModificar = true;
@@ -319,7 +315,6 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
     let duplicadosIgnorados = 0;
 
     for (const item of feriadosApi) {
-      // Checagem rigorosa para evitar registros duplicados na mesma data
       const jaExiste = appState.feriados.some(f => f.data === item.date && (f.tipo === 'NACIONAL' || f.tipo === 'ESTADUAL'));
       if (!jaExiste) {
         const ferId = 'feriado_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -331,8 +326,9 @@ window.carregarFeriadosNacionaisAnoAtual = async function() {
           delegaciasIds: []
         };
 
-        appState.feriados.push(novoObj);
+        // Gravação síncrona no Firestore
         await syncDocToFirestore('feriados', ferId, novoObj);
+        appState.feriados.push(novoObj);
         adicionados++;
       } else {
         duplicadosIgnorados++;
@@ -369,7 +365,6 @@ window.salvarFeriado = async function(e) {
     return;
   }
 
-  // Trava de segurança: impede cadastramento de Feriado Nacional/Estadual por não-administrador
   if (!isAdmin && (tipo === 'NACIONAL' || tipo === 'ESTADUAL')) {
     alert("Ação Bloqueada: O seu perfil só permite cadastrar feriados do tipo MUNICIPAL.");
     return;
@@ -396,49 +391,56 @@ window.salvarFeriado = async function(e) {
     delegaciasIds: delegaciasIds
   };
 
-  if (!appState.feriados) appState.feriados = [];
-
-  const idx = appState.feriados.findIndex(f => String(f.id) === String(ferId));
-  if (idx >= 0) {
-    appState.feriados[idx] = novoFeriado;
-  } else {
-    appState.feriados.push(novoFeriado);
-  }
-
-  // 1. Atualização instantânea na tela
-  window.limparFormularioFeriado();
-  window.renderTabelaFeriados();
-
-  if (window.renderCalendarGrid) {
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  }
-
-  // 2. Gravação em segundo plano no Firestore
   try {
+    // 1. Gravação síncrona obrigatória no Firestore PRIMEIRO
     await syncDocToFirestore('feriados', ferId, novoFeriado);
-    alert(idExistente ? "Feriado atualizado com sucesso!" : "Feriado cadastrado com sucesso!");
+
+    // 2. Atualização local apenas após confirmação do banco de dados
+    if (!appState.feriados) appState.feriados = [];
+
+    const idx = appState.feriados.findIndex(f => String(f.id) === String(ferId));
+    if (idx >= 0) {
+      appState.feriados[idx] = novoFeriado;
+    } else {
+      appState.feriados.push(novoFeriado);
+    }
+
+    window.limparFormularioFeriado();
+    window.renderTabelaFeriados();
+
+    if (window.renderCalendarGrid) {
+      renderCalendarGrid('calendar-crf-container', 'CRF');
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    }
+
+    alert(idExistente ? "Feriado atualizado com sucesso no banco de dados!" : "Feriado cadastrado com sucesso no banco de dados!");
   } catch (err) {
     console.error("Erro ao salvar feriado no Firestore:", err);
+    alert(`Erro ao salvar feriado no banco de dados: ${err.message}`);
   }
 };
 
 window.excluirFeriado = async function(id) {
   if (!confirm("Deseja realmente remover este feriado?")) return;
 
-  appState.feriados = (appState.feriados || []).filter(f => String(f.id) !== String(id));
-
-  window.renderTabelaFeriados();
-
-  if (window.renderCalendarGrid) {
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
-  }
-
   try {
+    // 1. Remoção síncrona no Firestore PRIMEIRO
     await syncDocToFirestore('feriados', id, null, true);
+
+    // 2. Atualização local
+    appState.feriados = (appState.feriados || []).filter(f => String(f.id) !== String(id));
+
+    window.renderTabelaFeriados();
+
+    if (window.renderCalendarGrid) {
+      renderCalendarGrid('calendar-crf-container', 'CRF');
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    }
+
+    alert("Feriado removido com sucesso!");
   } catch (err) {
     console.error("Erro ao remover feriado no Firestore:", err);
+    alert(`Erro ao remover do banco de dados: ${err.message}`);
   }
 };
 
