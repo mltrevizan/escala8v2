@@ -25,6 +25,6 @@ jobs:
       - name: Deploy to Firebase
         uses: w9jds/firebase-action@v2.2.2
         with:
-          args: deploy --only functions
+          args: deploy --only functions --project escala8v2
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
