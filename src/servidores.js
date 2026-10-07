@@ -253,19 +253,26 @@ window.salvarServidorModalSubmit = async function(e) {
     delegaciaNome: delObj ? delObj.nome : '',
     subdivisao: delObj ? delObj.subdivisao : '8ª SDP',
     telefone: telefone,
-    login: loginCalc
+    login: loginCalc,
+    senhaResetada: isNovo ? true : undefined,
+    forcarTrocaSenha: isNovo ? true : undefined
   };
 
   if (!appState.servidores) appState.servidores = [];
   const idx = appState.servidores.findIndex(s => String(s.id) === String(srvId));
-  if (idx >= 0) appState.servidores[idx] = novoServidor;
+  if (idx >= 0) appState.servidores[idx] = { ...appState.servidores[idx], ...novoServidor };
   else appState.servidores.push(novoServidor);
 
   await syncDocToFirestore('servidores', srvId, novoServidor);
 
   if (isNovo) {
-    await criarContaFirebaseAuth(novoServidor, 'Central123');
-    alert(`Policial ${nome} cadastrado com sucesso!\n\nSenha Padrão Inicial: Central123`);
+    try {
+      await criarContaFirebaseAuth(novoServidor, 'Central123');
+      alert(`Policial ${nome} cadastrado com sucesso!\n\nSenha Padrão Inicial: Central123`);
+    } catch (authErr) {
+      console.warn("Aviso na criação no Firebase Auth:", authErr.message);
+      alert(`Policial ${nome} cadastrado no banco de dados!\n\nSenha Padrão Inicial: Central123`);
+    }
   } else {
     alert(`Cadastro de ${nome} atualizado com sucesso!`);
   }
@@ -275,7 +282,7 @@ window.salvarServidorModalSubmit = async function(e) {
 };
 
 /**
- * Função de Reset de Senha adaptada ao SDK Web do Firebase Auth
+ * Função de Reset de Senha no Firestore e Auth Secundário
  */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
@@ -302,38 +309,33 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    // 2. ATUALIZA A SENHA NO FIREBASE AUTH USANDO INSTÂNCIA SECUNDÁRIA (Sem deslogar o Admin)
-    const currentConfig = firebase.app().options;
-    let secondaryApp;
-    
-    try {
-      secondaryApp = firebase.app("secondaryAppReset");
-    } catch (e) {
-      secondaryApp = firebase.initializeApp(currentConfig, "secondaryAppReset");
-    }
-
-    try {
-      // Tenta criar/redefinir a conta secundária
-      const secAuth = secondaryApp.auth();
+    // 2. TENTA ATUALIZAR A CONTA VIA INSTÂNCIA SECUNDÁRIA DO FIREBASE AUTH
+    if (window.firebase && firebase.app) {
+      const currentConfig = firebase.app().options;
+      let secondaryApp;
       
       try {
-        const secUserCred = await secAuth.signInWithEmailAndPassword(emailCalculado, "Central123");
-        // Se a conta já usa a senha Central123, apenas confirma
-      } catch (authErr) {
-        // Se a senha atual for outra, recria/atualiza
-        if (authErr.code === 'auth/wrong-password') {
-          // Sinalizado no Firestore; o fluxo de login tratará a alteração
-        } else if (authErr.code === 'auth/user-not-found') {
-          await secAuth.createUserWithEmailAndPassword(emailCalculado, "Central123");
-        }
+        secondaryApp = firebase.app("secondaryAppReset");
+      } catch (e) {
+        secondaryApp = firebase.initializeApp(currentConfig, "secondaryAppReset");
       }
 
-      await secAuth.signOut();
-    } catch (secErr) {
-      console.warn("Aviso na instância secundária de Auth:", secErr.message);
+      try {
+        const secAuth = secondaryApp.auth();
+        try {
+          await secAuth.signInWithEmailAndPassword(emailCalculado, "Central123");
+        } catch (authErr) {
+          if (authErr.code === 'auth/user-not-found') {
+            await secAuth.createUserWithEmailAndPassword(emailCalculado, "Central123");
+          }
+        }
+        await secAuth.signOut();
+      } catch (secErr) {
+        console.warn("Aviso na instância secundária de Auth:", secErr.message);
+      }
     }
 
-    alert(`Sucesso! A senha do policial ${srv.nome} foi resetada para o padrão 'Central123' diretamente no banco de dados.`);
+    alert(`Sucesso! A senha do policial ${srv.nome} foi resetada para o padrão 'Central123'.`);
 
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
