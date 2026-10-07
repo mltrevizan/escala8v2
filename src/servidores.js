@@ -282,7 +282,7 @@ window.salvarServidorModalSubmit = async function(e) {
 };
 
 /**
- * Função de Reset de Senha no Firestore
+ * Função de Reset de Senha usando Cloud Function (Admin SDK)
  */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
@@ -296,16 +296,27 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  if (!confirm(`Deseja realmente marcar a conta do servidor ${srv.nome} para redefinição obrigatória de senha no próximo acesso?`)) {
+  if (!confirm(`Deseja realmente resetar a senha do servidor ${srv.nome} no Firebase Auth para 'Central123'?`)) {
     return;
   }
 
   try {
+    const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
+    const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
+
+    // 1. Marca no Firestore
     srv.senhaResetada = true;
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    alert(`Sucesso! O servidor ${srv.nome} foi marcado no banco de dados. No próximo acesso, o sistema solicitará o cadastro de uma nova senha.`);
+    // 2. Dispara a Cloud Function de Admin
+    if (window.firebase && firebase.functions) {
+      const resetarFn = firebase.functions().httpsCallable('resetarSenhaServidorAdmin');
+      const res = await resetarFn({ email: emailCalculado });
+      alert(`Sucesso! ${res.data.message}`);
+    } else {
+      alert(`Status atualizado no banco! A senha padrão será 'Central123'.`);
+    }
 
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
@@ -316,8 +327,8 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     }
 
   } catch (err) {
-    console.error("Erro ao resetar senha no banco:", err);
-    alert(`Erro ao salvar reset no banco de dados: ${err.message}`);
+    console.error("Erro ao resetar senha via Cloud Function:", err);
+    alert(`Erro ao redefinir senha no Firebase Auth: ${err.message}`);
   }
 };
 
