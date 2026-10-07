@@ -18,13 +18,32 @@ function formatarDataBr(dataIso) {
 }
 
 /**
+ * Localiza o ID do servidor correspondente ao usuário logado no appState
+ */
+function obterServidorIdUsuarioLogado() {
+  const user = appState.currentUser || {};
+  if (user.servidorId) return String(user.servidorId);
+  if (user.id) {
+    const srvPorId = (appState.servidores || []).find(s => String(s.id) === String(user.id));
+    if (srvPorId) return String(srvPorId.id);
+  }
+  const loginUser = normalizeText(user.login || user.email || user.nome || '');
+  const srvPorLogin = (appState.servidores || []).find(s => {
+    const loginSrv = normalizeText(s.login || s.email || s.nome || '');
+    return loginSrv && loginSrv === loginUser;
+  });
+
+  return srvPorLogin ? String(srvPorLogin.id) : String(user.id || '');
+}
+
+/**
  * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
  */
 function obterHorarioTurnoTexto(esc) {
   if (!esc) return '08:00 às 08:00';
 
   const turno = (esc.turno || '24h').toLowerCase().trim();
-  const del = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+  const del = (appState.delegacias || []).find(d => String(d.id) === String(esc.delegaciaId));
   const isSobreaviso = esc.tipo === 'SOBREAVISO';
   const config = isSobreaviso ? del?.sobreavisoConfig : del?.plantaoConfig;
 
@@ -71,17 +90,17 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
     const delegaciasComEscala = new Set(
       (escalas || [])
         .filter(e => e.scope === 'DELEGACIA' && e.data && e.data.startsWith(mesPrefixo))
-        .map(e => e.delegaciaId)
+        .map(e => String(e.delegaciaId))
     );
 
     listaDelegacias = listaDelegacias.filter(d => {
-      const bateuId = delegaciasComEscala.has(d.id);
-      const bateuUnificada = d.delegaciasIds && d.delegaciasIds.some(unfId => delegaciasComEscala.has(unfId));
+      const bateuId = delegaciasComEscala.has(String(d.id));
+      const bateuUnificada = d.delegaciasIds && d.delegaciasIds.some(unfId => delegaciasComEscala.has(String(unfId)));
       return bateuId || bateuUnificada;
     });
 
     if (listaDelegacias.length > 0) {
-      const selectedExiste = listaDelegacias.some(d => d.id === selectedDelegaciaId);
+      const selectedExiste = listaDelegacias.some(d => String(d.id) === String(selectedDelegaciaId));
       if (!selectedExiste) {
         appState.selectedDelegaciaId = listaDelegacias[0].id;
       }
@@ -95,7 +114,7 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
   const targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
 
   return listaDelegacias.map(d => 
-    `<option value="${d.id}" ${targetId === d.id ? 'selected' : ''}>${d.nome}</option>`
+    `<option value="${d.id}" ${String(targetId) === String(d.id) ? 'selected' : ''}>${d.nome}</option>`
   ).join('');
 }
 
@@ -109,7 +128,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   const firstDay = getFirstDayOfWeek(currentYear, currentMonth);
 
   const isPublico = !appState.currentUser;
-  const usuarioLogadoSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+  const usuarioLogadoSrvId = obterServidorIdUsuarioLogado();
 
   const hoje = new Date();
   const hojeAno = hoje.getFullYear();
@@ -160,7 +179,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   let delegaciasOptionsEscala = obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope);
 
   let html = `
-    <!-- Topo de Controle -->
     <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
@@ -178,7 +196,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Navegação de Mês + Botão de Log e Filtros -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         ${!isPublico ? `
@@ -213,7 +230,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       ` : ''}
     </div>
 
-    <!-- Cabeçalho Dias da Semana -->
     <div class="grid grid-cols-7 text-center bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 py-1.5 font-sans uppercase">
       <div class="text-red-600">Dom</div>
       <div>Seg</div>
@@ -224,7 +240,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-600">Sáb</div>
     </div>
 
-    <!-- Grade do Mês -->
     <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r border-slate-200 font-sans">
   `;
 
@@ -240,7 +255,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     const isHoje = (currentYear === hojeAno && currentMonth === hojeMes && day === hojeDia);
-    const delObj = (appState.delegacias || []).find(d => d.id === currentSelectedDelId);
+    const delObj = (appState.delegacias || []).find(d => String(d.id) === String(currentSelectedDelId));
 
     const feriadoDoDia = (feriados || []).find(f => {
       if (f.data !== dateStr) return false;
@@ -262,9 +277,9 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       
       if (scope === 'DELEGACIA') {
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
-          return e.delegaciaId === currentSelectedDelId || delObj.delegaciasIds.includes(e.delegaciaId);
+          return String(e.delegaciaId) === String(currentSelectedDelId) || delObj.delegaciasIds.includes(e.delegaciaId);
         }
-        return e.delegaciaId === currentSelectedDelId;
+        return String(e.delegaciaId) === String(currentSelectedDelId);
       }
       return true;
     });
@@ -272,8 +287,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
         escalasDoDia = escalasDoDia.filter(e => {
-          const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
-          const del = (appState.delegacias || []).find(d => d.id === e.delegaciaId);
+          const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
+          const del = (appState.delegacias || []).find(d => String(d.id) === String(e.delegaciaId));
 
           const sdpDel = del?.subdivisao ? padronizarSdpStr(del.subdivisao) : '';
           const sdpSrv = srv?.subdivisao ? padronizarSdpStr(srv.subdivisao) : '';
@@ -283,11 +298,10 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       }
 
       if (delFiltroAtual !== 'TODAS') {
-        escalasDoDia = escalasDoDia.filter(e => e.delegaciaId === delFiltroAtual);
+        escalasDoDia = escalasDoDia.filter(e => String(e.delegaciaId) === String(delFiltroAtual));
       }
     }
 
-    // CHECAGEM SE O POLICIAL LOGADO ESTÁ ESCALADO NESTE DIA PARA APLICAR BORDA DOURADA PCPR
     const usuarioEstaEscaladoNoDia = !isPublico && usuarioLogadoSrvId && escalasDoDia.some(e => String(e.servidorId) === String(usuarioLogadoSrvId));
 
     let bgDayClass = 'bg-white';
@@ -301,7 +315,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     if (isHoje) {
       hojeBorderClass = 'border-2 border-black bg-slate-100/50 shadow-inner z-10';
     } else if (usuarioEstaEscaladoNoDia) {
-      // Borda em Dourado PCPR para destacar o dia do plantão do policial logado
       hojeBorderClass = 'border-2 border-[#BEA55A] bg-[#F7F3E8]/40 shadow-xs z-10';
     }
 
@@ -376,7 +389,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const idsString = grupo.map(e => e.id).join(',');
 
           let nomesHtml = grupo.map(esc => {
-            const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+            const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
             const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
@@ -438,8 +451,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   }
 
   const ordenadas = [...escalasArray].sort((a, b) => {
-    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
-    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
+    const srvA = (appState.servidores || []).find(s => String(s.id) === String(a.servidorId));
+    const srvB = (appState.servidores || []).find(s => String(s.id) === String(b.servidorId));
 
     const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
     const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
@@ -456,7 +469,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
     const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
@@ -569,8 +582,8 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
     `;
 
     escalas.forEach(esc => {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+      const delServidor = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
@@ -672,16 +685,17 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
+    // IGNORA APJ ESCALADO NA EXTRAJORNADA/SDP PARA FINS DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
       return srv && !(srv.cargo || '').toUpperCase().includes('DELEGADO');
     });
 
     let cardsHtml = escalasDoGrupo.map(esc => {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-      const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+      const delServidor = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
       const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
@@ -750,12 +764,13 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
 
   modal.classList.remove('hidden');
 };
+
 window.fecharModalDetalhesPlantao = function() {
   document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
 };
 
 // =========================================================================
-// MODAIS DE AÇÃO COM LIMITAÇÕES POR PERFIL (TROCAR DEL, TROCAR APJ, VINCULAR APJ)
+// MODAIS DE AÇÃO COM LIMITAÇÕES CORRIGIDAS POR PERFIL E RENDERIZAÇÃO INSTANTÂNEA
 // =========================================================================
 
 // --- A) MODAL TROCAR DELEGADO ---
@@ -766,12 +781,12 @@ window.abrirModalTrocarDelegado = function(escalaId, dataIso, turnoStr) {
     modal = document.getElementById('modal-acao-trocar-delegado');
   }
 
-  const esc = (appState.escalas || []).find(e => e.id === escalaId);
+  const esc = (appState.escalas || []).find(e => String(e.id) === String(escalaId));
   if (!esc) return;
 
-  const srvAtual = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const srvAtual = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const perfil = getPerfilUsuarioLogado();
-  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+  const userSrvId = obterServidorIdUsuarioLogado();
 
   document.getElementById('m-del-escala-id').value = escalaId;
   document.getElementById('m-del-filtro-busca').value = '';
@@ -796,9 +811,6 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
   const busca = (document.getElementById('m-del-filtro-busca')?.value || '').toLowerCase().trim();
   const delFiltro = document.getElementById('m-del-filtro-delegacia')?.value || 'TODAS';
 
-  // LIMITAÇÃO DO PERFIL DELEGADO:
-  // 1) Se no turno o próprio delegado está escalado (srvAtual.id === userSrvId) -> Pode escolher qualquer outro.
-  // 2) Se no turno outro delegado está escalado -> Apenas pode selecionar a si próprio (sugestão fixa).
   const isPerfilDelegado = perfil === PERFIS.DELEGADO;
   const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
 
@@ -806,8 +818,9 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
     const cargoU = (s.cargo || '').toUpperCase();
     if (!cargoU.includes('DELEGADO')) return false;
 
+    // Se o próprio delegado está logado e NÃO está escalado neste turno, ele só pode escolher A SI MESMO
     if (isPerfilDelegado && !souEuEscalado) {
-      return String(s.id) === String(userSrvId); // Força aparecer apenas ele mesmo
+      return String(s.id) === String(userSrvId);
     }
 
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
@@ -818,39 +831,48 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   let opts = `<option value="">Selecione o Novo Delegado (${poolDelegados.length})...</option>`;
   poolDelegados.forEach(d => {
-    opts += `<option value="${d.id}" ${isPerfilDelegado && !souEuEscalado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
+    const isSelecionado = isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId);
+    opts += `<option value="${d.id}" ${isSelecionado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
   });
 
   selectNovo.innerHTML = opts;
+
   if (isPerfilDelegado && !souEuEscalado) {
+    selectNovo.value = userSrvId;
     selectNovo.disabled = true; // Trava a seleção no nome dele
   } else {
     selectNovo.disabled = false;
   }
 };
 
-window.salvarTrocaDelegadoSubmit = async function(e) {
+window.salvarTrocaDelegadoSubmit = function(e) {
   e.preventDefault();
 
   const escId = document.getElementById('m-del-escala-id').value;
-  const novoServidorId = document.getElementById('m-del-novo-id').value;
+  const selectNovo = document.getElementById('m-del-novo-id');
+  const novoServidorId = selectNovo.value;
 
   if (!novoServidorId) {
     alert("Selecione o novo Delegado para efetuar a troca.");
     return;
   }
 
-  const esc = (appState.escalas || []).find(e => e.id === escId);
+  const esc = (appState.escalas || []).find(e => String(e.id) === String(escId));
   if (!esc) return;
 
-  const srvAnterior = (appState.servidores || []).find(s => s.id === esc.servidorId);
-  const srvNovo = (appState.servidores || []).find(s => s.id === novoServidorId);
+  const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+  const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
+  // 1. ATUALIZAÇÃO INSTANTÂNEA LOCAL E FECHAMENTO DO MODAL
   esc.servidorId = novoServidorId;
-  await syncDocToFirestore('escalas', esc.id, esc);
 
-  // REGISTRO DE AUDITORIA NO LOG
-  await registrarLogTroca({
+  document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+
+  // 2. REGISTRO E GRAVAÇÃO EM SEGUNDO PLANO
+  registrarLogTroca({
     scope: esc.scope,
     delegaciaId: esc.delegaciaId,
     tipoAcao: 'TROCA_DELEGADO',
@@ -859,11 +881,7 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
     turno: esc.turno
   });
 
-  alert(`Troca efetuada com sucesso! Substituído por DEL. ${srvNovo ? srvNovo.nome : ''}.`);
-  document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
-
-  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+  syncDocToFirestore('escalas', esc.id, esc).catch(err => console.error("Erro ao salvar troca no Firestore:", err));
 };
 
 // --- B) MODAL TROCAR APJ ---
@@ -874,12 +892,12 @@ window.abrirModalTrocarApj = function(escalaId, dataIso, turnoStr) {
     modal = document.getElementById('modal-acao-trocar-apj');
   }
 
-  const esc = (appState.escalas || []).filter(e => e.id === escalaId)[0];
+  const esc = (appState.escalas || []).find(e => String(e.id) === String(escalaId));
   if (!esc) return;
 
-  const srvAtual = (appState.servidores || []).find(s => s.id === esc.servidorId);
+  const srvAtual = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const perfil = getPerfilUsuarioLogado();
-  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+  const userSrvId = obterServidorIdUsuarioLogado();
 
   document.getElementById('m-apj-escala-id').value = escalaId;
   document.getElementById('m-apj-filtro-busca').value = '';
@@ -904,9 +922,6 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
   const busca = (document.getElementById('m-apj-filtro-busca')?.value || '').toLowerCase().trim();
   const delFiltro = document.getElementById('m-apj-filtro-delegacia')?.value || 'TODAS';
 
-  // LIMITAÇÃO DO PERFIL APJ:
-  // 1) Se no turno o próprio APJ já está escalado -> Pode escolher qualquer outro APJ.
-  // 2) Se no turno outro APJ está escalado -> Apenas pode selecionar a si próprio (sugestão fixa).
   const isPerfilApj = perfil === PERFIS.APJ;
   const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
 
@@ -926,38 +941,48 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    opts += `<option value="${a.id}" ${isPerfilApj && !souEuEscalado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
+    const isSelecionado = isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId);
+    opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
   selectNovo.innerHTML = opts;
+
   if (isPerfilApj && !souEuEscalado) {
+    selectNovo.value = userSrvId;
     selectNovo.disabled = true;
   } else {
     selectNovo.disabled = false;
   }
 };
 
-window.salvarTrocaApjSubmit = async function(e) {
+window.salvarTrocaApjSubmit = function(e) {
   e.preventDefault();
 
   const escId = document.getElementById('m-apj-escala-id').value;
-  const novoServidorId = document.getElementById('m-apj-novo-id').value;
+  const selectNovo = document.getElementById('m-apj-novo-id');
+  const novoServidorId = selectNovo.value;
 
   if (!novoServidorId) {
     alert("Selecione o novo APJ para efetuar a troca.");
     return;
   }
 
-  const esc = (appState.escalas || []).find(e => e.id === escId);
+  const esc = (appState.escalas || []).find(e => String(e.id) === String(escId));
   if (!esc) return;
 
-  const srvAnterior = (appState.servidores || []).find(s => s.id === esc.servidorId);
-  const srvNovo = (appState.servidores || []).find(s => s.id === novoServidorId);
+  const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+  const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
+  // 1. ATUALIZAÇÃO INSTANTÂNEA LOCAL
   esc.servidorId = novoServidorId;
-  await syncDocToFirestore('escalas', esc.id, esc);
 
-  await registrarLogTroca({
+  document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+
+  // 2. GRAVAÇÃO EM SEGUNDO PLANO
+  registrarLogTroca({
     scope: esc.scope,
     delegaciaId: esc.delegaciaId,
     tipoAcao: 'TROCA_APJ',
@@ -966,11 +991,7 @@ window.salvarTrocaApjSubmit = async function(e) {
     turno: esc.turno
   });
 
-  alert(`Troca efetuada com sucesso! Substituído por APJ ${srvNovo ? srvNovo.nome : ''}.`);
-  document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
-
-  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+  syncDocToFirestore('escalas', esc.id, esc).catch(err => console.error("Erro ao salvar troca APJ no Firestore:", err));
 };
 
 // --- C) MODAL VINCULAR APJ ---
@@ -982,7 +1003,7 @@ window.abrirModalVincularApjAcao = function(escalaDelegadoId, dataIso, turnoStr)
   }
 
   const perfil = getPerfilUsuarioLogado();
-  const userSrvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+  const userSrvId = obterServidorIdUsuarioLogado();
 
   document.getElementById('m-vinc-escala-id').value = escalaDelegadoId;
   document.getElementById('m-vinc-data-iso').value = dataIso;
@@ -1009,8 +1030,6 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
   const busca = (document.getElementById('m-vinc-filtro-busca')?.value || '').toLowerCase().trim();
   const delFiltro = document.getElementById('m-vinc-filtro-delegacia')?.value || 'TODAS';
 
-  // LIMITAÇÃO DO PERFIL APJ AO VINCULAR:
-  // Somente poderá selecionar a si próprio (sugestão fixa no seu nome)
   const isPerfilApj = perfil === PERFIS.APJ;
 
   let poolApjs = (appState.servidores || []).filter(s => {
@@ -1029,33 +1048,37 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
 
   let opts = `<option value="">Selecione o APJ a Vincular (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    opts += `<option value="${a.id}" ${isPerfilApj ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
+    const isSelecionado = isPerfilApj && String(a.id) === String(userSrvId);
+    opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
   selectApj.innerHTML = opts;
+
   if (isPerfilApj) {
+    selectApj.value = userSrvId;
     selectApj.disabled = true;
   } else {
     selectApj.disabled = false;
   }
 };
 
-window.salvarVincularApjSubmit = async function(e) {
+window.salvarVincularApjSubmit = function(e) {
   e.preventDefault();
 
   const escDelId = document.getElementById('m-vinc-escala-id').value;
   const dataIso = document.getElementById('m-vinc-data-iso').value;
   const turnoStr = document.getElementById('m-vinc-turno-str').value;
-  const apjId = document.getElementById('m-vinc-apj-id').value;
+  const selectApj = document.getElementById('m-vinc-apj-id');
+  const apjId = selectApj.value;
 
   if (!apjId) {
     alert("Selecione um APJ para vincular ao plantão.");
     return;
   }
 
-  const escDel = (appState.escalas || []).find(e => e.id === escDelId);
-  const srvApj = (appState.servidores || []).find(s => s.id === apjId);
-  const srvDel = escDel ? (appState.servidores || []).find(s => s.id === escDel.servidorId) : null;
+  const escDel = (appState.escalas || []).find(e => String(e.id) === String(escDelId));
+  const srvApj = (appState.servidores || []).find(s => String(s.id) === String(apjId));
+  const srvDel = escDel ? (appState.servidores || []).find(s => String(s.id) === String(escDel.servidorId)) : null;
 
   const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const novaEscala = {
@@ -1070,10 +1093,15 @@ window.salvarVincularApjSubmit = async function(e) {
 
   if (!appState.escalas) appState.escalas = [];
   appState.escalas.push(novaEscala);
-  await syncDocToFirestore('escalas', newEscId, novaEscala);
 
-  // REGISTRO DE AUDITORIA NO LOG
-  await registrarLogTroca({
+  // 1. ATUALIZAÇÃO LOCAL INSTANTÂNEA E FECHAMENTO DO MODAL
+  document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
+  window.fecharModalDetalhesPlantao();
+
+  renderCalendarGrid('calendar-crf-container', 'CRF');
+
+  // 2. GRAVAÇÃO EM SEGUNDO PLANO
+  registrarLogTroca({
     scope: 'CRF',
     delegaciaId: null,
     tipoAcao: 'VINCULAR_APJ',
@@ -1082,11 +1110,7 @@ window.salvarVincularApjSubmit = async function(e) {
     turno: turnoStr
   });
 
-  alert(`Sucesso! APJ ${srvApj ? srvApj.nome : ''} vinculado ao plantão CRF de ${formatarDataBr(dataIso)}.`);
-  document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
-
-  renderCalendarGrid('calendar-crf-container', 'CRF');
+  syncDocToFirestore('escalas', newEscId, novaEscala).catch(err => console.error("Erro ao vincular APJ no Firestore:", err));
 };
 
 // --- CRIAÇÃO DOS DOMs DOS MODAIS DE AÇÃO ---
