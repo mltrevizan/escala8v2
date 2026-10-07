@@ -1,7 +1,10 @@
 // src/calendar.js
 import { appState, normalizeText } from './state.js';
-import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, PERFIS } from './permissions.js';
+import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, isProtectedAdminAccount, PERFIS } from './permissions.js';
 import { abrirModalHistoricoLogs, registrarLogTroca } from './logs.js';
+
+// Expõe explicitamente a função de logs no escopo global window
+window.abrirModalHistoricoLogs = abrirModalHistoricoLogs;
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -18,7 +21,7 @@ function formatarDataBr(dataIso) {
 }
 
 /**
- * Localiza o ID do servidor correspondente ao usuário logado no appState
+ * Localiza de forma estrita o ID do servidor correspondente ao usuário logado no appState
  */
 function obterServidorIdUsuarioLogado() {
   const user = appState.currentUser || {};
@@ -27,7 +30,10 @@ function obterServidorIdUsuarioLogado() {
     const srvPorId = (appState.servidores || []).find(s => String(s.id) === String(user.id));
     if (srvPorId) return String(srvPorId.id);
   }
+  
   const loginUser = normalizeText(user.login || user.email || user.nome || '');
+  if (!loginUser) return '';
+
   const srvPorLogin = (appState.servidores || []).find(s => {
     const loginSrv = normalizeText(s.login || s.email || s.nome || '');
     return loginSrv && loginSrv === loginUser;
@@ -179,40 +185,32 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
   let delegaciasOptionsEscala = obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope);
 
   let html = `
+    <!-- Topo de Controle -->
     <div class="p-3 bg-white border-b border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2">
         <span class="text-xs font-bold text-slate-800 tracking-tight uppercase">
           ${scope === 'CRF' ? '🏛️ Escala Geral CRF' : '🏢 Escala por Delegacia'}
         </span>
       </div>
-
-      ${scope === 'DELEGACIA' ? `
-        <div class="flex items-center gap-2">
-          <label class="text-xs font-medium text-slate-600">Unidade / Plantão:</label>
-          <select id="select-calendar-delegacia" class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-md p-1.5 shadow-xs">
-            ${delegaciasOptionsEscala}
-          </select>
-        </div>
-      ` : ''}
     </div>
 
+    <!-- Navegação de Mês + Seletor de Unidade e Botão de Logs alinhados à direita -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
-      <div class="flex items-center gap-2">
-        ${!isPublico ? `
-          <button type="button" onclick="abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
-            📋 Logs
-          </button>
-        ` : ''}
-
-        <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
-          <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
-          <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
-          <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">Próximo ▶</button>
-        </div>
+      <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
+        <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
+        <span class="font-black text-xs text-slate-800 uppercase tracking-wider px-2 border-x border-slate-200">${monthNames[currentMonth]} ${currentYear}</span>
+        <button id="btn-next-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">Próximo ▶</button>
       </div>
 
-      ${scope === 'CRF' ? `
-        <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        ${scope === 'DELEGACIA' ? `
+          <div class="flex items-center gap-1.5">
+            <label class="text-xs font-medium text-slate-600">Unidade / Plantão:</label>
+            <select id="select-calendar-delegacia" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
+              ${delegaciasOptionsEscala}
+            </select>
+          </div>
+        ` : `
           <div class="flex items-center gap-1.5">
             <label class="text-[11px] font-bold text-slate-600">SDP:</label>
             <select id="select-filtro-sdp" onchange="window.mudarFiltroSdp(this.value)" class="text-xs font-bold bg-white border border-slate-300 rounded-lg p-1.5 shadow-xs text-slate-800">
@@ -226,10 +224,18 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
               ${delCrfOptions}
             </select>
           </div>
-        </div>
-      ` : ''}
+        `}
+
+        <!-- BOTÃO DE LOG POSICIONADO À DIREITA DOS FILTROS E OCULTO NO PERFIL PÚBLICO -->
+        ${!isPublico ? `
+          <button type="button" onclick="window.abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-3 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
+            📋 Logs
+          </button>
+        ` : ''}
+      </div>
     </div>
 
+    <!-- Cabeçalho Dias da Semana -->
     <div class="grid grid-cols-7 text-center bg-slate-100 border-b border-slate-200 text-[10px] font-bold text-slate-600 py-1.5 font-sans uppercase">
       <div class="text-red-600">Dom</div>
       <div>Seg</div>
@@ -240,6 +246,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-600">Sáb</div>
     </div>
 
+    <!-- Grade do Mês -->
     <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r border-slate-200 font-sans">
   `;
 
@@ -685,7 +692,7 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // IGNORA APJ ESCALADO NA EXTRAJORNADA/SDP PARA FINS DO BOTÃO VINCULAR APJ
+    // IGNORA APJs ESCALADOS EM EXTRAJORNADA/SDP PARA A REGRA DE EXIBIÇÃO DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
@@ -753,7 +760,7 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
 
     cardsHtml += `
       <div class="pt-2 flex justify-between items-center border-t border-slate-200">
-        <button type="button" onclick="window.fecharModalDetalhesPlantao(); abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
+        <button type="button" onclick="window.fecharModalDetalhesPlantao(); window.abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
           📋 Logs de Alterações
         </button>
       </div>
@@ -815,10 +822,14 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
   const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
 
   let poolDelegados = (appState.servidores || []).filter(s => {
+    // REMOVE CONTA PROTEGIDA E ADMIN DO SISTEMA
+    if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
+      return false;
+    }
+
     const cargoU = (s.cargo || '').toUpperCase();
     if (!cargoU.includes('DELEGADO')) return false;
 
-    // Se o próprio delegado está logado e NÃO está escalado neste turno, ele só pode escolher A SI MESMO
     if (isPerfilDelegado && !souEuEscalado) {
       return String(s.id) === String(userSrvId);
     }
@@ -839,7 +850,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   if (isPerfilDelegado && !souEuEscalado) {
     selectNovo.value = userSrvId;
-    selectNovo.disabled = true; // Trava a seleção no nome dele
+    selectNovo.disabled = true;
   } else {
     selectNovo.disabled = false;
   }
@@ -863,7 +874,6 @@ window.salvarTrocaDelegadoSubmit = function(e) {
   const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
-  // 1. ATUALIZAÇÃO INSTANTÂNEA LOCAL E FECHAMENTO DO MODAL
   esc.servidorId = novoServidorId;
 
   document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
@@ -871,7 +881,6 @@ window.salvarTrocaDelegadoSubmit = function(e) {
 
   renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
 
-  // 2. REGISTRO E GRAVAÇÃO EM SEGUNDO PLANO
   registrarLogTroca({
     scope: esc.scope,
     delegaciaId: esc.delegaciaId,
@@ -926,6 +935,10 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
   const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
 
   let poolApjs = (appState.servidores || []).filter(s => {
+    if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
+      return false;
+    }
+
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
@@ -973,7 +986,6 @@ window.salvarTrocaApjSubmit = function(e) {
   const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
-  // 1. ATUALIZAÇÃO INSTANTÂNEA LOCAL
   esc.servidorId = novoServidorId;
 
   document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
@@ -981,7 +993,6 @@ window.salvarTrocaApjSubmit = function(e) {
 
   renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
 
-  // 2. GRAVAÇÃO EM SEGUNDO PLANO
   registrarLogTroca({
     scope: esc.scope,
     delegaciaId: esc.delegaciaId,
@@ -1033,6 +1044,10 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
   const isPerfilApj = perfil === PERFIS.APJ;
 
   let poolApjs = (appState.servidores || []).filter(s => {
+    if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
+      return false;
+    }
+
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
@@ -1094,13 +1109,11 @@ window.salvarVincularApjSubmit = function(e) {
   if (!appState.escalas) appState.escalas = [];
   appState.escalas.push(novaEscala);
 
-  // 1. ATUALIZAÇÃO LOCAL INSTANTÂNEA E FECHAMENTO DO MODAL
   document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
   window.fecharModalDetalhesPlantao();
 
   renderCalendarGrid('calendar-crf-container', 'CRF');
 
-  // 2. GRAVAÇÃO EM SEGUNDO PLANO
   registrarLogTroca({
     scope: 'CRF',
     delegaciaId: null,
