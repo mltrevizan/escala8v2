@@ -33,7 +33,10 @@ export function initAuthModule() {
 
       appState.currentUser = {
         uid: user.uid,
+        id: srv ? String(srv.id) : user.uid,
+        servidorId: srv ? String(srv.id) : null,
         email: user.email,
+        login: srv ? srv.login : user.email.split('@')[0],
         nome: srv ? srv.nome : (user.displayName || 'ADMINISTRADOR DO SISTEMA'),
         cargo: srv ? srv.cargo : 'DELEGADO',
         perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
@@ -48,7 +51,10 @@ export function initAuthModule() {
     renderUserStatusHeader();
     applyUIPermissions();
     
-    if (window.renderCalendarGrid) {
+    // ATUALIZAÇÃO DA TELA E DO BOTÃO DE LOG IMEDIATAMENTE APÓS O LOGIN
+    if (window.switchTab && appState.activeTab) {
+      window.switchTab(appState.activeTab);
+    } else if (window.renderCalendarGrid) {
       window.renderCalendarGrid(
         appState.activeTab === 'crf' ? 'calendar-crf-container' : 'calendar-delegacia-container', 
         appState.activeTab === 'crf' ? 'CRF' : 'DELEGACIA'
