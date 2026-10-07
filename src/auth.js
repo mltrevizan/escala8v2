@@ -1,7 +1,7 @@
 // src/auth.js
 import { appState, normalizeText } from './state.js';
 import { applyUIPermissions } from './permissions.js';
-import { loadAllDataFromFirestore } from './db.js';
+import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 
 let loginSearchState = {
   servidorSelecionado: null
@@ -338,10 +338,18 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     alert("Senha alterada com sucesso! Utilize a sua nova senha nos próximos acessos.");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
   } catch (err) {
-    console.error("Erro ao alterar senha:", err);
-    if (msgErro) {
-      msgErro.innerText = `Erro ao atualizar senha: ${err.message}`;
-      msgErro.classList.remove('hidden');
+    console.error("Erro ao alterar senha no Auth:", err);
+
+    // TRATAMENTO DE ERRO DE REAUTENTICAÇÃO RECENTE DO FIREBASE AUTH
+    if (err.code === 'auth/requires-recent-login') {
+      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha.");
+      await firebase.auth().signOut();
+      window.location.reload();
+    } else {
+      if (msgErro) {
+        msgErro.innerText = `Erro ao atualizar senha no Firebase: ${err.message}`;
+        msgErro.classList.remove('hidden');
+      }
     }
   }
 };
