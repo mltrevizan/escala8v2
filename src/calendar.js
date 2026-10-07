@@ -1,6 +1,7 @@
 // src/calendar.js
 import { appState, normalizeText } from './state.js';
-import { hasPermission, canViewPhoneForDate } from './permissions.js';
+import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, PERFIS } from './permissions.js';
+import { abrirModalHistoricoLogs, registrarLogTroca } from './logs.js';
 
 export function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -10,9 +11,6 @@ export function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-/**
- * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
- */
 function obterHorarioTurnoTexto(esc) {
   if (!esc) return '08:00 às 08:00';
 
@@ -21,15 +19,12 @@ function obterHorarioTurnoTexto(esc) {
   const isSobreaviso = esc.tipo === 'SOBREAVISO';
   const config = isSobreaviso ? del?.sobreavisoConfig : del?.plantaoConfig;
 
-  // Se o turno for 12h Diurno/Noturno específico da CRF
   if (turno.includes('12h (d)')) return '07:30 às 19:30';
   if (turno.includes('12h (n)')) return '19:30 às 07:30 (do dia seguinte)';
 
-  // Horários parametrizados da unidade
   const hUteis = config?.uteis || del?.horarioUteis || '08:00 às 08:00';
   const hNaoUteis = config?.naoUteis || del?.horarioNaoUteis || '08:00 às 08:00';
 
-  // Verifica se a data é final de semana
   if (esc.data) {
     const parts = esc.data.split('-').map(Number);
     if (parts.length === 3) {
@@ -41,7 +36,6 @@ function obterHorarioTurnoTexto(esc) {
     }
   }
 
-  // Turnos em múltiplos dias (ex: 3 dias)
   if (turno.includes('dias') || turno.includes('dia')) {
     const numDias = parseInt(turno, 10) || 1;
     const parts = esc.data.split('-').map(Number);
@@ -56,10 +50,6 @@ function obterHorarioTurnoTexto(esc) {
   return hUteis;
 }
 
-/**
- * Função responsável por popular o dropdown de seleções de delegacias
- * com filtragem inteligente para o modo público.
- */
 function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
   const isPublico = !appState.currentUser;
   const { currentYear, currentMonth, escalas, delegacias } = appState;
@@ -344,7 +334,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           const isSobreaviso = primeiraEsc.tipo === 'SOBREAVISO';
           const isExtra = primeiraEsc.tipo === 'EXTRAJORNADA' || primeiraEsc.tipo === 'SDP';
 
-          // ESTILIZAÇÃO DE CORES DA PCPR (EXTRAJORNADA EM CINZA CHUMBO COM DETALHES DOURADOS)
           let cardStyle = 'bg-[#F7F3E8] border-[#BEA55A] text-[#5A4716]';
           let rotuloTipo = 'PLANTÃO';
 
@@ -352,7 +341,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
             cardStyle = 'bg-[#2A2B2D] border-[#57585A] text-[#F0F1F2] shadow-xs';
             rotuloTipo = 'SOBREAVISO';
           } else if (isExtra) {
-            // CINZA CHUMBO / GRAFITE ELEGANTE COM DOURADO PCPR (SEM USAR PRETO DE TAG NEM VERMELHO)
             cardStyle = 'bg-slate-700 border-slate-800 text-slate-100 shadow-xs';
             rotuloTipo = 'EXTRA';
           }
@@ -632,12 +620,18 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   const tituloModalEl = document.getElementById('modal-detalhes-titulo-sub');
   if (!containerConteudo) return;
 
+  const scopeAtual = appState.calendarScope || 'CRF';
+  const selectedDelId = appState.selectedDelegaciaId;
+
   const ids = idsString.split(',');
   const escalasDoGrupo = (appState.escalas || []).filter(e => ids.includes(e.id));
   
   const podeVerTelefone = canViewPhoneForDate(dataIso);
   const showBtnApj = hasPermission('SHOW_BTN_INCLUIR_TROCAR_APJ');
   const showBtnDel = hasPermission('SHOW_BTN_TROCAR_DELEGADO');
+  
+  const perfilUser = getPerfilUsuarioLogado();
+  const podeVincularApj = scopeAtual === 'CRF' && [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.APJ].includes(perfilUser);
 
   if (tituloModalEl) {
     tituloModalEl.innerText = `${tituloGrupo} (${horarioGrupo}) • ${formatarDataBr(dataIso)}`;
@@ -650,6 +644,12 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
+    // Verifica se no turno da CRF não há nenhum APJ cadastrado
+    const temApjNoTurno = escalasDoGrupo.some(esc => {
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      return srv && !(srv.cargo || '').toUpperCase().includes('DELEGADO');
+    });
+
     let cardsHtml = escalasDoGrupo.map(esc => {
       const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
       const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
@@ -665,9 +665,15 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
         btnDelHtml = '<button onclick="window.abrirModalTrocarDelegado(\'' + esc.id + '\')" class="px-2 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar Delegado</button>';
       }
 
+      // BOTÃO DE VINCULAR APJ: DOURADO PCPR, APENAS NA CRF QUANDO O TURNO NÃO TIVER APJ
+      let btnVincularApjHtml = '';
+      if (isDel && !temApjNoTurno && podeVincularApj && !isExtra) {
+        btnVincularApjHtml = '<button onclick="window.abrirModalVincularApjSimplificado(\'' + esc.id + '\', \'' + dataIso + '\', \'' + (esc.turno || horarioGrupo) + '\')" class="px-2 py-1 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-lg text-[10px] cursor-pointer shadow-xs">🔗 Vincular APJ</button>';
+      }
+
       let btnApjHtml = '';
       if (!isDel && showBtnApj && !isExtra) {
-        btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">➕/🔄 Incluir / Trocar APJ</button>';
+        btnApjHtml = '<button onclick="window.abrirModalIncluirTrocarAPJ(\'' + esc.id + '\')" class="px-2 py-1 bg-black text-pcpr-gold hover:bg-slate-800 border border-pcpr-gold rounded-lg font-bold text-[10px] cursor-pointer">🔄 Trocar APJ</button>';
       }
 
       return `
@@ -696,11 +702,21 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
 
           <div class="flex justify-end gap-1 pt-1 border-t border-slate-200">
             ${btnDelHtml}
+            ${btnVincularApjHtml}
             ${btnApjHtml}
           </div>
         </div>
       `;
     }).join('');
+
+    // Botão de acesso rápido aos Logs no rodapé do Modal
+    cardsHtml += `
+      <div class="pt-2 flex justify-between items-center border-t border-slate-200">
+        <button type="button" onclick="window.fecharModalDetalhesPlantao(); abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
+          📋 Logs de Alterações
+        </button>
+      </div>
+    `;
 
     containerConteudo.innerHTML = `<div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">${cardsHtml}</div>`;
   }
