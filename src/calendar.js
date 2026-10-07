@@ -2,8 +2,8 @@
 import { appState, normalizeText } from './state.js';
 import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, isProtectedAdminAccount, PERFIS } from './permissions.js';
 import { abrirModalHistoricoLogs, registrarLogTroca } from './logs.js';
+import { syncDocToFirestore } from './db.js';
 
-// Expõe explicitamente a função de logs no escopo global window
 window.abrirModalHistoricoLogs = abrirModalHistoricoLogs;
 
 export function getDaysInMonth(year, month) {
@@ -20,9 +20,6 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-/**
- * Localiza de forma estrita o ID do servidor correspondente ao usuário logado no appState
- */
 function obterServidorIdUsuarioLogado() {
   const user = appState.currentUser || {};
   if (user.servidorId) return String(user.servidorId);
@@ -42,9 +39,6 @@ function obterServidorIdUsuarioLogado() {
   return srvPorLogin ? String(srvPorLogin.id) : String(user.id || '');
 }
 
-/**
- * Calcula e formata o horário exato de entrada e saída com base na configuração da unidade/turno
- */
 function obterHorarioTurnoTexto(esc) {
   if (!esc) return '08:00 às 08:00';
 
@@ -226,7 +220,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           </div>
         `}
 
-        <!-- BOTÃO DE LOG POSICIONADO À DIREITA DOS FILTROS E OCULTO NO PERFIL PÚBLICO -->
         ${!isPublico ? `
           <button type="button" onclick="window.abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-3 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
             📋 Logs
@@ -246,7 +239,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       <div class="text-indigo-600">Sáb</div>
     </div>
 
-    <!-- Grade do Mês -->
     <div class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px border-b border-r border-slate-200 font-sans">
   `;
 
@@ -692,7 +684,6 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // IGNORA APJs ESCALADOS EM EXTRAJORNADA/SDP PARA A REGRA DE EXIBIÇÃO DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
@@ -758,13 +749,15 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       `;
     }).join('');
 
-    cardsHtml += `
-      <div class="pt-2 flex justify-between items-center border-t border-slate-200">
-        <button type="button" onclick="window.fecharModalDetalhesPlantao(); window.abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
-          📋 Logs de Alterações
-        </button>
-      </div>
-    `;
+    if (appState.currentUser) {
+      cardsHtml += `
+        <div class="pt-2 flex justify-between items-center border-t border-slate-200">
+          <button type="button" onclick="window.fecharModalDetalhesPlantao(); window.abrirModalHistoricoLogs('${scopeAtual}', '${selectedDelId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[10px] cursor-pointer flex items-center gap-1">
+            📋 Logs de Alterações
+          </button>
+        </div>
+      `;
+    }
 
     containerConteudo.innerHTML = `<div class="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">${cardsHtml}</div>`;
   }
@@ -777,7 +770,7 @@ window.fecharModalDetalhesPlantao = function() {
 };
 
 // =========================================================================
-// MODAIS DE AÇÃO COM LIMITAÇÕES CORRIGIDAS POR PERFIL E RENDERIZAÇÃO INSTANTÂNEA
+// MODAIS DE AÇÃO COM GRAVAÇÃO SÍNCRONA
 // =========================================================================
 
 // --- A) MODAL TROCAR DELEGADO ---
@@ -822,7 +815,6 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
   const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
 
   let poolDelegados = (appState.servidores || []).filter(s => {
-    // REMOVE CONTA PROTEGIDA E ADMIN DO SISTEMA
     if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
       return false;
     }
@@ -842,7 +834,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   let opts = `<option value="">Selecione o Novo Delegado (${poolDelegados.length})...</option>`;
   poolDelegados.forEach(d => {
-    const isSelecionado = isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId);
+    const isSelecionado = (isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId)) || (userSrvId && String(d.id) === String(userSrvId));
     opts += `<option value="${d.id}" ${isSelecionado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
   });
 
@@ -856,7 +848,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
   }
 };
 
-window.salvarTrocaDelegadoSubmit = function(e) {
+window.salvarTrocaDelegadoSubmit = async function(e) {
   e.preventDefault();
 
   const escId = document.getElementById('m-del-escala-id').value;
@@ -876,21 +868,28 @@ window.salvarTrocaDelegadoSubmit = function(e) {
 
   esc.servidorId = novoServidorId;
 
-  document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
+  // Sincronização e gravação obrigatória antes de fechar a janela
+  try {
+    await syncDocToFirestore('escalas', esc.id, esc);
 
-  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+    await registrarLogTroca({
+      scope: esc.scope,
+      delegaciaId: esc.delegaciaId,
+      tipoAcao: 'TROCA_DELEGADO',
+      detalhes: `Troca do Delegado ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo DEL. ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
+      dataPlantao: esc.data,
+      turno: esc.turno
+    });
 
-  registrarLogTroca({
-    scope: esc.scope,
-    delegaciaId: esc.delegaciaId,
-    tipoAcao: 'TROCA_DELEGADO',
-    detalhes: `Troca do Delegado ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo DEL. ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
-    dataPlantao: esc.data,
-    turno: esc.turno
-  });
+    document.getElementById('modal-acao-trocar-delegado')?.classList.add('hidden');
+    window.fecharModalDetalhesPlantao();
 
-  syncDocToFirestore('escalas', esc.id, esc).catch(err => console.error("Erro ao salvar troca no Firestore:", err));
+    renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+    alert(`Troca efetuada e gravada com sucesso! Substituído por DEL. ${srvNovo ? srvNovo.nome : ''}.`);
+  } catch (err) {
+    console.error("Erro ao salvar troca no Firestore:", err);
+    alert(`Erro ao gravar troca no banco de dados: ${err.message}`);
+  }
 };
 
 // --- B) MODAL TROCAR APJ ---
@@ -954,7 +953,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    const isSelecionado = isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId);
+    const isSelecionado = (isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId)) || (userSrvId && String(a.id) === String(userSrvId));
     opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
@@ -968,7 +967,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
   }
 };
 
-window.salvarTrocaApjSubmit = function(e) {
+window.salvarTrocaApjSubmit = async function(e) {
   e.preventDefault();
 
   const escId = document.getElementById('m-apj-escala-id').value;
@@ -988,21 +987,27 @@ window.salvarTrocaApjSubmit = function(e) {
 
   esc.servidorId = novoServidorId;
 
-  document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
+  try {
+    await syncDocToFirestore('escalas', esc.id, esc);
 
-  renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+    await registrarLogTroca({
+      scope: esc.scope,
+      delegaciaId: esc.delegaciaId,
+      tipoAcao: 'TROCA_APJ',
+      detalhes: `Troca do APJ ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo APJ ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
+      dataPlantao: esc.data,
+      turno: esc.turno
+    });
 
-  registrarLogTroca({
-    scope: esc.scope,
-    delegaciaId: esc.delegaciaId,
-    tipoAcao: 'TROCA_APJ',
-    detalhes: `Troca do APJ ${srvAnterior ? srvAnterior.nome : 'Anterior'} pelo APJ ${srvNovo ? srvNovo.nome : 'Novo'} no plantão do dia ${formatarDataBr(esc.data)} (${esc.turno || '24h'}).`,
-    dataPlantao: esc.data,
-    turno: esc.turno
-  });
+    document.getElementById('modal-acao-trocar-apj')?.classList.add('hidden');
+    window.fecharModalDetalhesPlantao();
 
-  syncDocToFirestore('escalas', esc.id, esc).catch(err => console.error("Erro ao salvar troca APJ no Firestore:", err));
+    renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
+    alert(`Troca efetuada e gravada com sucesso! Substituído por APJ ${srvNovo ? srvNovo.nome : ''}.`);
+  } catch (err) {
+    console.error("Erro ao salvar troca APJ no Firestore:", err);
+    alert(`Erro ao gravar troca no banco de dados: ${err.message}`);
+  }
 };
 
 // --- C) MODAL VINCULAR APJ ---
@@ -1063,21 +1068,24 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
 
   let opts = `<option value="">Selecione o APJ a Vincular (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    const isSelecionado = isPerfilApj && String(a.id) === String(userSrvId);
+    const isSelecionado = String(a.id) === String(userSrvId);
     opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
   selectApj.innerHTML = opts;
 
   if (isPerfilApj) {
-    selectApj.value = userSrvId;
+    if (userSrvId) selectApj.value = userSrvId;
     selectApj.disabled = true;
   } else {
+    if (userSrvId && poolApjs.some(a => String(a.id) === String(userSrvId))) {
+      selectApj.value = userSrvId;
+    }
     selectApj.disabled = false;
   }
 };
 
-window.salvarVincularApjSubmit = function(e) {
+window.salvarVincularApjSubmit = async function(e) {
   e.preventDefault();
 
   const escDelId = document.getElementById('m-vinc-escala-id').value;
@@ -1109,21 +1117,27 @@ window.salvarVincularApjSubmit = function(e) {
   if (!appState.escalas) appState.escalas = [];
   appState.escalas.push(novaEscala);
 
-  document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
-  window.fecharModalDetalhesPlantao();
+  try {
+    await syncDocToFirestore('escalas', newEscId, novaEscala);
 
-  renderCalendarGrid('calendar-crf-container', 'CRF');
+    await registrarLogTroca({
+      scope: 'CRF',
+      delegaciaId: null,
+      tipoAcao: 'VINCULAR_APJ',
+      detalhes: `Inclusão/Vinculação do APJ ${srvApj ? srvApj.nome : 'Policial'} ao plantão CRF do dia ${formatarDataBr(dataIso)} (${turnoStr}) junto com o DEL. ${srvDel ? srvDel.nome : 'Delegado'}.`,
+      dataPlantao: dataIso,
+      turno: turnoStr
+    });
 
-  registrarLogTroca({
-    scope: 'CRF',
-    delegaciaId: null,
-    tipoAcao: 'VINCULAR_APJ',
-    detalhes: `Inclusão/Vinculação do APJ ${srvApj ? srvApj.nome : 'Policial'} ao plantão CRF do dia ${formatarDataBr(dataIso)} (${turnoStr}) junto com o DEL. ${srvDel ? srvDel.nome : 'Delegado'}.`,
-    dataPlantao: dataIso,
-    turno: turnoStr
-  });
+    document.getElementById('modal-acao-vincular-apj')?.classList.add('hidden');
+    window.fecharModalDetalhesPlantao();
 
-  syncDocToFirestore('escalas', newEscId, novaEscala).catch(err => console.error("Erro ao vincular APJ no Firestore:", err));
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+    alert(`Sucesso! APJ ${srvApj ? srvApj.nome : ''} vinculado e gravado na escala da CRF.`);
+  } catch (err) {
+    console.error("Erro ao vincular APJ no Firestore:", err);
+    alert(`Erro ao gravar vinculação no banco de dados: ${err.message}`);
+  }
 };
 
 // --- CRIAÇÃO DOS DOMs DOS MODAIS DE AÇÃO ---
