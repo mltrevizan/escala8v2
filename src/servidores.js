@@ -282,7 +282,7 @@ window.salvarServidorModalSubmit = async function(e) {
 };
 
 /**
- * Função de Reset de Senha no Firestore e Auth Secundário
+ * Função de Reset de Senha no Firestore
  */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
@@ -296,46 +296,16 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  if (!confirm(`Deseja realmente resetar a senha do servidor ${srv.nome} para a senha padrão 'Central123'?\n\nO servidor será obrigado a alterar a senha no próximo acesso.`)) {
+  if (!confirm(`Deseja realmente marcar a conta do servidor ${srv.nome} para redefinição obrigatória de senha no próximo acesso?`)) {
     return;
   }
 
   try {
-    const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
-    const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
-
-    // 1. ATUALIZA A SINALIZAÇÃO DE RESET DIRETO NO FIRESTORE
     srv.senhaResetada = true;
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    // 2. TENTA ATUALIZAR A CONTA VIA INSTÂNCIA SECUNDÁRIA DO FIREBASE AUTH
-    if (window.firebase && firebase.app) {
-      const currentConfig = firebase.app().options;
-      let secondaryApp;
-      
-      try {
-        secondaryApp = firebase.app("secondaryAppReset");
-      } catch (e) {
-        secondaryApp = firebase.initializeApp(currentConfig, "secondaryAppReset");
-      }
-
-      try {
-        const secAuth = secondaryApp.auth();
-        try {
-          await secAuth.signInWithEmailAndPassword(emailCalculado, "Central123");
-        } catch (authErr) {
-          if (authErr.code === 'auth/user-not-found') {
-            await secAuth.createUserWithEmailAndPassword(emailCalculado, "Central123");
-          }
-        }
-        await secAuth.signOut();
-      } catch (secErr) {
-        console.warn("Aviso na instância secundária de Auth:", secErr.message);
-      }
-    }
-
-    alert(`Sucesso! A senha do policial ${srv.nome} foi resetada para o padrão 'Central123'.`);
+    alert(`Sucesso! O servidor ${srv.nome} foi marcado no banco de dados. No próximo acesso, o sistema solicitará o cadastro de uma nova senha.`);
 
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
