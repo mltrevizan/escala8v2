@@ -52,7 +52,6 @@ export function initAuthModule() {
     renderUserStatusHeader();
     applyUIPermissions();
     
-    // ATUALIZAÇÃO DA TELA E DO BOTÃO DE LOG IMEDIATAMENTE APÓS O LOGIN
     if (window.switchTab && appState.activeTab) {
       window.switchTab(appState.activeTab);
     } else if (window.renderCalendarGrid) {
@@ -206,15 +205,7 @@ window.executarLoginFirebase = async function(e) {
   const password = document.getElementById('login-password')?.value;
   const msgErro = document.getElementById('login-erro-msg');
 
-  if (!email) {
-    if (msgErro) {
-      msgErro.innerText = "Por favor, digite seu nome e selecione o policial na lista.";
-      msgErro.classList.remove('hidden');
-    }
-    return;
-  }
-
-  if (!password) return;
+  if (!email || !password) return;
 
   try {
     msgErro?.classList.add('hidden');
@@ -223,7 +214,6 @@ window.executarLoginFirebase = async function(e) {
 
     const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
 
-    // CHECAGEM DE RETORNO OBRIGATÓRIO PARA TROCA DE SENHA CASO SEJA A SENHA PADRÃO OU BANCO INDIQUE RESET
     if (password === 'Central123' || srv?.forcarTrocaSenha || srv?.senhaResetada) {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
@@ -325,7 +315,6 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
     await user.updatePassword(nova);
 
-    // REMOVE OS SINALIZADORES DE RESET DO BANCO DE DADOS APÓS A TROCA CONCLUÍDA
     if (appState.currentUser?.servidorId) {
       const srv = (appState.servidores || []).find(s => String(s.id) === String(appState.currentUser.servidorId));
       if (srv) {
@@ -340,7 +329,6 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   } catch (err) {
     console.error("Erro ao alterar senha no Auth:", err);
 
-    // TRATAMENTO DE ERRO DE REAUTENTICAÇÃO RECENTE DO FIREBASE AUTH
     if (err.code === 'auth/requires-recent-login') {
       alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha.");
       await firebase.auth().signOut();
