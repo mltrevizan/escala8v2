@@ -205,16 +205,37 @@ window.executarLoginFirebase = async function(e) {
   const password = document.getElementById('login-password')?.value;
   const msgErro = document.getElementById('login-erro-msg');
 
-  if (!email || !password) return;
+  if (!email || !password) {
+    if (msgErro) {
+      msgErro.innerText = "Por favor, selecione o policial e digite a senha.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
 
   try {
     msgErro?.classList.add('hidden');
-    const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-    window.fecharModalLoginApp();
+    let userCredential = null;
 
     const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
+    const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
 
-    if (password === 'Central123' || srv?.forcarTrocaSenha || srv?.senhaResetada) {
+    try {
+      userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+    } catch (authErr) {
+      if (password === 'Central123' && estaComResetPendente) {
+        if (msgErro) {
+          msgErro.innerText = "A senha foi marcada para redefinição no banco de dados. Digite sua senha pessoal de acesso para autorizar a redefinição de nova senha.";
+          msgErro.classList.remove('hidden');
+        }
+        return;
+      }
+      throw authErr;
+    }
+
+    window.fecharModalLoginApp();
+
+    if (password === 'Central123' || estaComResetPendente) {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
       const nomeSrv = loginSearchState.servidorSelecionado?.nome || srv?.nome || 'Usuário';
@@ -266,7 +287,7 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
 };
 
 window.cancelarTrocaSenhaObrigatoria = async function() {
-  const confirma = confirm("A alteração da senha padrão é obrigatória para acessar o sistema. Se cancelar, sua sessão será encerrada. Deseja sair?");
+  const confirma = confirm("A alteração da senha é obrigatória para acessar o sistema. Se cancelar, sua sessão será encerrada. Deseja sair?");
   
   if (confirma) {
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
@@ -405,7 +426,7 @@ function criarModalTrocarSenhaDOM() {
             <span class="text-xl">⚠️</span>
             <h3 class="font-bold text-slate-900 text-sm">Alteração Obrigatória de Senha</h3>
           </div>
-          <p class="text-[11px] text-slate-500 mt-1">Por questões de segurança, cadastre uma nova senha pessoal para substituir a senha padrão inicial.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Por questões de segurança, cadastre uma nova senha pessoal para substituir a senha de acesso.</p>
         </div>
 
         <form onsubmit="window.salvarNovaSenhaObrigatoria(event)" class="space-y-3 text-xs">
