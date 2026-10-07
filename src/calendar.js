@@ -21,37 +21,51 @@ function formatarDataBr(dataIso) {
 }
 
 /**
- * Localiza de forma ultra-robusta o ID do servidor correspondente ao usuário logado
+ * Localiza de forma ultra-robusta e precisa o objeto/ID do servidor do usuário logado
  */
 function obterServidorIdUsuarioLogado() {
   const user = appState.currentUser;
   if (!user) return '';
 
-  const listaServidores = appState.servidores || [];
+  const lista = appState.servidores || [];
 
-  // 1. Busca por servidorId direto
-  if (user.servidorId) {
-    const srv = listaServidores.find(s => String(s.id) === String(user.servidorId));
-    if (srv) return String(srv.id);
-  }
+  // 1. Tenta comparar por servidorId, id ou uid
+  const idsBusca = [user.servidorId, user.id, user.uid].filter(Boolean).map(String);
+  let srvEncontrado = lista.find(s => idsBusca.includes(String(s.id)));
+  if (srvEncontrado) return String(srvEncontrado.id);
 
-  // 2. Busca por ID direto
-  if (user.id) {
-    const srv = listaServidores.find(s => String(s.id) === String(user.id));
-    if (srv) return String(srv.id);
-  }
-
-  // 3. Busca por login ou e-mail sanitizado
-  const loginUser = normalizeText(user.login || user.email || user.nome || '');
+  // 2. Tenta comparar por login ou email
+  const loginUser = normalizeText(user.login || user.email || '').split('@')[0];
   if (loginUser) {
-    const srv = listaServidores.find(s => {
-      const loginSrv = normalizeText(s.login || s.email || s.nome || '');
+    srvEncontrado = lista.find(s => {
+      const loginSrv = normalizeText(s.login || s.email || '').split('@')[0];
       return loginSrv && loginSrv === loginUser;
     });
-    if (srv) return String(srv.id);
+    if (srvEncontrado) return String(srvEncontrado.id);
   }
 
-  return String(user.id || user.servidorId || '');
+  // 3. Tenta comparar por Nome
+  const nomeUser = normalizeText(user.nome || user.displayName || '');
+  if (nomeUser) {
+    srvEncontrado = lista.find(s => normalizeText(s.nome) === nomeUser);
+    if (srvEncontrado) return String(srvEncontrado.id);
+  }
+
+  return idsBusca[0] || '';
+}
+
+/**
+ * Verifica se dois IDs de servidor/escala correspondem ao mesmo policial
+ */
+function saoMesmoPolicial(idA, idB) {
+  if (!idA || !idB) return false;
+  if (String(idA) === String(idB)) return true;
+
+  const srvA = (appState.servidores || []).find(s => String(s.id) === String(idA));
+  const srvB = (appState.servidores || []).find(s => String(s.id) === String(idB));
+
+  if (srvA && srvB && srvA.id === srvB.id) return true;
+  return false;
 }
 
 function obterHorarioTurnoTexto(esc) {
@@ -235,7 +249,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
           </div>
         `}
 
-        <!-- BOTÃO DE LOG REAVALIADO DINAMICAMENTE -->
         ${!isPublico ? `
           <button type="button" onclick="window.abrirModalHistoricoLogs('${scope}', '${scope === 'DELEGACIA' ? (appState.selectedDelegaciaId || selectedDelegaciaId) : ''}')" class="px-3 py-1.5 bg-slate-800 hover:bg-black text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1">
             📋 Logs
@@ -317,7 +330,8 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       }
     }
 
-    const usuarioEstaEscaladoNoDia = !isPublico && usuarioLogadoSrvId && escalasDoDia.some(e => String(e.servidorId) === String(usuarioLogadoSrvId));
+    // CORREÇÃO DO DESTAQUE VISUAL DE PLANTÃO ("MEU PLANTÃO")
+    const usuarioEstaEscaladoNoDia = !isPublico && usuarioLogadoSrvId && escalasDoDia.some(e => saoMesmoPolicial(e.servidorId, usuarioLogadoSrvId));
 
     let bgDayClass = 'bg-white';
     if (feriadoDoDia) {
@@ -330,7 +344,7 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
     if (isHoje) {
       hojeBorderClass = 'border-2 border-black bg-slate-100/50 shadow-inner z-10';
     } else if (usuarioEstaEscaladoNoDia) {
-      hojeBorderClass = 'border-2 border-[#BEA55A] bg-[#F7F3E8]/40 shadow-xs z-10';
+      hojeBorderClass = 'border-2 border-[#BEA55A] bg-[#F7F3E8]/50 shadow-xs z-10';
     }
 
     html += `
@@ -700,7 +714,7 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
       </div>
     `;
   } else {
-    // REGRA DE IGNORAR EXTRAJORNADA/SDP PARA A EXIBIÇÃO DO BOTÃO VINCULAR APJ
+    // IGNORA EXTRAJORNADA/SDP PARA FINS DO BOTÃO VINCULAR APJ
     const plantaoRegular = escalasDoGrupo.filter(esc => esc.tipo !== 'EXTRAJORNADA' && esc.tipo !== 'SDP');
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
@@ -787,7 +801,7 @@ window.fecharModalDetalhesPlantao = function() {
 };
 
 // =========================================================================
-// MODAIS DE AÇÃO COM RECORREÇÃO DE POOL E GRAVAÇÃO SÍNCRONA
+// MODAIS DE AÇÃO COM CORREÇÃO DA POOL E DAS TRAVAS POR PERFIL
 // =========================================================================
 
 // --- A) MODAL TROCAR DELEGADO ---
@@ -829,7 +843,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
   const delFiltro = document.getElementById('m-del-filtro-delegacia')?.value || 'TODAS';
 
   const isPerfilDelegado = perfil === PERFIS.DELEGADO;
-  const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
+  const souEuEscalado = srvAtual && saoMesmoPolicial(srvAtual.id, userSrvId);
 
   let poolDelegados = (appState.servidores || []).filter(s => {
     if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
@@ -839,9 +853,11 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
     const cargoU = (s.cargo || '').toUpperCase();
     if (!cargoU.includes('DELEGADO')) return false;
 
-    // Se é Delegado e NÃO é o responsável escalado no card, força aparecer Apenas Ele Mesmo
+    // REGRA DE LIMITAÇÃO PARA O PERFIL DELEGADO:
+    // 1) Se EU já estou escalado no turno (souEuEscalado = true) -> Posso trocar por QUALQUER OUTRO delegado (exibe a pool completa).
+    // 2) Se OUTRO delegado está escalado (souEuEscalado = false) -> Apenas posso selecionar A MIM MESMO.
     if (isPerfilDelegado && !souEuEscalado) {
-      return String(s.id) === String(userSrvId);
+      return saoMesmoPolicial(s.id, userSrvId);
     }
 
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
@@ -852,7 +868,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   let opts = `<option value="">Selecione o Novo Delegado (${poolDelegados.length})...</option>`;
   poolDelegados.forEach(d => {
-    const isSelecionado = (isPerfilDelegado && !souEuEscalado && String(d.id) === String(userSrvId));
+    const isSelecionado = (isPerfilDelegado && !souEuEscalado && saoMesmoPolicial(d.id, userSrvId));
     opts += `<option value="${d.id}" ${isSelecionado ? 'selected' : ''}>DEL. ${d.nome}</option>`;
   });
 
@@ -860,7 +876,7 @@ window.atualizarSelectTrocarDelegadoModal = function(esc, srvAtual, perfil, user
 
   if (isPerfilDelegado && !souEuEscalado) {
     if (userSrvId) selectNovo.value = userSrvId;
-    selectNovo.disabled = true;
+    selectNovo.disabled = true; // Trava fixa no meu próprio nome
   } else {
     selectNovo.disabled = false;
   }
@@ -902,7 +918,7 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
     window.fecharModalDetalhesPlantao();
 
     renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
-    alert(`Troca efetuada e gravada com sucesso! Substituído por DEL. ${srvNovo ? srvNovo.nome : ''}.`);
+    alert(`Troca efetuada com sucesso! Substituído por DEL. ${srvNovo ? srvNovo.nome : ''}.`);
   } catch (err) {
     console.error("Erro ao salvar troca no Firestore:", err);
     alert(`Erro ao gravar troca no banco de dados: ${err.message}`);
@@ -948,7 +964,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
   const delFiltro = document.getElementById('m-apj-filtro-delegacia')?.value || 'TODAS';
 
   const isPerfilApj = perfil === PERFIS.APJ;
-  const souEuEscalado = srvAtual && String(srvAtual.id) === String(userSrvId);
+  const souEuEscalado = srvAtual && saoMesmoPolicial(srvAtual.id, userSrvId);
 
   let poolApjs = (appState.servidores || []).filter(s => {
     if (isProtectedAdminAccount(s) || (s.nome || '').toUpperCase().includes('ADMINISTRADOR DO SISTEMA') || s.login === 'admin') {
@@ -958,9 +974,11 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
-    // Se é APJ e NÃO é o próprio policial escalado no card, força aparecer Apenas Ele Mesmo
+    // REGRA DE LIMITAÇÃO PARA O PERFIL APJ:
+    // 1) Se EU já estou escalado no turno (souEuEscalado = true) -> Posso trocar por QUALQUER OUTRO APJ (exibe a pool completa).
+    // 2) Se OUTRO APJ está escalado (souEuEscalado = false) -> Apenas posso selecionar A MIM MESMO.
     if (isPerfilApj && !souEuEscalado) {
-      return String(s.id) === String(userSrvId);
+      return saoMesmoPolicial(s.id, userSrvId);
     }
 
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
@@ -971,7 +989,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    const isSelecionado = (isPerfilApj && !souEuEscalado && String(a.id) === String(userSrvId));
+    const isSelecionado = (isPerfilApj && !souEuEscalado && saoMesmoPolicial(a.id, userSrvId));
     opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
@@ -979,7 +997,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
 
   if (isPerfilApj && !souEuEscalado) {
     if (userSrvId) selectNovo.value = userSrvId;
-    selectNovo.disabled = true;
+    selectNovo.disabled = true; // Trava fixa no meu próprio nome
   } else {
     selectNovo.disabled = false;
   }
@@ -1021,7 +1039,7 @@ window.salvarTrocaApjSubmit = async function(e) {
     window.fecharModalDetalhesPlantao();
 
     renderCalendarGrid(appState.calendarScope === 'CRF' ? 'calendar-crf-container' : 'calendar-delegacia-container', appState.calendarScope);
-    alert(`Troca efetuada e gravada com sucesso! Substituído por APJ ${srvNovo ? srvNovo.nome : ''}.`);
+    alert(`Troca efetuada com sucesso! Substituído por APJ ${srvNovo ? srvNovo.nome : ''}.`);
   } catch (err) {
     console.error("Erro ao salvar troca APJ no Firestore:", err);
     alert(`Erro ao gravar troca no banco de dados: ${err.message}`);
@@ -1074,9 +1092,10 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
     const cargoU = (s.cargo || '').toUpperCase();
     if (cargoU.includes('DELEGADO')) return false;
 
-    // Se é perfil APJ, força aparecer Ele Mesmo na lista
+    // REGRA DE LIMITAÇÃO PARA O PERFIL APJ AO VINCULAR:
+    // Apenas pode vincular A SI MESMO ao plantão
     if (isPerfilApj) {
-      return String(s.id) === String(userSrvId);
+      return saoMesmoPolicial(s.id, userSrvId);
     }
 
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
@@ -1087,7 +1106,7 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
 
   let opts = `<option value="">Selecione o APJ a Vincular (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
-    const isSelecionado = String(a.id) === String(userSrvId);
+    const isSelecionado = saoMesmoPolicial(a.id, userSrvId);
     opts += `<option value="${a.id}" ${isSelecionado ? 'selected' : ''}>${a.nome} (${a.cargo || 'APJ'})</option>`;
   });
 
@@ -1095,9 +1114,9 @@ window.atualizarSelectVincularApjModal = function(perfil, userSrvId) {
 
   if (isPerfilApj) {
     if (userSrvId) selectApj.value = userSrvId;
-    selectApj.disabled = true;
+    selectApj.disabled = true; // Trava fixa no meu próprio nome
   } else {
-    if (userSrvId && poolApjs.some(a => String(a.id) === String(userSrvId))) {
+    if (userSrvId && poolApjs.some(a => saoMesmoPolicial(a.id, userSrvId))) {
       selectApj.value = userSrvId;
     }
     selectApj.disabled = false;
