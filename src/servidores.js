@@ -16,7 +16,7 @@ export function renderServidoresTable(containerId) {
 
   let optsDelegacias = `<option value="TODAS">Todas as Delegacias</option>`;
   (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
-    optsDelegacias += `<option value="${d.id}" ${(!isAdminOrCoord && d.id === userDelId) ? 'selected' : (servidoresFiltros.delegaciaId === d.id ? 'selected' : '')}>${d.nome}</option>`;
+    optsDelegacias += `<option value="${d.id}" ${(!isAdminOrCoord && String(d.id) === String(userDelId)) ? 'selected' : (servidoresFiltros.delegaciaId === d.id ? 'selected' : '')}>${d.nome}</option>`;
   });
 
   container.innerHTML = `
@@ -33,7 +33,6 @@ export function renderServidoresTable(containerId) {
         </div>
       </div>
 
-      <!-- Filtros com injeção do valor da memória -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
         <div>
           <input type="text" id="srv-filtro-busca" value="${servidoresFiltros.busca || ''}" oninput="window.filtrarTabelaServidores()" placeholder="🔍 Nome, cargo ou login..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
@@ -53,7 +52,6 @@ export function renderServidoresTable(containerId) {
       </div>
     </div>
 
-    <!-- Tabela de Servidores -->
     <div class="overflow-x-auto font-sans">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
@@ -112,9 +110,9 @@ window.renderTabelaServidoresCorpo = function() {
     }
 
     if (!isAdminOrCoord && userDelId) {
-      if (srv.delegaciaId !== userDelId) return false;
+      if (String(srv.delegaciaId) !== String(userDelId)) return false;
     } else if (delegaciaId !== 'TODAS') {
-      if (srv.delegaciaId !== delegaciaId) return false;
+      if (String(srv.delegaciaId) !== String(delegaciaId)) return false;
     }
 
     return true;
@@ -126,7 +124,7 @@ window.renderTabelaServidoresCorpo = function() {
   }
 
   tbody.innerHTML = servidoresLista.map(srv => {
-    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     const nivel = srv.nivelAcesso || srv.perfil || 'APJ';
     const cargoExibicao = (srv.cargo || '').toUpperCase().includes('DELEGADO') ? 'DELEGADO DE POLÍCIA' : 'APJ';
 
@@ -135,7 +133,7 @@ window.renderTabelaServidoresCorpo = function() {
     else if (nivel.toUpperCase() === 'DELEGADO') badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
     else if (nivel.toUpperCase() === 'COORDENADOR') badgeClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
-    const podeEditar = isAdminOrCoord || (srv.delegaciaId === userDelId);
+    const podeEditar = isAdminOrCoord || (String(srv.delegaciaId) === String(userDelId));
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
@@ -151,7 +149,7 @@ window.renderTabelaServidoresCorpo = function() {
             <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
               ✏️ Editar
             </button>
-            <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Resetar senha para Central123" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
+            <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Solicitar redefinição de senha para o policial" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
               🔑 Resetar Senha
             </button>
             <button onclick="window.excluirServidorDirect('${srv.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
@@ -171,7 +169,7 @@ window.abrirModalServidor = function(srvId = null) {
     modal = document.getElementById('modal-cadastro-servidor');
   }
 
-  const srv = srvId ? (appState.servidores || []).find(s => s.id === srvId) : null;
+  const srv = srvId ? (appState.servidores || []).find(s => String(s.id) === String(srvId)) : null;
   const role = getCurrentUserRole();
   const userDelId = getCurrentUserDelegaciaId();
   const isAdminOrCoord = ['ADMINISTRADOR', 'COORDENADOR'].includes(role);
@@ -185,7 +183,7 @@ window.abrirModalServidor = function(srvId = null) {
   const selectDel = document.getElementById('modal-srv-delegacia');
   if (selectDel) {
     let opts = (appState.delegacias || []).map(d => 
-      `<option value="${d.id}" ${(!isAdminOrCoord && d.id === userDelId) ? 'selected' : ''}>${d.nome}</option>`
+      `<option value="${d.id}" ${(!isAdminOrCoord && String(d.id) === String(userDelId)) ? 'selected' : ''}>${d.nome}</option>`
     ).join('');
     selectDel.innerHTML = opts;
     selectDel.disabled = !isAdminOrCoord;
@@ -233,14 +231,14 @@ window.salvarServidorModalSubmit = async function(e) {
   }
 
   if (idInput) {
-    const srvExistente = (appState.servidores || []).find(s => s.id === idInput);
+    const srvExistente = (appState.servidores || []).find(s => String(s.id) === String(idInput));
     if (isProtectedAdminAccount(srvExistente) && nivelAcesso !== 'ADMINISTRADOR') {
       alert("Ação Bloqueada: O perfil do Administrador do Sistema não pode ser rebaixado.");
       return;
     }
   }
 
-  const delObj = (appState.delegacias || []).find(d => d.id === delegaciaId);
+  const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
   const isNovo = !idInput;
   const srvId = idInput || 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const loginCalc = normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
@@ -259,7 +257,7 @@ window.salvarServidorModalSubmit = async function(e) {
   };
 
   if (!appState.servidores) appState.servidores = [];
-  const idx = appState.servidores.findIndex(s => s.id === srvId);
+  const idx = appState.servidores.findIndex(s => String(s.id) === String(srvId));
   if (idx >= 0) appState.servidores[idx] = novoServidor;
   else appState.servidores.push(novoServidor);
 
@@ -276,11 +274,14 @@ window.salvarServidorModalSubmit = async function(e) {
   renderServidoresTable('servidores-table-container');
 };
 
+/**
+ * Função de Reset de Senha adaptada ao SDK Web do Firebase Auth
+ */
 window.resetarSenhaServidorDirect = async function(srvId = null) {
   const idUsar = srvId || document.getElementById('modal-srv-id')?.value;
   if (!idUsar) return;
 
-  const srv = (appState.servidores || []).find(s => s.id === idUsar);
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(idUsar));
   if (!srv) return;
 
   if (isProtectedAdminAccount(srv)) {
@@ -288,24 +289,38 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  if (!confirm(`Deseja resetar a senha de acesso do servidor ${srv.nome} para a senha padrão 'Central123'?\n\nO servidor precisará alterar a senha no próximo login.`)) {
+  const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
+  const emailCalculado = srv.email || `${loginBase}@policiacivil.pr.gov.br`;
+
+  if (!confirm(`Deseja enviar a solicitação de redefinição de senha do policial ${srv.nome} para o e-mail registrado (${emailCalculado})?`)) {
     return;
   }
 
   try {
-    await criarContaFirebaseAuth(srv, 'Central123');
-    alert(`Senha do servidor ${srv.nome} resetada com sucesso para: Central123`);
+    await firebase.auth().sendPasswordResetEmail(emailCalculado);
+    alert(`Instruções de redefinição enviadas com sucesso para ${emailCalculado}.`);
+    
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
     }
   } catch (err) {
-    console.error("Erro ao resetar senha:", err);
-    alert(`Erro ao redefinir senha: ${err.message}`);
+    console.error("Erro ao resetar senha no Firebase Auth:", err);
+    
+    // Fallback: se o e-mail do policial não existir no provedor de Auth, tenta recriar com a senha padrão Central123
+    try {
+      await criarContaFirebaseAuth(srv, 'Central123');
+      alert(`Conta do servidor ${srv.nome} atualizada/redefinida com a senha padrão: Central123`);
+      if (document.getElementById('modal-cadastro-servidor')) {
+        window.fecharModalServidor();
+      }
+    } catch (err2) {
+      alert(`Não foi possível enviar o e-mail de redefinição: ${err.message}`);
+    }
   }
 };
 
 window.excluirServidorDirect = async function(srvId) {
-  const srv = (appState.servidores || []).find(s => s.id === srvId);
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
 
   if (isProtectedAdminAccount(srv)) {
     alert("Ação Bloqueada: A conta do Administrador do Sistema não pode ser excluída.");
@@ -314,7 +329,7 @@ window.excluirServidorDirect = async function(srvId) {
 
   if (!confirm(`Deseja realmente remover o servidor ${srv ? srv.nome : ''}?`)) return;
 
-  appState.servidores = (appState.servidores || []).filter(s => s.id !== srvId);
+  appState.servidores = (appState.servidores || []).filter(s => String(s.id) !== String(srvId));
   await syncDocToFirestore('servidores', srvId, null, true);
 
   alert("Servidor removido do cadastro.");
@@ -367,7 +382,7 @@ function criarModalServidorDOM() {
 
           <div id="modal-container-btn-reset" class="hidden pt-2 border-t">
             <button type="button" onclick="window.resetarSenhaServidorDirect()" class="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1">
-              🔑 Resetar Senha para o Padrão (Central123)
+              🔑 Resetar Senha do Policial
             </button>
           </div>
 
