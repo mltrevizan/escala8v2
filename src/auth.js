@@ -215,12 +215,27 @@ window.executarLoginFirebase = async function(e) {
 
   try {
     msgErro?.classList.add('hidden');
-    const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-    window.fecharModalLoginApp();
+    let userCredential = null;
 
     const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
+    const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
 
-    if (password === 'Central123' || srv?.forcarTrocaSenha || srv?.senhaResetada) {
+    try {
+      userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+    } catch (authErr) {
+      if (password === 'Central123' && estaComResetPendente) {
+        if (msgErro) {
+          msgErro.innerText = "A redefinição foi solicitada pelo Administrador. Digite sua senha pessoal de acesso para autorizar o cadastro da nova senha.";
+          msgErro.classList.remove('hidden');
+        }
+        return;
+      }
+      throw authErr;
+    }
+
+    window.fecharModalLoginApp();
+
+    if (password === 'Central123' || estaComResetPendente) {
       window.abrirModalTrocarSenhaObrigatoria(userCredential.user);
     } else {
       const nomeSrv = loginSearchState.servidorSelecionado?.nome || srv?.nome || 'Usuário';
@@ -381,7 +396,7 @@ function criarModalLoginDOM() {
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Senha:</label>
-            <input type="password" id="login-password" required placeholder="Senha padrão: Central123" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <input type="password" id="login-password" required placeholder="Senha de Acesso" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
@@ -431,7 +446,7 @@ function criarModalTrocarSenhaDOM() {
             <button type="button" onclick="window.cancelarTrocaSenhaObrigatoria()" class="px-4 py-2.5 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">
               Cancelar e Sair
             </button>
-            <button type="submit" class="px-4 py-2.5 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer text-center">
+            <button type="submit" class="px-4 py-2.5 bg-black text-[#BEA55A] border border-[#BEA55A] hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer text-center">
               💾 Cadastrar Nova Senha
             </button>
           </div>
