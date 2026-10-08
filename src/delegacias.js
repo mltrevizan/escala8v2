@@ -14,11 +14,10 @@ function limparSujeiraHorario(str) {
  * Preenche o dropdown da aba 'Escala por Delegacia' apenas com delegacias que possuem 
  * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
  * 
- * @param {string} selectElementId - ID do elemento <select> na aba de Escalas por Delegacia.
- * @returns {string|null} Retorna o ID da delegacia selecionada automaticamente ou null se vazia.
+ * Ajustado para localizar prioritariamente o ID do elemento usado no calendário: 'select-calendar-delegacia'
  */
-export function popularDropdownDelegaciasComEscala(selectElementId = 'select-escala-delegacia') {
-  const select = document.getElementById(selectElementId);
+export function popularDropdownDelegaciasComEscala(selectElementId = 'select-calendar-delegacia') {
+  const select = document.getElementById(selectElementId) || document.getElementById('select-escala-delegacia');
   if (!select) return null;
 
   const escalas = appState.escalas || [];
