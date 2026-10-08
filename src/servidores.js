@@ -134,7 +134,7 @@ window.renderTabelaServidoresCorpo = function() {
     else if (nivel.toUpperCase() === 'COORDENADOR') badgeClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
     const podeEditar = isAdminOrCoord || (String(srv.delegaciaId) === String(userDelId));
-    // Apenas Administradores e Coordenadores podem visualizar e acionar o botão de Reset
+    // Apenas o Administrador pode visualizar e disparar o botão de Reset de Senha
     const podeResetar = podeResetarSenhaPolicial(srv);
 
     return `
@@ -237,20 +237,20 @@ window.salvarServidorModalSubmit = async function(e) {
     return;
   }
 
-  if (idInput) {
-    const srvExistente = (appState.servidores || []).find(s => String(s.id) === String(idInput));
-    if (isProtectedAdminAccount(srvExistente) && nivelAcesso !== 'ADMINISTRADOR') {
-      alert("Ação Bloqueada: O perfil do Administrador do Sistema não pode ser rebaixado.");
-      return;
-    }
+  const isNovo = !idInput;
+  const srvExistente = !isNovo ? (appState.servidores || []).find(s => String(s.id) === String(idInput)) : null;
+
+  if (srvExistente && isProtectedAdminAccount(srvExistente) && nivelAcesso !== 'ADMINISTRADOR') {
+    alert("Ação Bloqueada: O perfil do Administrador do Sistema não pode ser rebaixado.");
+    return;
   }
 
   const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
-  const isNovo = !idInput;
   const srvId = idInput || 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const loginCalc = normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
 
-  const novoServidor = {
+  const servidorAjustado = {
+    ...(srvExistente || {}),
     id: srvId,
     nome: nome,
     cargo: cargo,
@@ -260,32 +260,44 @@ window.salvarServidorModalSubmit = async function(e) {
     delegaciaNome: delObj ? delObj.nome : '',
     subdivisao: delObj ? delObj.subdivisao : '8ª SDP',
     telefone: telefone,
-    login: loginCalc,
-    senhaResetada: isNovo ? true : undefined,
-    forcarTrocaSenha: isNovo ? true : undefined
+    login: loginCalc
   };
+
+  if (isNovo) {
+    servidorAjustado.senhaResetada = true;
+    servidorAjustado.forcarTrocaSenha = true;
+  }
 
   if (!appState.servidores) appState.servidores = [];
   const idx = appState.servidores.findIndex(s => String(s.id) === String(srvId));
-  if (idx >= 0) appState.servidores[idx] = { ...appState.servidores[idx], ...novoServidor };
-  else appState.servidores.push(novoServidor);
-
-  await syncDocToFirestore('servidores', srvId, novoServidor);
-
-  if (isNovo) {
-    try {
-      await criarContaFirebaseAuth(novoServidor, 'Central123');
-      alert(`Policial ${nome} cadastrado com sucesso!\n\nSenha Padrão Inicial: Central123`);
-    } catch (authErr) {
-      console.warn("Aviso na criação no Firebase Auth:", authErr.message);
-      alert(`Policial ${nome} cadastrado no banco de dados!\n\nSenha Padrão Inicial: Central123`);
-    }
+  if (idx >= 0) {
+    appState.servidores[idx] = servidorAjustado;
   } else {
-    alert(`Cadastro de ${nome} atualizado com sucesso!`);
+    appState.servidores.push(servidorAjustado);
   }
 
-  window.fecharModalServidor();
-  renderServidoresTable('servidores-table-container');
+  try {
+    await syncDocToFirestore('servidores', srvId, servidorAjustado);
+
+    if (isNovo) {
+      try {
+        await criarContaFirebaseAuth(servidorAjustado, 'Central123');
+        alert(`Policial ${nome} cadastrado com sucesso!\n\nNível de Acesso: ${nivelAcesso}\nSenha Padrão Inicial: Central123`);
+      } catch (authErr) {
+        console.warn("Aviso na criação no Firebase Auth:", authErr.message);
+        alert(`Policial ${nome} cadastrado no banco de dados!\n\nNível de Acesso: ${nivelAcesso}\nSenha Padrão Inicial: Central123`);
+      }
+    } else {
+      alert(`Cadastro e Nível de Acesso (${nivelAcesso}) de ${nome} atualizados com sucesso!`);
+    }
+
+    window.fecharModalServidor();
+    renderServidoresTable('servidores-table-container');
+
+  } catch (err) {
+    console.error("Erro ao salvar servidor no banco de dados:", err);
+    alert(`Erro ao salvar alterações: ${err.message}`);
+  }
 };
 
 window.resetarSenhaServidorDirect = async function(srvId = null) {
@@ -296,12 +308,12 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
   if (!srv) return;
 
   if (!podeResetarSenhaPolicial(srv)) {
-    alert("Ação Bloqueada: Apenas Administradores e Coordenadores têm permissão para resetar senhas.");
+    alert("Ação Bloqueada: Apenas o Administrador do Sistema tem permissão para resetar senhas.");
     return;
   }
 
   if (isProtectedAdminAccount(srv)) {
-    alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada.");
+    alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada por essa função.");
     return;
   }
 
