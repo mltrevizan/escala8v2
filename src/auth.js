@@ -373,28 +373,16 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
     const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
 
-    // Tenta trocar e-mail e senha diretamente no Auth
-    let emailAtualizadoNoAuth = false;
     try {
       if (user.email !== novoEmail) {
         await user.updateEmail(novoEmail);
-        emailAtualizadoNoAuth = true;
       }
       await user.updatePassword(nova);
     } catch (authUpdateErr) {
-      // Se o Firebase Auth bloquear o updateEmail, recria a conta no Auth do zero com o e-mail real e a nova senha
-      if (srv) {
-        const tempObj = { ...srv, email: novoEmail };
-        await user.delete().catch(() => {});
-        await criarContaFirebaseAuth(tempObj, nova);
-        await firebase.auth().signInWithEmailAndPassword(novoEmail, nova);
-        emailAtualizadoNoAuth = true;
-      } else {
-        throw authUpdateErr;
-      }
+      console.warn("Troca de e-mail direta no Auth necessita de relogin. Atualizando senha e gravando e-mail de recuperação no Firestore:", authUpdateErr.message);
+      await user.updatePassword(nova);
     }
 
-    // Grava o e-mail real e limpa as pendências de reset no Firestore
     if (srv) {
       srv.email = novoEmail;
       srv.senhaResetada = false;
