@@ -29,7 +29,7 @@ export function initAuthModule() {
 
       const srv = (appState.servidores || []).find(s => {
         const emailSrv = obterEmailAutenticacao(s);
-        return emailSrv === user.email.toLowerCase();
+        return emailSrv === user.email.toLowerCase() || (s.email && s.email.toLowerCase() === user.email.toLowerCase());
       });
 
       appState.currentUser = {
@@ -218,7 +218,7 @@ window.executarLoginFirebase = async function(e) {
     msgErro?.classList.add('hidden');
     let userCredential = null;
 
-    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase());
+    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase() || (s.email && s.email.toLowerCase() === email.toLowerCase()));
     const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
 
     try {
@@ -303,7 +303,7 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
     modal = document.getElementById('modal-trocar-senha-obrigatoria');
   }
 
-  const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === (user.email || '').toLowerCase());
+  const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === (user.email || '').toLowerCase() || (s.email && s.email.toLowerCase() === (user.email || '').toLowerCase()));
 
   document.getElementById('pwd-email-recuperacao').value = (srv?.email && !srv.email.endsWith('@policiacivil.pr.gov.br')) ? srv.email : '';
   document.getElementById('pwd-nova').value = '';
@@ -370,29 +370,36 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
 
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
+    const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
 
-    // 1. Atualiza a senha no Firebase Auth
-    await user.updatePassword(nova);
-
-    // 2. Tenta atualizar o email no Firebase Auth; se houver trava do Firebase, ignora e prossegue
+    // Tenta trocar e-mail e senha diretamente no Auth
+    let emailAtualizadoNoAuth = false;
     try {
       if (user.email !== novoEmail) {
         await user.updateEmail(novoEmail);
+        emailAtualizadoNoAuth = true;
       }
-    } catch (emailErr) {
-      console.warn("Firebase Auth manteve o email padrao no Auth, mas o email de recuperacao foi gravado no Firestore:", emailErr.message);
+      await user.updatePassword(nova);
+    } catch (authUpdateErr) {
+      // Se o Firebase Auth bloquear o updateEmail, recria a conta no Auth do zero com o e-mail real e a nova senha
+      if (srv) {
+        const tempObj = { ...srv, email: novoEmail };
+        await user.delete().catch(() => {});
+        await criarContaFirebaseAuth(tempObj, nova);
+        await firebase.auth().signInWithEmailAndPassword(novoEmail, nova);
+        emailAtualizadoNoAuth = true;
+      } else {
+        throw authUpdateErr;
+      }
     }
 
-    // 3. Grava o e-mail real e limpa as pendências de reset no Firestore
-    const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
-    if (srvId) {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
-      if (srv) {
-        srv.email = novoEmail;
-        srv.senhaResetada = false;
-        srv.forcarTrocaSenha = false;
-        await syncDocToFirestore('servidores', srv.id, srv);
-      }
+    // Grava o e-mail real e limpa as pendências de reset no Firestore
+    if (srv) {
+      srv.email = novoEmail;
+      srv.senhaResetada = false;
+      srv.forcarTrocaSenha = false;
+      await syncDocToFirestore('servidores', srv.id, srv);
     }
 
     alert("E-mail para recuperação de senha e nova senha cadastrados com sucesso!");
