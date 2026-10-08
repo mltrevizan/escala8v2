@@ -5,7 +5,8 @@ import { appState, normalizeText } from './state.js';
 const SENHA_PADRAO_INICIAL = 'Central123';
 
 /**
- * Retorna o e-mail no padrão do Firebase Auth a partir das informações do servidor
+ * Retorna o e-mail no padrão do Firebase Auth a partir das informações do servidor.
+ * Prioriza o e-mail real de recuperação caso já esteja cadastrado.
  */
 export function gerarEmailAuth(srv) {
   if (!srv) return '';
