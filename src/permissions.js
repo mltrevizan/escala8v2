@@ -44,7 +44,7 @@ export function getCurrentUserDelegaciaId() {
 export function getSubdivisaoUsuarioLogado() {
   const userDelId = getDelegaciaIdUsuarioLogado();
   if (!userDelId || !appState.delegacias) return null;
-  const delObj = appState.delegacias.find(d => d.id === userDelId);
+  const delObj = appState.delegacias.find(d => String(d.id) === String(userDelId));
   return delObj?.subdivisao ? delObj.subdivisao.trim().toUpperCase() : null;
 }
 
@@ -97,13 +97,22 @@ export function podeModificarEscalaDelegacia(delegaciaAlvoId) {
   if (perfil === PERFIS.COORDENADOR) {
     const sdpUser = getSubdivisaoUsuarioLogado();
     if (!sdpUser) return false;
-    const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaAlvoId);
+    const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaAlvoId));
     return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
   }
 
   if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
     const userDelId = getDelegaciaIdUsuarioLogado();
-    return userDelId && String(userDelId) === String(delegaciaAlvoId);
+    if (!userDelId) return false;
+    
+    // Bate por ID direto da unidade de lotação
+    if (String(userDelId) === String(delegaciaAlvoId)) return true;
+
+    // Suporte ao Plantão Unificado: Checa se a unidade de lotação gerencia/agrupa a delegacia alvo
+    const delUsuarioObj = (appState.delegacias || []).find(d => String(d.id) === String(userDelId));
+    if (delUsuarioObj && delUsuarioObj.delegaciasIds && Array.isArray(delUsuarioObj.delegaciasIds)) {
+      return delUsuarioObj.delegaciasIds.map(String).includes(String(delegaciaAlvoId));
+    }
   }
 
   return false;
@@ -131,13 +140,20 @@ export function podeModificarServidor(servidorAlvo) {
   if (perfil === PERFIS.COORDENADOR) {
     const sdpUser = getSubdivisaoUsuarioLogado();
     if (!sdpUser) return false;
-    const delAlvo = (appState.delegacias || []).find(d => d.id === servidorAlvo?.delegaciaId);
+    const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(servidorAlvo?.delegaciaId));
     return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
   }
 
   if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
     const userDelId = getDelegaciaIdUsuarioLogado();
-    return userDelId && servidorAlvo && String(userDelId) === String(servidorAlvo.delegaciaId);
+    if (!userDelId || !servidorAlvo) return false;
+
+    if (String(userDelId) === String(servidorAlvo.delegaciaId)) return true;
+
+    const delUsuarioObj = (appState.delegacias || []).find(d => String(d.id) === String(userDelId));
+    if (delUsuarioObj && delUsuarioObj.delegaciasIds && Array.isArray(delUsuarioObj.delegaciasIds)) {
+      return delUsuarioObj.delegaciasIds.map(String).includes(String(servidorAlvo.delegaciaId));
+    }
   }
 
   return false;
@@ -181,7 +197,7 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
   if (perfil === PERFIS.COORDENADOR) {
     if (tipoFeriado === 'MUNICIPAL' && delegaciaAlvoId) {
       const sdpUser = getSubdivisaoUsuarioLogado();
-      const delAlvo = (appState.delegacias || []).find(d => d.id === delegaciaAlvoId);
+      const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaAlvoId));
       return delAlvo && delAlvo.subdivisao && delAlvo.subdivisao.trim().toUpperCase() === sdpUser;
     }
     return true;
@@ -189,8 +205,7 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 
   if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
     if (tipoFeriado === 'MUNICIPAL') {
-      const userDelId = getDelegaciaIdUsuarioLogado();
-      return userDelId && String(userDelId) === String(delegaciaAlvoId);
+      return podeModificarEscalaDelegacia(delegaciaAlvoId);
     }
     return false;
   }
