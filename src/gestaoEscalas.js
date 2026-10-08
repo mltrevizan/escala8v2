@@ -66,6 +66,17 @@ window.recalcularDataFimModalDelegacia = function() {
   inputFim.value = `${yyyy}-${mm}-${dd}`;
 };
 
+window.abrirModalAjusteHorariosPadrao = function(scope = 'DELEGACIA') {
+  const targetDelId = appState.selectedDelegaciaId;
+  if (typeof window.abrirModalDelegacia === 'function' && targetDelId) {
+    window.abrirModalDelegacia(targetDelId);
+  } else if (typeof window.abrirModalGeradorLote === 'function') {
+    window.abrirModalGeradorLote(scope);
+  } else {
+    alert("Selecione uma delegacia para ajustar os horários padrão.");
+  }
+};
+
 // =========================================================================
 // 1. MÓDULO GESTÃO CRF (COM FILTROS AVANÇADOS, ORDENAÇÃO E EXCLUSÃO EM LOTE)
 // =========================================================================
@@ -248,11 +259,9 @@ window.obterEscalasFiltradasGestaoCrf = function() {
   return (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF') return false;
 
-    // Filtro por Data Inicial e Final
     if (dataInicio && e.data < dataInicio) return false;
     if (dataFim && e.data > dataFim) return false;
 
-    // Se não informou faixa de data, aplica filtro de Mês e Ano
     if (!dataInicio && !dataFim) {
       const [a, m] = e.data.split('-').map(Number);
       if (a !== ano || (m - 1) !== mes) return false;
@@ -425,6 +434,9 @@ export function renderGestaoDelegaciasModule(containerId) {
           <button onclick="window.abrirModalLancamentoDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ➕ Novo Lançamento
           </button>
+          <button onclick="window.abrirModalAjusteHorariosPadrao('DELEGACIA')" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ⏰ Horários Padrão
+          </button>
           <button onclick="window.abrirModalGeradorLote('DELEGACIA')" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
             ⚡ Gerador Automático
           </button>
@@ -561,11 +573,9 @@ window.obterEscalasFiltradasGestaoDel = function() {
   return (appState.escalas || []).filter(e => {
     if (e.scope !== 'DELEGACIA' || String(e.delegaciaId) !== String(selectedDelegaciaId)) return false;
 
-    // Filtro de Data Inicial e Final
     if (dataInicio && e.data < dataInicio) return false;
     if (dataFim && e.data > dataFim) return false;
 
-    // Se não utilizou o filtro de datas, aplica filtro por mês e ano
     if (!dataInicio && !dataFim) {
       const [a, m] = e.data.split('-').map(Number);
       if (a !== ano || (m - 1) !== mes) return false;
@@ -625,7 +635,6 @@ window.renderTabelaGestaoDelCorpo = function() {
     const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
     const tipoModalidade = normalizarTipoModalidade(esc.tipo);
 
-    // BADGE PADRONIZADA COM AS CORES DA PCPR (CINZA CHUMBO COM DOURADO PARA EXTRAJORNADA)
     let badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A]';
     if (tipoModalidade === 'SOBREAVISO') {
       badgeClass = 'bg-[#2A2B2D] text-[#F0F1F2] border-[#57585A]';
@@ -979,7 +988,6 @@ window.abrirModalLancamentoDelegacia = function() {
   const inputDelNome = document.getElementById('ml-del-unidade-nome');
   if (inputDelNome) inputDelNome.value = delObj ? delObj.nome : 'Unidade Selecionada';
 
-  // Define por padrão a delegacia da unidade alvo no filtro do modal
   modalDelFiltros.delegaciaId = selectedDelegaciaId || 'TODAS';
   modalDelFiltros.cargo = 'TODOS';
   modalDelFiltros.busca = '';
@@ -1124,7 +1132,6 @@ window.salvarLancamentoDelegaciaModal = async function(e) {
   const srv = (appState.servidores || []).find(s => String(s.id) === String(servidorId));
   const delAlvoObj = (appState.delegacias || []).find(d => String(d.id) === String(targetDelId));
 
-  // VERIFICAÇÃO DE LOTAÇÃO / PLANTÃO UNIFICADO
   if (srv && String(srv.delegaciaId) !== String(targetDelId)) {
     const idsUnificados = delAlvoObj?.delegaciasIds || [];
     const pertenceAoUnificado = idsUnificados.includes(srv.delegaciaId);
@@ -1196,7 +1203,6 @@ function criarModalLancamentoDelegaciaDOM() {
             <input type="text" id="ml-del-unidade-nome" readonly disabled class="w-full border rounded-xl p-2 bg-slate-100 text-slate-700 font-bold">
           </div>
 
-          <!-- 1. Modalidade e Duração do Turno -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Modalidade Local:</label>
@@ -1222,13 +1228,11 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- 2. TAG ou VTR -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">TAG ou VTR (livre digitação):</label>
             <input type="text" id="ml-del-vtr" oninput="this.value = this.value.toUpperCase()" placeholder="EX: VTR 8011 / DUSTER..." class="w-full border rounded-xl p-2 bg-slate-50 font-mono text-slate-900 font-bold">
           </div>
 
-          <!-- 3. Seleção de Datas -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Data Início:</label>
@@ -1240,9 +1244,7 @@ function criarModalLancamentoDelegaciaDOM() {
             </div>
           </div>
 
-          <!-- 4. Painel de Filtros e Seleção do Policial Escalado -->
           <div class="p-2 bg-slate-100 rounded-xl border border-slate-200 space-y-2">
-            <!-- Filtro por Delegacia e Filtro por Cargo lado a lado acima da busca -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Filtrar por Delegacia:</label>
@@ -1259,7 +1261,6 @@ function criarModalLancamentoDelegaciaDOM() {
               </div>
             </div>
 
-            <!-- Busca Rápida Letra a Letra -->
             <div>
               <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Busca Letra a Letra:</label>
               <input type="text" id="ml-del-filtro-busca" value="${modalDelFiltros.busca || ''}" oninput="window.atualizarFiltrosServidoresDelModal()" placeholder="Digite o nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
