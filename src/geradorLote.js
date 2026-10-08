@@ -2,7 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
-import { getPerfilUsuarioLogado, getDelegaciaIdUsuarioLogado, getSubdivisaoUsuarioLogado, PERFIS } from './permissions.js';
+import { getPerfilUsuarioLogado, getDelegaciaIdUsuarioLogado, getSubdivisaoUsuarioLogado, podeModificarEscalaDelegacia, PERFIS } from './permissions.js';
 
 let geradorState = {
   modo: 'INDIVIDUAL',
@@ -79,24 +79,24 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   document.getElementById('ger-scope').value = scopeTarget;
 
-  // Filtragem estrita de delegacias permitidas para o gerador de lote
+  // Filtragem flexível de delegacias permitidas (suportando unidades unificadas)
   const delegaciasPermitidas = (appState.delegacias || []).filter(d => {
     if (perfil === PERFIS.ADMINISTRADOR) return true;
     if (perfil === PERFIS.COORDENADOR) {
       return d.subdivisao && d.subdivisao.trim().toUpperCase() === sdpUser;
     }
     if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
-      return String(d.id) === String(userDelId);
+      return podeModificarEscalaDelegacia(d.id);
     }
     return false;
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
-  const isRestritoMesmaDelegacia = (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE);
-
   let targetSelectedId = appState.selectedDelegaciaId;
-  if (isRestritoMesmaDelegacia) {
+  if (userDelId && podeModificarEscalaDelegacia(targetSelectedId)) {
+    // Mantém a selecionada se houver permissão sobre ela
+  } else if (userDelId) {
     targetSelectedId = userDelId;
-  } else if (delegaciasPermitidas.length > 0 && !delegaciasPermitidas.some(d => String(d.id) === String(targetSelectedId))) {
+  } else if (delegaciasPermitidas.length > 0) {
     targetSelectedId = delegaciasPermitidas[0].id;
   }
 
@@ -111,7 +111,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   if (selectDel) {
     selectDel.innerHTML = delOptions;
-    selectDel.disabled = isRestritoMesmaDelegacia;
+    selectDel.disabled = (delegaciasPermitidas.length <= 1);
   }
 
   // Filtro de policiais por delegacia no modal do gerador
@@ -123,7 +123,7 @@ window.abrirModalGeradorLote = function(scopeTarget = 'DELEGACIA') {
 
   if (selectFiltroDel) {
     selectFiltroDel.innerHTML = filtroDelOpts;
-    selectFiltroDel.disabled = isRestritoMesmaDelegacia;
+    selectFiltroDel.disabled = false;
   }
 
   const selectFiltroCargo = document.getElementById('ger-filtro-cargo');
@@ -181,11 +181,8 @@ window.carregarConfiguracaoMemorizadaDelegacia = function(delegaciaId) {
 };
 
 window.aoMudarDelegaciaGerador = function(delegaciaId) {
-  const perfil = getPerfilUsuarioLogado();
-  const userDelId = getDelegaciaIdUsuarioLogado();
-
-  if ((perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) && String(delegaciaId) !== String(userDelId)) {
-    alert("Ação Bloqueada: O seu perfil permite gerar escalas apenas para a sua delegacia de lotação.");
+  if (!podeModificarEscalaDelegacia(delegaciaId)) {
+    alert("Ação Bloqueada: O seu perfil permite gerar escalas apenas para as delegacias sob sua gestão/lotação.");
     return;
   }
 
@@ -271,10 +268,6 @@ function renderizarPainelModo() {
 }
 
 function filtrarServidoresComPersistencia(membrosFixosIds = []) {
-  const perfil = getPerfilUsuarioLogado();
-  const userDelId = getDelegaciaIdUsuarioLogado();
-  const isRestritoDelegacia = (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE);
-
   const { filtroTexto, filtroDelegacia, filtroCargo } = geradorState;
 
   return [...(appState.servidores || [])]
@@ -282,10 +275,8 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
       const n = normalizeText(s.nome || '');
       if (n === 'administrador do sistema' || n === 'admin') return false;
 
-      // Trava de segurança por perfil do utilizador
-      if (isRestritoDelegacia && userDelId) {
-        if (String(s.delegaciaId) !== String(userDelId)) return false;
-      }
+      // Trava por permissão geral do usuário sobre o servidor
+      if (!podeModificarEscalaDelegacia(s.delegaciaId)) return false;
 
       if (membrosFixosIds.includes(s.id)) return true;
 
@@ -298,7 +289,7 @@ function filtrarServidoresComPersistencia(membrosFixosIds = []) {
       if (filtroDelegacia !== 'TODAS') {
         const delObj = (appState.delegacias || []).find(d => String(d.id) === String(filtroDelegacia));
         const bateuId = String(s.delegaciaId) === String(filtroDelegacia);
-        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.includes(s.delegaciaId);
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.map(String).includes(String(s.delegaciaId));
         if (!bateuId && !bateuUnificado) return false;
       }
 
@@ -565,10 +556,6 @@ window.moverPolicialFila = function(index, direcao) {
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
-  const perfil = getPerfilUsuarioLogado();
-  const userDelId = getDelegaciaIdUsuarioLogado();
-  const sdpUser = getSubdivisaoUsuarioLogado();
-
   const scope = document.getElementById('ger-scope').value;
   const delegaciaId = document.getElementById('ger-delegacia').value;
   const dataInicio = document.getElementById('ger-data-inicio').value;
@@ -576,18 +563,10 @@ window.executarGeradorLote = async function(e) {
   const tipoModalidade = document.getElementById('ger-modalidade').value;
   const regraDias = document.getElementById('ger-regra-dias').value;
 
-  // TRAVA DE SEGURANÇA FINAL NO ENVIO DO FORMULÁRIO
-  if (perfil === PERFIS.DELEGADO || perfil === PERFIS.SUPERINTENDENTE) {
-    if (String(delegaciaId) !== String(userDelId)) {
-      alert("Ação Bloqueada: O seu perfil só tem autorização para gerar escalas para a sua delegacia de lotação.");
-      return;
-    }
-  } else if (perfil === PERFIS.COORDENADOR) {
-    const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
-    if (!delAlvo || delAlvo.subdivisao?.trim().toUpperCase() !== sdpUser) {
-      alert("Ação Bloqueada: O seu perfil permite gerar escalas apenas para delegacias da sua Subdivisão.");
-      return;
-    }
+  // VALIDAÇÃO FLEXÍVEL DE PERMISSÃO COMPATÍVEL COM PLANTÕES UNIFICADOS
+  if (!podeModificarEscalaDelegacia(delegaciaId)) {
+    alert("Ação Bloqueada: O seu perfil não possui autorização para gerar escalas para esta delegacia.");
+    return;
   }
 
   const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
@@ -638,8 +617,8 @@ window.executarGeradorLote = async function(e) {
 
       if (f.tipo === 'MUNICIPAL') {
         const idsAtingidos = f.delegaciasIds || [];
-        const bateuLocal = idsAtingidos.includes(delegaciaId);
-        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(unifId => idsAtingidos.includes(unifId));
+        const bateuLocal = idsAtingidos.map(String).includes(String(delegaciaId));
+        const bateuUnificado = delObj?.delegaciasIds && delObj.delegaciasIds.some(unifId => idsAtingidos.map(String).includes(String(unifId)));
         return bateuLocal || bateuUnificado;
       }
       return false;
@@ -651,7 +630,7 @@ window.executarGeradorLote = async function(e) {
   });
 
   if (diasValidos.length === 0) {
-    alert("Nenum dia no intervalo atende à regra de dias selecionada.");
+    alert("Nenhum dia no intervalo atende à regra de dias selecionada.");
     return;
   }
 
