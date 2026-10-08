@@ -255,6 +255,27 @@ window.executarLoginFirebase = async function(e) {
   }
 };
 
+window.solicitarRecuperacaoSenha = async function() {
+  const emailSel = document.getElementById('login-email-hidden')?.value;
+  let emailPrompt = prompt("Digite o seu 'E-mail para recuperação de senha' para receber o link de redefinição:", emailSel && emailSel.includes('@') ? emailSel : '');
+
+  if (!emailPrompt) return;
+  emailPrompt = emailPrompt.trim().toLowerCase();
+
+  if (!emailPrompt.includes('@')) {
+    alert("Por favor, digite um e-mail válido.");
+    return;
+  }
+
+  try {
+    await firebase.auth().sendPasswordResetEmail(emailPrompt);
+    alert(`Enviamos um e-mail de redefinição de senha para: ${emailPrompt}\n\nVerifique a sua caixa de entrada ou spam e siga as instruções.`);
+  } catch (err) {
+    console.error("Erro ao enviar e-mail de redefinição:", err);
+    alert(`Erro ao solicitar redefinição: ${err.message}`);
+  }
+};
+
 window.fazerLogoutApp = async function() {
   if (confirm("Deseja realmente encerrar a sessão?")) {
     await firebase.auth().signOut();
@@ -279,6 +300,9 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
     modal = document.getElementById('modal-trocar-senha-obrigatoria');
   }
 
+  const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === (user.email || '').toLowerCase());
+
+  document.getElementById('pwd-email-recuperacao').value = (srv?.email && !srv.email.endsWith('@policiacivil.pr.gov.br')) ? srv.email : '';
   document.getElementById('pwd-nova').value = '';
   document.getElementById('pwd-confirma').value = '';
   document.getElementById('pwd-erro-msg')?.classList.add('hidden');
@@ -287,7 +311,7 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
 };
 
 window.cancelarTrocaSenhaObrigatoria = async function() {
-  const confirma = confirm("A alteração da senha é obrigatória para acessar o sistema. Se cancelar, sua sessão será encerrada. Deseja sair?");
+  const confirma = confirm("A alteração da senha e cadastro do e-mail de recuperação são obrigatórios para acessar o sistema. Se cancelar, sua sessão será encerrada. Deseja sair?");
   
   if (confirma) {
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
@@ -304,9 +328,18 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
 
 window.salvarNovaSenhaObrigatoria = async function(e) {
   e.preventDefault();
+  const novoEmail = document.getElementById('pwd-email-recuperacao').value.trim().toLowerCase();
   const nova = document.getElementById('pwd-nova').value;
   const confirma = document.getElementById('pwd-confirma').value;
   const msgErro = document.getElementById('pwd-erro-msg');
+
+  if (!novoEmail || !novoEmail.includes('@')) {
+    if (msgErro) {
+      msgErro.innerText = "Por favor, insira um e-mail válido para recuperação de senha.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
 
   if (nova.length < 6) {
     if (msgErro) {
@@ -334,29 +367,39 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
 
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
+
+    // 1. Atualiza o e-mail no Firebase Auth se tiver mudado
+    if (user.email !== novoEmail) {
+      await user.updateEmail(novoEmail);
+    }
+
+    // 2. Atualiza a senha no Firebase Auth
     await user.updatePassword(nova);
 
-    if (appState.currentUser?.servidorId) {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(appState.currentUser.servidorId));
+    // 3. Atualiza os dados no Firestore
+    const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+    if (srvId) {
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
       if (srv) {
+        srv.email = novoEmail;
         srv.senhaResetada = false;
         srv.forcarTrocaSenha = false;
         await syncDocToFirestore('servidores', srv.id, srv);
       }
     }
 
-    alert("Senha alterada com sucesso! Utilize a sua nova senha nos próximos acessos.");
+    alert("E-mail de recuperação e nova senha cadastrados com sucesso!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
   } catch (err) {
-    console.error("Erro ao alterar senha no Auth:", err);
+    console.error("Erro ao alterar credenciais no Auth:", err);
 
     if (err.code === 'auth/requires-recent-login') {
-      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha.");
+      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha e e-mail.");
       await firebase.auth().signOut();
       window.location.reload();
     } else {
       if (msgErro) {
-        msgErro.innerText = `Erro ao atualizar senha no Firebase: ${err.message}`;
+        msgErro.innerText = `Erro ao atualizar cadastro no Firebase: ${err.message}`;
         msgErro.classList.remove('hidden');
       }
     }
@@ -395,7 +438,10 @@ function criarModalLoginDOM() {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Senha:</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-bold text-slate-700">Senha:</label>
+              <button type="button" onclick="window.solicitarRecuperacaoSenha()" class="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer">Esqueci minha senha</button>
+            </div>
             <input type="password" id="login-password" required placeholder="Senha de Acesso" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
           </div>
 
@@ -424,13 +470,19 @@ function criarModalTrocarSenhaDOM() {
         <div class="border-b pb-3 shrink-0 pr-6">
           <div class="flex items-center gap-2">
             <span class="text-xl">⚠️</span>
-            <h3 class="font-bold text-slate-900 text-sm">Alteração Obrigatória de Senha</h3>
+            <h3 class="font-bold text-slate-900 text-sm">Cadastro de Acesso e Nova Senha</h3>
           </div>
-          <p class="text-[11px] text-slate-500 mt-1">Por questões de segurança, cadastre uma nova senha pessoal para substituir a senha de acesso.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Por questões de segurança, registre o seu e-mail funcional/pessoal para recuperação e cadastre uma nova senha pessoal.</p>
         </div>
 
         <form onsubmit="window.salvarNovaSenhaObrigatoria(event)" class="space-y-3 text-xs">
           <div id="pwd-erro-msg" class="hidden p-2 bg-red-100 text-red-800 border border-red-200 font-bold rounded-lg text-[11px] text-center"></div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">E-mail para recuperação de senha:</label>
+            <input type="email" id="pwd-email-recuperacao" required placeholder="exemplo@policiacivil.pr.gov.br" class="w-full border rounded-xl p-2.5 bg-slate-50 font-medium text-slate-900 focus:ring-2 focus:ring-pcpr-gold focus:outline-none">
+            <span class="text-[10px] text-slate-400 block mt-0.5">Utilizado para enviar o link de redefinição caso esqueça a senha futuramente.</span>
+          </div>
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Nova Senha Pessoal:</label>
@@ -447,7 +499,7 @@ function criarModalTrocarSenhaDOM() {
               Cancelar e Sair
             </button>
             <button type="submit" class="px-4 py-2.5 bg-black text-[#BEA55A] border border-[#BEA55A] hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer text-center">
-              💾 Cadastrar Nova Senha
+              💾 Salvar Dados e Acessar
             </button>
           </div>
         </form>
