@@ -2,7 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
 import { criarContaFirebaseAuth } from './authSync.js';
-import { getCurrentUserRole, getCurrentUserDelegaciaId, getAllowedRolesForCreation, isProtectedAdminAccount } from './permissions.js';
+import { getCurrentUserRole, getCurrentUserDelegaciaId, getAllowedRolesForCreation, isProtectedAdminAccount, podeResetarSenhaPolicial } from './permissions.js';
 
 let servidoresFiltros = { busca: '', cargo: 'TODOS', delegaciaId: 'TODAS' };
 
@@ -134,6 +134,8 @@ window.renderTabelaServidoresCorpo = function() {
     else if (nivel.toUpperCase() === 'COORDENADOR') badgeClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
     const podeEditar = isAdminOrCoord || (String(srv.delegaciaId) === String(userDelId));
+    // Apenas Administradores e Coordenadores podem visualizar e acionar o botão de Reset
+    const podeResetar = podeResetarSenhaPolicial(srv);
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
@@ -149,9 +151,11 @@ window.renderTabelaServidoresCorpo = function() {
             <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
               ✏️ Editar
             </button>
-            <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Solicitar redefinição de senha para o policial" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
-              🔑 Resetar Senha
-            </button>
+            ${podeResetar ? `
+              <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Solicitar redefinição obrigatória de senha e e-mail para o policial" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
+                🔑 Resetar Senha
+              </button>
+            ` : ''}
             <button onclick="window.excluirServidorDirect('${srv.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
               🗑 Excluir
             </button>
@@ -201,8 +205,11 @@ window.abrirModalServidor = function(srvId = null) {
 
   const containerReset = document.getElementById('modal-container-btn-reset');
   if (containerReset) {
-    if (srvId) containerReset.classList.remove('hidden');
-    else containerReset.classList.add('hidden');
+    if (srvId && podeResetarSenhaPolicial(srv)) {
+      containerReset.classList.remove('hidden');
+    } else {
+      containerReset.classList.add('hidden');
+    }
   }
 
   if (srv && selectNivel) selectNivel.value = srv.nivelAcesso || srv.perfil || 'APJ';
@@ -288,12 +295,17 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
   const srv = (appState.servidores || []).find(s => String(s.id) === String(idUsar));
   if (!srv) return;
 
+  if (!podeResetarSenhaPolicial(srv)) {
+    alert("Ação Bloqueada: Apenas Administradores e Coordenadores têm permissão para resetar senhas.");
+    return;
+  }
+
   if (isProtectedAdminAccount(srv)) {
     alert("Ação Bloqueada: A senha da conta do Administrador do Sistema não pode ser resetada.");
     return;
   }
 
-  if (!confirm(`Deseja marcar a conta de ${srv.nome} para redefinição de senha no próximo acesso?`)) {
+  if (!confirm(`Deseja marcar a conta de ${srv.nome} para redefinição obrigatória de e-mail de recuperação e senha no próximo acesso?`)) {
     return;
   }
 
@@ -302,7 +314,7 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     srv.forcarTrocaSenha = true;
     await syncDocToFirestore('servidores', srv.id, srv);
 
-    alert(`Sucesso! A conta de ${srv.nome} foi marcada para redefinição. No próximo acesso, o sistema exigirá que o policial cadastre uma nova senha pessoal.`);
+    alert(`Sucesso! A conta de ${srv.nome} foi marcada para redefinição. No próximo acesso, o sistema exigirá o cadastro de e-mail para recuperação de senha e uma nova senha pessoal.`);
 
     if (document.getElementById('modal-cadastro-servidor')) {
       window.fecharModalServidor();
@@ -314,7 +326,7 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
 
   } catch (err) {
     console.error("Erro ao resetar senha no banco:", err);
-    alert(`Erro ao salvar no banco de dados: ${err.message}`);
+    alert(`Erro ao salvar redefinição no banco de dados: ${err.message}`);
   }
 };
 
