@@ -134,7 +134,6 @@ window.renderTabelaServidoresCorpo = function() {
     else if (nivel.toUpperCase() === 'COORDENADOR') badgeClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
     const podeEditar = isAdminOrCoord || (String(srv.delegaciaId) === String(userDelId));
-    // Apenas o Administrador pode visualizar e disparar o botão de Reset de Senha
     const podeResetar = podeResetarSenhaPolicial(srv);
 
     return `
@@ -247,7 +246,10 @@ window.salvarServidorModalSubmit = async function(e) {
 
   const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
   const srvId = idInput || 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-  const loginCalc = normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
+
+  // GERAÇÃO HIGIENIZADA DO LOGIN E DO E-MAIL
+  const loginCalc = srvExistente?.login || normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
+  const emailCalc = srvExistente?.email || `${loginCalc}@policiacivil.pr.gov.br`;
 
   const servidorAjustado = {
     ...(srvExistente || {}),
@@ -260,7 +262,8 @@ window.salvarServidorModalSubmit = async function(e) {
     delegaciaNome: delObj ? delObj.nome : '',
     subdivisao: delObj ? delObj.subdivisao : '8ª SDP',
     telefone: telefone,
-    login: loginCalc
+    login: loginCalc,
+    email: emailCalc
   };
 
   if (isNovo) {
