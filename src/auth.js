@@ -224,10 +224,8 @@ window.executarLoginFirebase = async function(e) {
     try {
       userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     } catch (authErr) {
-      // Caso o login falhe porque a conta no Firebase Auth foi excluída e o usuário está digitando a senha padrão
       if (password === 'Central123' && (estaComResetPendente || authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential')) {
         if (srv) {
-          // Recria a conta no Firebase Auth automaticamente com a senha padrão Central123
           await criarContaFirebaseAuth(srv, 'Central123');
           userCredential = await firebase.auth().signInWithEmailAndPassword(email, 'Central123');
         } else {
@@ -373,12 +371,19 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
 
-    if (user.email !== novoEmail) {
-      await user.updateEmail(novoEmail);
-    }
-
+    // 1. Atualiza a senha no Firebase Auth
     await user.updatePassword(nova);
 
+    // 2. Tenta atualizar o email no Firebase Auth; se houver trava do Firebase, ignora e prossegue
+    try {
+      if (user.email !== novoEmail) {
+        await user.updateEmail(novoEmail);
+      }
+    } catch (emailErr) {
+      console.warn("Firebase Auth manteve o email padrao no Auth, mas o email de recuperacao foi gravado no Firestore:", emailErr.message);
+    }
+
+    // 3. Grava o e-mail real e limpa as pendências de reset no Firestore
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
     if (srvId) {
       const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
@@ -390,18 +395,18 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       }
     }
 
-    alert("E-mail de recuperação e nova senha cadastrados com sucesso!");
+    alert("E-mail para recuperação de senha e nova senha cadastrados com sucesso!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
   } catch (err) {
     console.error("Erro ao alterar credenciais no Auth:", err);
 
     if (err.code === 'auth/requires-recent-login') {
-      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha e e-mail.");
+      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha.");
       await firebase.auth().signOut();
       window.location.reload();
     } else {
       if (msgErro) {
-        msgErro.innerText = `Erro ao atualizar cadastro no Firebase: ${err.message}`;
+        msgErro.innerText = `Erro ao atualizar cadastro: ${err.message}`;
         msgErro.classList.remove('hidden');
       }
     }
