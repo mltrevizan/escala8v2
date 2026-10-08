@@ -173,8 +173,12 @@ export function obterPerfisAtribuiveis() {
   return [PERFIS.VISUALIZADOR];
 }
 
+/**
+ * Permissão exclusiva para Administradores e Coordenadores resetarem a senha de um policial
+ */
 export function podeResetarSenhaPolicial(servidorAlvo) {
-  return podeModificarServidor(servidorAlvo);
+  const perfil = getPerfilUsuarioLogado();
+  return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
 }
 
 export function podeModificarFeriasServidor(servidorAlvo) {
@@ -220,7 +224,6 @@ export function applyUIPermissions() {
   }
 
   if (perfil === PERFIS.VISUALIZADOR) {
-    // Força a ocultação das abas administrativas no modo público
     styleEl.innerHTML = `
       #tab-btn-unidades, #tab-btn-delegacias, #tab-btn-gestao-crf, #tab-btn-gestao-del, 
       #tab-btn-gestao-delegacias, #tab-btn-servidores, #tab-btn-ferias, #tab-btn-feriados {
@@ -236,10 +239,8 @@ export function applyUIPermissions() {
       }
     }
   } else {
-    // Limpa a regra de restrição CSS para usuários logados
     styleEl.innerHTML = '';
 
-    // Mapeia e ativa individualmente cada botão no HTML conforme a permissão do perfil logado
     const abasMap = {
       'tab-btn-gestao-crf': podeAcessarAbaGestaoCrf(),
       'tab-btn-gestao-del': podeAcessarAbaGestaoDelegacias(),
@@ -264,7 +265,6 @@ export function applyUIPermissions() {
   }
 }
 
-// Execução automática ao carregar o script
 applyUIPermissions();
 
 // =========================================================================
@@ -352,21 +352,13 @@ export function isAdmin() {
   return getPerfilUsuarioLogado() === PERFIS.ADMINISTRADOR;
 }
 
-// =========================================================================
-// NOVAS PERMISSÕES PARA BOTÕES DO CALENDÁRIO E LOGS DE AUDITORIA
-// =========================================================================
-
-
 export function podeVisualizarLogs() {
   const perfil = getPerfilUsuarioLogado();
   return perfil !== PERFIS.VISUALIZADOR;
 }
 
-// novas permissões
-
 export function podeVincularApjCrf() {
   const perfil = getPerfilUsuarioLogado();
-  // Permite Administrador, Coordenador, Delegado, APJ e Superintendente
   return [PERFIS.ADMINISTRADOR, PERFIS.COORDENADOR, PERFIS.DELEGADO, PERFIS.SUPERINTENDENTE, PERFIS.APJ].includes(perfil);
 }
 
