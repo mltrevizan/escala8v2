@@ -15,9 +15,6 @@ export const PERFIS = {
   VISUALIZADOR: 'VISUALIZADOR'
 };
 
-/**
- * Retorna o perfil do usuário logado ou VISUALIZADOR se não houver login
- */
 export function getPerfilUsuarioLogado() {
   if (!appState.currentUser) return PERFIS.VISUALIZADOR;
   
@@ -63,10 +60,6 @@ export function isProtectedAdminAccount(servidorObj) {
   return isNomeAdmin || isLoginAdmin || (perfilNorm === 'ADMINISTRADOR' && isNomeAdmin);
 }
 
-// =========================================================================
-// REGRAS DE ACESSO ÀS ABAS
-// =========================================================================
-
 export function podeAcessarAbaGestaoCrf() {
   const perfil = getPerfilUsuarioLogado();
   return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
@@ -96,10 +89,6 @@ export function podeAcessarAbaDelegacias() {
   const perfil = getPerfilUsuarioLogado();
   return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
 }
-
-// =========================================================================
-// REGRAS DE MANIPULAÇÃO DE ESCALAS, SERVIDORES E FÉRIAS
-// =========================================================================
 
 export function podeModificarEscalaDelegacia(delegaciaAlvoId) {
   const perfil = getPerfilUsuarioLogado();
@@ -174,11 +163,11 @@ export function obterPerfisAtribuiveis() {
 }
 
 /**
- * Permissão exclusiva para Administradores e Coordenadores resetarem a senha de um policial
+ * Permissão EXCLUSIVA do ADMINISTRADOR para resetar a senha de qualquer servidor
  */
-export function podeResetarSenhaPolicial(servidorAlvo) {
+export function podeResetarSenhaPolicial(servidorAlvo = null) {
   const perfil = getPerfilUsuarioLogado();
-  return perfil === PERFIS.ADMINISTRADOR || perfil === PERFIS.COORDENADOR;
+  return perfil === PERFIS.ADMINISTRADOR;
 }
 
 export function podeModificarFeriasServidor(servidorAlvo) {
@@ -208,10 +197,6 @@ export function podeCadastrarFeriado(tipoFeriado, delegaciaAlvoId = null) {
 
   return false;
 }
-
-// =========================================================================
-// APLICAÇÃO E ATUALIZAÇÃO RIGOROSA DA INTERFACE (UI)
-// =========================================================================
 
 export function applyUIPermissions() {
   const perfil = getPerfilUsuarioLogado();
@@ -266,10 +251,6 @@ export function applyUIPermissions() {
 }
 
 applyUIPermissions();
-
-// =========================================================================
-// REGULAÇÃO DE EXIBIÇÃO DE CONTATOS / TELEFONE E COMPATIBILIDADES
-// =========================================================================
 
 export function podeVisualizarTelefoneServidor(dataPlantaoIso = null) {
   const perfil = getPerfilUsuarioLogado();
