@@ -2,6 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { applyUIPermissions } from './permissions.js';
 import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
+import { criarContaFirebaseAuth } from './authSync.js';
 
 let loginSearchState = {
   servidorSelecionado: null
@@ -223,14 +224,18 @@ window.executarLoginFirebase = async function(e) {
     try {
       userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     } catch (authErr) {
-      if (password === 'Central123' && estaComResetPendente) {
-        if (msgErro) {
-          msgErro.innerText = "A redefinição foi solicitada pelo Administrador. Digite sua senha pessoal de acesso para autorizar o cadastro da nova senha.";
-          msgErro.classList.remove('hidden');
+      // Caso o login falhe porque a conta no Firebase Auth foi excluída e o usuário está digitando a senha padrão
+      if (password === 'Central123' && (estaComResetPendente || authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential')) {
+        if (srv) {
+          // Recria a conta no Firebase Auth automaticamente com a senha padrão Central123
+          await criarContaFirebaseAuth(srv, 'Central123');
+          userCredential = await firebase.auth().signInWithEmailAndPassword(email, 'Central123');
+        } else {
+          throw authErr;
         }
-        return;
+      } else {
+        throw authErr;
       }
-      throw authErr;
     }
 
     window.fecharModalLoginApp();
@@ -245,7 +250,7 @@ window.executarLoginFirebase = async function(e) {
   } catch (err) {
     console.error("Erro no login:", err);
     if (msgErro) {
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         msgErro.innerText = "Senha incorreta ou usuário não cadastrado no Firebase Auth.";
       } else {
         msgErro.innerText = `Erro de Autenticação: ${err.message}`;
@@ -368,15 +373,12 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
 
-    // 1. Atualiza o e-mail no Firebase Auth se tiver mudado
     if (user.email !== novoEmail) {
       await user.updateEmail(novoEmail);
     }
 
-    // 2. Atualiza a senha no Firebase Auth
     await user.updatePassword(nova);
 
-    // 3. Atualiza os dados no Firestore
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
     if (srvId) {
       const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
