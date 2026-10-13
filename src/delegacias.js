@@ -15,6 +15,7 @@ function limparSujeiraHorario(str) {
  * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
  * 
  * Ajustado para localizar prioritariamente o ID do elemento usado no calendário: 'select-calendar-delegacia'
+ * e sincronizar perfeitamente com o appState.selectedDelegaciaId.
  */
 export function popularDropdownDelegaciasComEscala(selectElementId = 'select-calendar-delegacia') {
   const select = document.getElementById(selectElementId) || document.getElementById('select-escala-delegacia');
@@ -39,6 +40,7 @@ export function popularDropdownDelegaciasComEscala(selectElementId = 'select-cal
   if (delegaciasComEscala.length === 0) {
     select.innerHTML = `<option value="">Nenhuma delegacia com escala registrada</option>`;
     select.disabled = true;
+    appState.selectedDelegaciaId = null;
     return null;
   }
 
@@ -53,14 +55,18 @@ export function popularDropdownDelegaciasComEscala(selectElementId = 'select-cal
   select.innerHTML = optionsHTML;
   select.disabled = false;
 
-  // Regra: Seleciona automaticamente a primeira delegacia válida da lista
+  // Define a primeira delegacia válida da lista
   const primeiraDelegaciaId = delegaciasComEscala[0].id;
-  select.value = primeiraDelegaciaId;
 
-  // Dispara o evento de 'change' para atualizar automaticamente a grade/calendário se houver listener
-  select.dispatchEvent(new Event('change'));
+  // Sincroniza o estado global se estiver vazio ou se a delegacia selecionada anteriormente não tiver escalas
+  if (!appState.selectedDelegaciaId || !delegaciasComEscala.some(d => String(d.id) === String(appState.selectedDelegaciaId))) {
+    appState.selectedDelegaciaId = primeiraDelegaciaId;
+  }
 
-  return primeiraDelegaciaId;
+  // Ajusta o valor visual do seletor conforme o estado global
+  select.value = appState.selectedDelegaciaId;
+
+  return appState.selectedDelegaciaId;
 }
 
 export function renderDelegaciasCards(containerId) {
