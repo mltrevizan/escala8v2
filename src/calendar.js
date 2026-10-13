@@ -105,11 +105,13 @@ function obterHorarioTurnoTexto(esc) {
  * Função global para alteração direta da delegacia no filtro do calendário
  */
 window.mudarDelegaciaCalendario = function(delegaciaId) {
-  appState.selectedDelegaciaId = String(delegaciaId);
+  if (delegaciaId) {
+    appState.selectedDelegaciaId = String(delegaciaId);
+  }
   renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
 };
 
-function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
+function obterDelegaciasValidasScope(scope) {
   const isPublico = !appState.currentUser;
   const { currentYear, currentMonth, escalas, delegacias } = appState;
 
@@ -131,20 +133,17 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
     });
   }
 
+  return listaDelegacias;
+}
+
+function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
+  const listaDelegacias = obterDelegaciasValidasScope(scope);
+
   if (listaDelegacias.length === 0) {
     return `<option value="">Nenhuma delegacia disponível</option>`;
   }
 
-  // Determina qual ID deve vir selecionado
-  let targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
-  
-  if (!targetId && !isPublico && appState.currentUser?.delegaciaId) {
-    targetId = String(appState.currentUser.delegaciaId);
-    appState.selectedDelegaciaId = targetId;
-  } else if (!targetId && listaDelegacias.length > 0) {
-    targetId = String(listaDelegacias[0].id);
-    appState.selectedDelegaciaId = targetId;
-  }
+  const targetId = appState.selectedDelegaciaId || selectedDelegaciaId;
 
   return listaDelegacias.map(d => 
     `<option value="${d.id}" ${String(targetId) === String(d.id) ? 'selected' : ''}>${d.nome}</option>`
@@ -157,12 +156,27 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // Preserva o valor atual selecionado na tela se já existir um <select> ativo
-  const selectExistente = document.getElementById('select-calendar-delegacia');
-  if (selectExistente && selectExistente.value && scope === 'DELEGACIA') {
-    appState.selectedDelegaciaId = selectExistente.value;
-  } else if (scope === 'DELEGACIA' && appState.currentUser && appState.currentUser.delegaciaId && !appState.selectedDelegaciaId) {
-    appState.selectedDelegaciaId = String(appState.currentUser.delegaciaId);
+  // RESOLUÇÃO DELEGACIA INICIAL (Previne calendário zerado no modo público e privado)
+  if (scope === 'DELEGACIA') {
+    const listaValida = obterDelegaciasValidasScope('DELEGACIA');
+    const selectExistente = document.getElementById('select-calendar-delegacia');
+    
+    let idCandidato = appState.selectedDelegaciaId;
+
+    if (!idCandidato && selectExistente && selectExistente.value) {
+      idCandidato = selectExistente.value;
+    }
+
+    if (!idCandidato && appState.currentUser && appState.currentUser.delegaciaId) {
+      idCandidato = String(appState.currentUser.delegaciaId);
+    }
+
+    // Se o ID candidato não existir na lista válida (ou estiver vazio), pega a 1ª delegacia da lista
+    if (listaValida.length > 0 && (!idCandidato || !listaValida.some(d => String(d.id) === String(idCandidato)))) {
+      idCandidato = String(listaValida[0].id);
+    }
+
+    appState.selectedDelegaciaId = idCandidato || null;
   }
 
   const { currentYear, currentMonth, selectedDelegaciaId, feriados } = appState;
