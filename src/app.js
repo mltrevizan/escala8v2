@@ -4,7 +4,7 @@ import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderServidoresTable } from './servidores.js';
-import { renderDelegaciasCards } from './delegacias.js';
+import { renderDelegaciasCards, popularDropdownDelegaciasComEscala } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
 import { renderFeriasModule } from './ferias.js';
@@ -59,6 +59,8 @@ window.switchTab = function(tabName) {
       renderCalendarGrid('calendar-crf-container', 'CRF');
       break;
     case 'delegacia':
+      // 🔑 CORREÇÃO AQUI: Popula o dropdown e define a delegacia no estado ANTES de desenhar a grade
+      popularDropdownDelegaciasComEscala('select-calendar-delegacia');
       renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
       break;
     case 'gestao-crf':
