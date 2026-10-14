@@ -1,6 +1,9 @@
 // src/db.js
 import { appState } from './state.js';
 
+let isCarregandoDados = false;
+let dadosJáCarregados = false;
+
 /**
  * Retorna as datas de Ontem, Hoje e Amanhã em formato ISO (YYYY-MM-DD)
  */
@@ -23,13 +26,28 @@ function obterDatasOperacionaisIso() {
 
 /**
  * Carrega todos os documentos do Firestore para o estado global appState.
+ * Otimizado com trava de segurança para evitar consumo excessivo de leituras.
  */
-export async function loadAllDataFromFirestore() {
+export async function loadAllDataFromFirestore(forceRefresh = false) {
+  // 🔑 TRAVA DE CACHE: Se os dados já foram carregados e não foi solicitado refresh forçado, reaproveita a memória
+  if (dadosJáCarregados && !forceRefresh) {
+    console.log("[Cache DB] Dados mantidos em memória (0 leituras no Firestore).");
+    return;
+  }
+
+  // 🔑 TRAVA DE CONCORRÊNCIA: Evita execuções paralelas simultâneas
+  if (isCarregandoDados) {
+    console.warn("[Aviso DB] Carregamento de dados já em andamento. Ignorando requisição duplicada.");
+    return;
+  }
+
+  isCarregandoDados = true;
+
   try {
     const db = firebase.firestore();
 
     const statusEl = document.getElementById('app-status');
-    if (statusEl && !appState.currentUser) {
+    if (statusEl && !appState.currentUser && !dadosJáCarregados) {
       statusEl.innerHTML = `<span class="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold animate-pulse">Carregando dados...</span>`;
     }
 
@@ -46,7 +64,7 @@ export async function loadAllDataFromFirestore() {
       }
     };
 
-    // Buscas paralelas seguras (Incluindo as coleções 'ferias' e 'logs')
+    // Buscas paralelas seguras
     const [delegaciasData, escalasData, feriadosData, sdpsData, servidoresData, feriasData, logsData] = await Promise.all([
       buscarColecaoSegura('delegacias'),
       buscarColecaoSegura('escalas'),
@@ -62,8 +80,8 @@ export async function loadAllDataFromFirestore() {
     appState.escalas = escalasData;
     appState.feriados = feriadosData;
     appState.sdps = sdpsData;
-    appState.ferias = feriasData; // essencial para o correto cruzamento e bloqueio de escalas
-    appState.logs = logsData;     // essencial para persistência do histórico de auditoria
+    appState.ferias = feriasData;
+    appState.logs = logsData;
 
     // Mapeia IDs dos policiais que estão de plantão Ontem, Hoje ou Amanhã
     const datasOperacionais = obterDatasOperacionaisIso();
@@ -94,15 +112,17 @@ export async function loadAllDataFromFirestore() {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    // Atualização de status visual
-    if (statusEl) {
+    if (statusEl && !appState.currentUser) {
       statusEl.innerHTML = '';
     }
 
-    console.log(`Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias, ${appState.ferias.length} férias e ${appState.logs.length} logs de auditoria.`);
+    dadosJáCarregados = true;
+    console.log(`[Firestore DB] Carregamento concluído: ${appState.servidores.length} servidores, ${appState.delegacias.length} delegacias, ${appState.ferias.length} férias e ${appState.logs.length} logs.`);
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
+  } finally {
+    isCarregandoDados = false;
   }
 }
 
