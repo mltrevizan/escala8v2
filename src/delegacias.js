@@ -11,6 +11,27 @@ function limparSujeiraHorario(str) {
 }
 
 /**
+ * Função utilitária para extrair Início e Fim de strings no formato "HH:MM às HH:MM"
+ */
+function extrairHorariosInicioFim(strHorario, padraoInicio = '08:00', padraoFim = '08:00') {
+  if (!strHorario || typeof strHorario !== 'string') {
+    return { inicio: padraoInicio, fim: padraoFim };
+  }
+
+  const partes = strHorario.split(/\s+às\s+/i);
+  if (partes.length === 2) {
+    const inicio = partes[0].trim().slice(0, 5);
+    const fim = partes[1].trim().slice(0, 5);
+    return {
+      inicio: /^\d{2}:\d{2}$/.test(inicio) ? inicio : padraoInicio,
+      fim: /^\d{2}:\d{2}$/.test(fim) ? fim : padraoFim
+    };
+  }
+
+  return { inicio: padraoInicio, fim: padraoFim };
+}
+
+/**
  * Preenche o dropdown da aba 'Escala por Delegacia' apenas com delegacias que possuem 
  * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
  * 
@@ -271,13 +292,19 @@ window.abrirModalDelegacia = function(delId = null) {
 
   const selPRegime = document.getElementById('del-p-regime');
   const selPIntervalo = document.getElementById('del-p-intervalo');
-  const inputPUteis = document.getElementById('del-p-uteis');
-  const inputPNaoUteis = document.getElementById('del-p-nao-uteis');
+  
+  const inPUteisInicio = document.getElementById('del-p-uteis-inicio');
+  const inPUteisFim = document.getElementById('del-p-uteis-fim');
+  const inPNaoUteisInicio = document.getElementById('del-p-nao-uteis-inicio');
+  const inPNaoUteisFim = document.getElementById('del-p-nao-uteis-fim');
 
   const selSRegime = document.getElementById('del-s-regime');
   const selSIntervalo = document.getElementById('del-s-intervalo');
-  const inputSUteis = document.getElementById('del-s-uteis');
-  const inputSNaoUteis = document.getElementById('del-s-nao-uteis');
+  
+  const inSUteisInicio = document.getElementById('del-s-uteis-inicio');
+  const inSUteisFim = document.getElementById('del-s-uteis-fim');
+  const inSNaoUteisInicio = document.getElementById('del-s-nao-uteis-inicio');
+  const inSNaoUteisFim = document.getElementById('del-s-nao-uteis-fim');
 
   if (delId) {
     const del = (appState.delegacias || []).find(d => d.id === delId);
@@ -289,14 +316,26 @@ window.abrirModalDelegacia = function(delId = null) {
       const p = del.plantaoConfig || {};
       selPRegime.value = p.regime || 'ININTERRUPTA';
       selPIntervalo.value = p.intervalo || '24h';
-      inputPUteis.value = limparSujeiraHorario(p.uteis || del.horarioUteis);
-      inputPNaoUteis.value = limparSujeiraHorario(p.naoUteis || del.horarioNaoUteis);
+
+      const pU = extrairHorariosInicioFim(p.uteis || del.horarioUteis, '08:00', '08:00');
+      inPUteisInicio.value = pU.inicio;
+      inPUteisFim.value = pU.fim;
+
+      const pNU = extrairHorariosInicioFim(p.naoUteis || del.horarioNaoUteis, '08:00', '08:00');
+      inPNaoUteisInicio.value = pNU.inicio;
+      inPNaoUteisFim.value = pNU.fim;
 
       const s = del.sobreavisoConfig || {};
       selSRegime.value = s.regime || 'INTERMITENTE';
       selSIntervalo.value = s.intervalo || '24h';
-      inputSUteis.value = limparSujeiraHorario(s.uteis || '18:00 às 08:00');
-      inputSNaoUteis.value = limparSujeiraHorario(s.naoUteis || '08:00 às 08:00');
+
+      const sU = extrairHorariosInicioFim(s.uteis, '18:00', '08:00');
+      inSUteisInicio.value = sU.inicio;
+      inSUteisFim.value = sU.fim;
+
+      const sNU = extrairHorariosInicioFim(s.naoUteis, '08:00', '08:00');
+      inSNaoUteisInicio.value = sNU.inicio;
+      inSNaoUteisFim.value = sNU.fim;
     }
   } else {
     inputId.value = '';
@@ -304,13 +343,17 @@ window.abrirModalDelegacia = function(delId = null) {
 
     selPRegime.value = 'ININTERRUPTA';
     selPIntervalo.value = '24h';
-    inputPUteis.value = '08:00 às 08:00';
-    inputPNaoUteis.value = '08:00 às 08:00';
+    inPUteisInicio.value = '08:00';
+    inPUteisFim.value = '08:00';
+    inPNaoUteisInicio.value = '08:00';
+    inPNaoUteisFim.value = '08:00';
 
     selSRegime.value = 'INTERMITENTE';
     selSIntervalo.value = '24h';
-    inputSUteis.value = '18:00 às 08:00';
-    inputSNaoUteis.value = '08:00 às 08:00';
+    inSUteisInicio.value = '18:00';
+    inSUteisFim.value = '08:00';
+    inSNaoUteisInicio.value = '08:00';
+    inSNaoUteisFim.value = '08:00';
   }
 
   modal.classList.remove('hidden');
@@ -323,45 +366,87 @@ window.fecharModalDelegacia = function() {
 window.salvarDelegaciaModal = async function(e) {
   e.preventDefault();
 
-  const id = document.getElementById('del-id').value;
-  const nome = document.getElementById('del-nome').value.toUpperCase().trim();
-  const subdivisao = document.getElementById('del-sdp').value.toUpperCase().trim();
+  try {
+    const id = document.getElementById('del-id')?.value;
+    const nomeInput = document.getElementById('del-nome')?.value || '';
+    const sdpInput = document.getElementById('del-sdp')?.value || '8ª SDP';
 
-  const plantaoConfig = {
-    regime: document.getElementById('del-p-regime').value,
-    intervalo: document.getElementById('del-p-intervalo').value,
-    uteis: limparSujeiraHorario(document.getElementById('del-p-uteis').value.toUpperCase()),
-    naoUteis: limparSujeiraHorario(document.getElementById('del-p-nao-uteis').value.toUpperCase())
-  };
+    const nome = nomeInput.toUpperCase().trim();
+    const subdivisao = sdpInput.toUpperCase().trim();
 
-  const sobreavisoConfig = {
-    regime: document.getElementById('del-s-regime').value,
-    intervalo: document.getElementById('del-s-intervalo').value,
-    uteis: limparSujeiraHorario(document.getElementById('del-s-uteis').value.toUpperCase()),
-    naoUteis: limparSujeiraHorario(document.getElementById('del-s-nao-uteis').value.toUpperCase())
-  };
+    if (!nome) {
+      alert("Por favor, preencha o nome da delegacia.");
+      return;
+    }
 
-  const targetId = id || ('del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+    // Leitura das seleções de tempo nativas (HH:MM)
+    const pUInicio = document.getElementById('del-p-uteis-inicio')?.value || '08:00';
+    const pUFim = document.getElementById('del-p-uteis-fim')?.value || '08:00';
+    const pNUInicio = document.getElementById('del-p-nao-uteis-inicio')?.value || '08:00';
+    const pNUFim = document.getElementById('del-p-nao-uteis-fim')?.value || '08:00';
 
-  let delObj = (appState.delegacias || []).find(d => d.id === targetId) || { id: targetId };
+    const sUInicio = document.getElementById('del-s-uteis-inicio')?.value || '18:00';
+    const sUFim = document.getElementById('del-s-uteis-fim')?.value || '08:00';
+    const sNUInicio = document.getElementById('del-s-nao-uteis-inicio')?.value || '08:00';
+    const sNUFim = document.getElementById('del-s-nao-uteis-fim')?.value || '08:00';
 
-  delObj.nome = nome;
-  delObj.subdivisao = subdivisao;
-  delObj.plantaoConfig = plantaoConfig;
-  delObj.sobreavisoConfig = sobreavisoConfig;
-  delObj.horarioUteis = plantaoConfig.uteis;
-  delObj.horarioNaoUteis = plantaoConfig.naoUteis;
+    // Formatação garantida: "HH:MM às HH:MM"
+    const pUteisStr = `${pUInicio} às ${pUFim}`;
+    const pNaoUteisStr = `${pNUInicio} às ${pNUFim}`;
+    const sUteisStr = `${sUInicio} às ${sUFim}`;
+    const sNaoUteisStr = `${sNUInicio} às ${sNUFim}`;
 
-  if (!appState.delegacias) appState.delegacias = [];
-  if (!id) appState.delegacias.push(delObj);
+    const plantaoConfig = {
+      regime: document.getElementById('del-p-regime')?.value || 'ININTERRUPTA',
+      intervalo: document.getElementById('del-p-intervalo')?.value || '24h',
+      uteis: pUteisStr,
+      naoUteis: pNaoUteisStr
+    };
 
-  await syncDocToFirestore('delegacias', targetId, delObj);
+    const sobreavisoConfig = {
+      regime: document.getElementById('del-s-regime')?.value || 'INTERMITENTE',
+      intervalo: document.getElementById('del-s-intervalo')?.value || '24h',
+      uteis: sUteisStr,
+      naoUteis: sNaoUteisStr
+    };
 
-  alert("Delegacia salva com sucesso!");
-  window.fecharModalDelegacia();
+    const targetId = id || ('del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+    let delObj = (appState.delegacias || []).find(d => String(d.id) === String(targetId)) || { id: targetId };
 
-  renderDelegaciasCards('delegacias-container');
-  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    delObj.nome = nome;
+    delObj.subdivisao = subdivisao;
+    delObj.plantaoConfig = plantaoConfig;
+    delObj.sobreavisoConfig = sobreavisoConfig;
+    delObj.horarioUteis = plantaoConfig.uteis;
+    delObj.horarioNaoUteis = plantaoConfig.naoUteis;
+
+    if (!appState.delegacias) appState.delegacias = [];
+    const idx = appState.delegacias.findIndex(d => String(d.id) === String(targetId));
+    if (idx >= 0) {
+      appState.delegacias[idx] = delObj;
+    } else {
+      appState.delegacias.push(delObj);
+    }
+
+    await syncDocToFirestore('delegacias', targetId, delObj);
+
+    alert("Configurações da Delegacia salvas com sucesso!");
+    window.fecharModalDelegacia();
+
+    if (typeof renderDelegaciasCards === 'function') {
+      renderDelegaciasCards('delegacias-container');
+    }
+    if (typeof window.atualizarInfoParametrizacaoUnidade === 'function') {
+      window.atualizarInfoParametrizacaoUnidade();
+    }
+    if (typeof renderCalendarGrid === 'function' && appState.activeTab === 'delegacia') {
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    }
+
+  } catch (err) {
+    console.error("Erro ao salvar dados da delegacia:", err);
+    alert(`Erro ao salvar alterações da delegacia: ${err.message}`);
+  }
 };
 
 window.excluirDelegacia = async function(id) {
@@ -375,6 +460,8 @@ window.excluirDelegacia = async function(id) {
 };
 
 function criarModalDelegaciaDOM() {
+  document.getElementById('modal-delegacia')?.remove();
+
   const modalHTML = `
     <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
@@ -397,6 +484,7 @@ function criarModalDelegaciaDOM() {
             </div>
           </div>
 
+          <!-- Configuração do Plantão Local -->
           <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
             <span class="font-bold text-slate-900 text-xs block">🏢 Configuração do Plantão Local</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -418,17 +506,28 @@ function criarModalDelegaciaDOM() {
                   <option value="7 dias">7 Dias (1 Semana)</option>
                 </select>
               </div>
+
               <div>
                 <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Horário Dias Úteis:</label>
-                <input type="text" id="del-p-uteis" oninput="this.value = this.value.toUpperCase()" placeholder="08:00 às 08:00" class="w-full border rounded-lg p-1.5 font-mono text-slate-800 bg-white">
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-p-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-slate-400">às</span>
+                  <input type="time" id="del-p-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
               </div>
+
               <div>
-                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Horário Fins de Semana / Feriados:</label>
-                <input type="text" id="del-p-nao-uteis" oninput="this.value = this.value.toUpperCase()" placeholder="08:00 às 08:00" class="w-full border rounded-lg p-1.5 font-mono text-slate-800 bg-white">
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Fins de Semana / Feriados:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-p-nao-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-slate-400">às</span>
+                  <input type="time" id="del-p-nao-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
               </div>
             </div>
           </div>
 
+          <!-- Configuração do Sobreaviso -->
           <div class="p-3 bg-[#F7F3E8] rounded-2xl border border-[#BEA55A]/80 space-y-2">
             <span class="font-bold text-[#5A4716] text-xs block">📞 Configuração do Sobreaviso</span>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -448,13 +547,23 @@ function criarModalDelegaciaDOM() {
                   <option value="7 dias">7 Dias (1 Semana)</option>
                 </select>
               </div>
+
               <div>
                 <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Horário Dias Úteis:</label>
-                <input type="text" id="del-s-uteis" oninput="this.value = this.value.toUpperCase()" placeholder="18:00 às 08:00" class="w-full border rounded-lg p-1.5 font-mono text-slate-800 bg-white">
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-s-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-[#5A4716]/60">às</span>
+                  <input type="time" id="del-s-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
               </div>
+
               <div>
-                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Horário Fins de Semana / Feriados:</label>
-                <input type="text" id="del-s-nao-uteis" oninput="this.value = this.value.toUpperCase()" placeholder="08:00 às 08:00" class="w-full border rounded-lg p-1.5 font-mono text-slate-800 bg-white">
+                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Fins de Semana / Feriados:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-s-nao-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-[#5A4716]/60">às</span>
+                  <input type="time" id="del-s-nao-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
               </div>
             </div>
           </div>
