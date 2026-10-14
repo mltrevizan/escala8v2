@@ -44,7 +44,7 @@
   </script>
 
   <!-- ARQUIVO DE ESTILOS DA PASTA css/ -->
-  <link rel="stylesheet" href="./css/styles.css?v=8.0.0">
+  <link rel="stylesheet" href="./css/styles.css?v=8.0.1">
 
   <!-- SDK Firebase v8 (App, Firestore e Auth) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -63,6 +63,11 @@
         appId: "1:974252050712:web:debb093dc6eea1f4c6766d"
       };
       firebase.initializeApp(firebaseConfig);
+
+      // 🔑 ATIVAÇÃO DO CACHE EM DISCO DO FIRESTORE (Despenca o consumo de leituras)
+      firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
+        console.warn("Aviso ao ativar cache local do Firestore:", err.message);
+      });
     }
   </script>
 </head>
@@ -154,7 +159,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 -->
-  <script type="module" src="./src/app.js?v=12.3.0"></script>
+  <!-- Script Principal ES6 (Versão Incrementada v12.3.1 para quebrar cache antigo) -->
+  <script type="module" src="./src/app.js?v=12.3.1"></script>
 </body>
 </html>
