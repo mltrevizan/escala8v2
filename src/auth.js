@@ -9,19 +9,16 @@ let loginSearchState = {
 };
 
 function obterEmailAutenticacao(srv) {
-  if (!srv) return '';
+  if (!srv) return '';  
   
-  // Prioridade 1: E-mail de recuperação/pessoal cadastrado
   if (srv.emailRecuperacao && srv.emailRecuperacao.includes('@')) {
     return srv.emailRecuperacao.toLowerCase().trim();
   }
   
-  // Prioridade 2: E-mail do Firestore se não for nulo
   if (srv.email && srv.email.includes('@')) {
     return srv.email.toLowerCase().trim();
   }
 
-  // Fallback: E-mail funcional fictício
   const loginBase = srv.login ? srv.login.toLowerCase().trim() : normalizeText(srv.nome || '').replace(/\s+/g, '.');
   return `${loginBase}@policiacivil.pr.gov.br`;
 }
@@ -38,7 +35,9 @@ export function initAuthModule() {
 
       const srv = (appState.servidores || []).find(s => {
         const emailSrv = obterEmailAutenticacao(s);
-        return emailSrv === user.email.toLowerCase() || (s.email && s.email.toLowerCase() === user.email.toLowerCase());
+        return emailSrv === user.email.toLowerCase() || 
+               (s.email && s.email.toLowerCase() === user.email.toLowerCase()) ||
+               (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === user.email.toLowerCase());
       });
 
       appState.currentUser = {
@@ -55,7 +54,6 @@ export function initAuthModule() {
         forcarTrocaSenha: srv?.forcarTrocaSenha || srv?.senhaResetada || false
       };
 
-      // Desmascara telefones na memória assim que o login for confirmado
       if (appState.servidores && appState.servidores.length > 0) {
         appState.servidores.forEach(s => {
           if (s._telefoneOriginal) {
@@ -218,10 +216,11 @@ window.selecionarPolicialLogin = function(id, nome, email, cargo) {
   }
 };
 
+// 🔑 EXECUÇÃO DE LOGIN COM MÚLTIPLAS TENTATIVAS DE E-MAIL (EVITA DESALINHAMENTO COM FIREBASE AUTH)
 window.executarLoginFirebase = async function(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
 
-  const emailInput = document.getElementById('login-email-hidden')?.value;
+  const emailInput = document.getElementById('login-email-hidden')?.value?.trim().toLowerCase();
   const password = document.getElementById('login-password')?.value;
   const msgErro = document.getElementById('login-erro-msg');
 
@@ -238,68 +237,57 @@ window.executarLoginFirebase = async function(e) {
     let userCredential = null;
 
     let srv = (appState.servidores || []).find(s => 
-      obterEmailAutenticacao(s) === emailInput.toLowerCase() || 
-      (s.email && s.email.toLowerCase() === emailInput.toLowerCase()) ||
-      (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === emailInput.toLowerCase())
+      obterEmailAutenticacao(s) === emailInput || 
+      (s.email && s.email.toLowerCase() === emailInput) ||
+      (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === emailInput)
     );
 
-    if (!srv) {
+    if (!srv && typeof loadAllDataFromFirestore === 'function') {
       await loadAllDataFromFirestore(true);
       srv = (appState.servidores || []).find(s => 
-        obterEmailAutenticacao(s) === emailInput.toLowerCase() || 
-        (s.email && s.email.toLowerCase() === emailInput.toLowerCase()) ||
-        (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === emailInput.toLowerCase())
+        obterEmailAutenticacao(s) === emailInput || 
+        (s.email && s.email.toLowerCase() === emailInput) ||
+        (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === emailInput)
       );
     }
 
     const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
-    const emailCorporativoPadrao = srv ? `${(srv.login || normalizeText(srv.nome).replace(/\s+/g, '.')).toLowerCase()}@policiacivil.pr.gov.br` : emailInput;
 
-    // Tentativa 1: Autenticar com o e-mail selecionado
-    try {
-      userCredential = await firebase.auth().signInWithEmailAndPassword(emailInput, password);
-    } catch (authErr) {
-      // Fallback: Tentativa com o e-mail corporativo padrão
-      if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-        try {
-          userCredential = await firebase.auth().signInWithEmailAndPassword(emailCorporativoPadrao, password);
-        } catch (fallbackErr) {
-          if (password === 'Central123' && srv) {
-            await criarContaFirebaseAuth(srv, 'Central123');
-            userCredential = await firebase.auth().signInWithEmailAndPassword(emailCorporativoPadrao, 'Central123');
-          } else {
-            throw authErr;
-          }
-        }
-      } else {
-        throw authErr;
+    const emailsParaTestar = new Set();
+    if (emailInput) emailsParaTestar.add(emailInput);
+    if (srv?.emailRecuperacao) emailsParaTestar.add(srv.emailRecuperacao.toLowerCase().trim());
+    if (srv?.email) emailsParaTestar.add(srv.email.toLowerCase().trim());
+    
+    const loginBase = srv?.login ? srv.login.toLowerCase().trim() : normalizeText(srv?.nome || '').replace(/\s+/g, '.');
+    if (loginBase) emailsParaTestar.add(`${loginBase}@policiacivil.pr.gov.br`);
+
+    let ultimoErro = null;
+    for (const emailTeste of emailsParaTestar) {
+      if (!emailTeste || !emailTeste.includes('@')) continue;
+      try {
+        userCredential = await firebase.auth().signInWithEmailAndPassword(emailTeste, password);
+        if (userCredential) break;
+      } catch (authErr) {
+        ultimoErro = authErr;
       }
     }
 
-    // MIGRAÇÃO AUTOMÁTICA DE CONTA FICTÍCIA PARA REAL (IGNORA CONTA ADMINISTRADOR)
-    const isAdmin = isProtectedAdminAccount(srv) || (srv?.nivelAcesso || srv?.perfil || '').toUpperCase() === 'ADMINISTRADOR' || srv?.login === 'admin';
-
-    if (!isAdmin && userCredential && userCredential.user && password !== 'Central123') {
-      const emailAuthAtivo = userCredential.user.email.toLowerCase();
-      const emailRealCadastrado = (srv?.emailRecuperacao || srv?.email || '').toLowerCase();
-
-      if (emailAuthAtivo.endsWith('@policiacivil.pr.gov.br') && emailRealCadastrado && !emailRealCadastrado.endsWith('@policiacivil.pr.gov.br')) {
-        try {
-          console.log(`[Migração Automática] Transicionando conta fictícia para e-mail real: ${emailRealCadastrado}...`);
-          
-          await firebase.auth().createUserWithEmailAndPassword(emailRealCadastrado, password);
-          
-          srv.email = emailRealCadastrado;
-          srv.emailRecuperacao = emailRealCadastrado;
-          await syncDocToFirestore('servidores', srv.id, srv);
-          
-          console.log(`[Migração Automática] Concluída com sucesso para ${emailRealCadastrado}`);
-        } catch (migracaoErr) {
-          if (migracaoErr.code !== 'auth/email-already-in-use') {
-            console.warn("Aviso na transição automática de conta:", migracaoErr.message);
-          }
-        }
+    if (!userCredential && password === 'Central123' && srv) {
+      const emailCorpPadrao = `${loginBase}@policiacivil.pr.gov.br`;
+      try {
+        await criarContaFirebaseAuth(srv, 'Central123');
+      } catch (cErr) {
+        // Ignora se a conta já existia
       }
+      try {
+        userCredential = await firebase.auth().signInWithEmailAndPassword(emailCorpPadrao, 'Central123');
+      } catch (fErr) {
+        ultimoErro = fErr;
+      }
+    }
+
+    if (!userCredential) {
+      throw ultimoErro || new Error("Senha incorreta ou acesso não localizado.");
     }
 
     window.fecharModalLoginApp();
@@ -315,7 +303,7 @@ window.executarLoginFirebase = async function(e) {
     console.error("Erro no login:", err);
     if (msgErro) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        msgErro.innerText = "Senha incorreta ou credenciais de acesso inválidas. Se esqueceu a sua nova senha, utilize a redefinição por e-mail.";
+        msgErro.innerText = "Senha incorreta ou credenciais de acesso inválidas. Se esqueceu a sua nova senha, utilize a redefinição por e-mail ou solicite o reset ao administrador.";
       } else {
         msgErro.innerText = `Erro de Autenticação: ${err.message}`;
       }
@@ -369,7 +357,11 @@ window.abrirModalTrocarSenhaObrigatoria = function(user) {
     modal = document.getElementById('modal-trocar-senha-obrigatoria');
   }
 
-  const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === (user.email || '').toLowerCase() || (s.email && s.email.toLowerCase() === (user.email || '').toLowerCase()));
+  const srv = (appState.servidores || []).find(s => 
+    obterEmailAutenticacao(s) === (user.email || '').toLowerCase() || 
+    (s.email && s.email.toLowerCase() === (user.email || '').toLowerCase()) ||
+    (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === (user.email || '').toLowerCase())
+  );
 
   document.getElementById('pwd-email-recuperacao').value = (srv?.email && !srv.email.endsWith('@policiacivil.pr.gov.br')) ? srv.email : (srv?.emailRecuperacao || '');
   document.getElementById('pwd-nova').value = '';
@@ -395,12 +387,13 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
   }
 };
 
+// 🔑 CADASTRO DE NOVA SENHA E E-MAIL REAL NATIVO NO FIREBASE AUTH
 window.salvarNovaSenhaObrigatoria = async function(e) {
-  e.preventDefault();
-  const novoEmail = document.getElementById('pwd-email-recuperacao').value.trim().toLowerCase();
+  if (e) e.preventDefault();
+  const novoEmail = document.getElementById('pwd-email-recuperacao')?.value.trim().toLowerCase();
   const elNova = document.getElementById('pwd-nova');
   const nova = elNova ? elNova.value : '';
-  const confirma = document.getElementById('pwd-confirma').value;
+  const confirma = document.getElementById('pwd-confirma')?.value;
   const msgErro = document.getElementById('pwd-erro-msg');
 
   if (!novoEmail || !novoEmail.includes('@')) {
@@ -411,86 +404,135 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     return;
   }
 
-  if (nova.length < 6 || nova === 'Central123' || nova !== confirma) {
+  if (nova.length < 6) {
     if (msgErro) {
-      msgErro.innerText = "Verifique os requisitos da nova senha (mínimo 6 caracteres e diferente de Central123).";
+      msgErro.innerText = "A nova senha deve ter no mínimo 6 caracteres.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (nova === 'Central123') {
+    if (msgErro) {
+      msgErro.innerText = "Você deve escolher uma senha diferente da senha padrão Central123.";
+      msgErro.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (nova !== confirma) {
+    if (msgErro) {
+      msgErro.innerText = "A confirmação de senha não confere com a nova senha.";
       msgErro.classList.remove('hidden');
     }
     return;
   }
 
   try {
-    const currentUserAuth = firebase.auth().currentUser;
-    const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
-    
-    // Localiza o servidor correto pelo ID original guardado na sessão do appState
-    let srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
+    msgErro?.classList.add('hidden');
+    const user = firebase.auth().currentUser;
 
-    if (!srv && currentUserAuth) {
-      srv = (appState.servidores || []).find(s => s.email?.toLowerCase() === currentUserAuth.email?.toLowerCase());
+    if (!user) {
+      alert("Sessão expirada. Por favor, faça login novamente.");
+      window.location.reload();
+      return;
     }
 
-    const isAdmin = isProtectedAdminAccount(srv) || (srv?.nivelAcesso || srv?.perfil || '').toUpperCase() === 'ADMINISTRADOR' || srv?.login === 'admin';
+    const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
+    let srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
 
-    // 1. ATUALIZA PRIMEIRO O FIRESTORE E A MEMÓRIA LOCAL
+    if (!srv) {
+      srv = (appState.servidores || []).find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
+    }
+
+    const emailAtualAuth = (user.email || '').toLowerCase();
+
+    // 1. ATUALIZA O E-MAIL DO USUÁRIO NO FIREBASE AUTH
+    if (emailAtualAuth !== novoEmail) {
+      try {
+        await user.updateEmail(novoEmail);
+      } catch (emailErr) {
+        if (emailErr.code === 'auth/email-already-in-use') {
+          console.warn("[Auth] E-mail já associado a outra credencial. Prosseguindo com atualização de senha...");
+        } else {
+          throw emailErr;
+        }
+      }
+    }
+
+    // 2. ATUALIZA A SENHA NO FIREBASE AUTH
+    await user.updatePassword(nova);
+
+    // 3. REGISTRA NO FIRESTORE
     if (srv) {
       srv.email = novoEmail;
       srv.emailRecuperacao = novoEmail;
       srv.senhaResetada = false;
       srv.forcarTrocaSenha = false;
 
-      // Garante que o appState local receba o e-mail imediatamente
-      const idx = appState.servidores.findIndex(s => String(s.id) === String(srv.id));
+      const idx = (appState.servidores || []).findIndex(s => String(s.id) === String(srv.id));
       if (idx >= 0) appState.servidores[idx] = srv;
 
       await syncDocToFirestore('servidores', srv.id, srv);
     }
 
-    // 2. CRIA A NOVA CONTA NO AUTH
-    if (!isAdmin) {
-      try {
-        await firebase.auth().createUserWithEmailAndPassword(novoEmail, nova);
-      } catch (createErr) {
-        if (createErr.code === 'auth/email-already-in-use') {
-          await firebase.auth().currentUser?.updatePassword(nova);
-        } else {
-          console.warn("Aviso ao criar conta de transição:", createErr.message);
-        }
-      }
-    } else {
-      if (currentUserAuth) await currentUserAuth.updatePassword(nova);
+    if (appState.currentUser) {
+      appState.currentUser.email = novoEmail;
+      appState.currentUser.forcarTrocaSenha = false;
     }
 
-    // 3. ATUALIZA O ATRIBUTO CURRENTUSER PARA EVITAR FALLBACK AO ADMIN
-    if (srv) {
-      appState.currentUser = {
-        uid: firebase.auth().currentUser?.uid || srv.id,
-        id: String(srv.id),
-        servidorId: String(srv.id),
-        email: novoEmail,
-        login: srv.login || novoEmail.split('@')[0],
-        nome: srv.nome,
-        cargo: srv.cargo || 'APJ',
-        perfil: srv.nivelAcesso || srv.perfil || 'APJ',
-        delegaciaId: srv.delegaciaId,
-        subdivisao: srv.subdivisao || '8ª SDP',
-        forcarTrocaSenha: false
-      };
-    }
-
-    alert("E-mail e nova senha cadastrados com sucesso!");
+    alert("E-mail e nova senha cadastrados com sucesso no Firebase Auth!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
 
-    // Atualiza o cabeçalho e as permissões da tela imediatamente
     if (typeof renderUserStatusHeader === 'function') renderUserStatusHeader();
     if (typeof applyUIPermissions === 'function') applyUIPermissions();
 
   } catch (err) {
-    console.error("Erro ao salvar nova senha no Auth:", err);
-    if (msgErro) {
-      msgErro.innerText = `Erro ao atualizar cadastro: ${err.message}`;
-      msgErro.classList.remove('hidden');
+    console.error("Erro ao salvar novo e-mail/senha no Auth:", err);
+
+    if (err.code === 'auth/requires-recent-login') {
+      alert("Por questões de segurança, faça o login novamente com 'Central123' para confirmar a alteração do e-mail e senha.");
+      await firebase.auth().signOut();
+      window.location.reload();
+    } else {
+      if (msgErro) {
+        msgErro.innerText = `Erro ao atualizar cadastro no Firebase Auth: ${err.message}`;
+        msgErro.classList.remove('hidden');
+      }
     }
+  }
+};
+
+// 🔑 RESET ADMINISTRATIVO DE ACESSO (SEM DEPENDER DE ENVIO DE E-MAIL)
+window.resetarAcessoServidorAdmin = async function(servidorId) {
+  if (!servidorId) return;
+
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(servidorId));
+  if (!srv) {
+    alert("Servidor não localizado na memória.");
+    return;
+  }
+
+  const confirmacao = confirm(
+    `ATENÇÃO - RESET DE ACESSO:\n\n` +
+    `Deseja realmente resetar o acesso do policial "${srv.nome}"?\n\n` +
+    `• A senha temporária voltará a ser: Central123\n` +
+    `• O policial será solicitado a cadastrar o e-mail real no próximo login.`
+  );
+
+  if (!confirmacao) return;
+
+  try {
+    srv.forcarTrocaSenha = true;
+    srv.senhaResetada = true;
+
+    await syncDocToFirestore('servidores', srv.id, srv);
+
+    alert(`Sucesso! O acesso de ${srv.nome} foi resetado.\nOrientação: Peça ao policial para selecionar o nome dele na tela de login e digitar a senha temporária Central123.`);
+
+  } catch (err) {
+    console.error("Erro ao efetuar reset administrativo:", err);
+    alert(`Erro ao atualizar dados no Firestore: ${err.message}`);
   }
 };
 
