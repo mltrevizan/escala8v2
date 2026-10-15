@@ -218,7 +218,13 @@ window.executarLoginFirebase = async function(e) {
     msgErro?.classList.add('hidden');
     let userCredential = null;
 
-    const srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase() || (s.email && s.email.toLowerCase() === email.toLowerCase()));
+    // 🔑 VERIFICADOR DADOS FALTANTES: Se o usuário não for encontrado no appState local, força uma recarga no Firestore
+    let srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase() || (s.email && s.email.toLowerCase() === email.toLowerCase()));
+    if (!srv) {
+      await loadAllDataFromFirestore(true);
+      srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase() || (s.email && s.email.toLowerCase() === email.toLowerCase()));
+    }
+
     const estaComResetPendente = srv?.forcarTrocaSenha || srv?.senhaResetada;
 
     try {
