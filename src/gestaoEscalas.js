@@ -1351,6 +1351,7 @@ window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
   document.body.removeChild(link);
 };
 
+// 🔑 IMPORTADOR CSV APERFEIÇOADO (FUZZY MATCHING + RELATÓRIO)
 window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -1372,17 +1373,36 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
         }
 
         let importados = 0;
+        const naoEncontrados = new Set();
+
         for (let i = 1; i < linhas.length; i++) {
           const cols = linhas[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
           if (cols.length < 2) continue;
 
           const dataIso = cols[0];
-          const nomePolicial = cols[1].toUpperCase();
+          let nomeBruto = cols[1].toUpperCase();
+
+          // Limpa títulos e prefixos comuns
+          nomeBruto = nomeBruto.replace(/^(DEL\.|DELEGADO|DELEGADA|DR\.|DRA\.)\s+/i, '').trim();
+
           const turnoStr = cols[4] || '24h';
           const tipoStr = normalizarTipoModalidade(cols[5]);
           const vtrStr = cols[6] || '';
 
-          const srv = (appState.servidores || []).find(s => normalizeText(s.nome) === normalizeText(nomePolicial));
+          const nomeBuscaNorm = normalizeText(nomeBruto);
+
+          // 1. Busca Exata
+          let srv = (appState.servidores || []).find(s => normalizeText(s.nome) === nomeBuscaNorm);
+
+          // 2. Busca Flexível / Parcial
+          if (!srv && nomeBuscaNorm.length > 3) {
+            const partesBusca = nomeBuscaNorm.split(/\s+/).filter(p => p.length > 2);
+
+            srv = (appState.servidores || []).find(s => {
+              const nomeSrvNorm = normalizeText(s.nome);
+              return partesBusca.every(parte => nomeSrvNorm.includes(parte));
+            });
+          }
 
           if (srv && dataIso.match(/^\d{4}-\d{2}-\d{2}$/)) {
             const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -1401,10 +1421,25 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
             appState.escalas.push(novaEsc);
             await syncDocToFirestore('escalas', newEscId, novaEsc);
             importados++;
+          } else if (nomeBruto) {
+            naoEncontrados.add(nomeBruto);
           }
         }
 
-        alert(`Sucesso! ${importados} lançamento(s) importados do arquivo CSV.`);
+        let msgResultado = `✅ Importação Concluída!\n\n• Lançamentos importados com sucesso: ${importados}`;
+        
+        if (naoEncontrados.size > 0) {
+          msgResultado += `\n\n⚠️ Atenção: Os seguintes ${naoEncontrados.size} policiais do CSV não foram localizados na base de dados:\n`;
+          [...naoEncontrados].slice(0, 15).forEach(n => {
+            msgResultado += `\n• ${n}`;
+          });
+          if (naoEncontrados.size > 15) {
+            msgResultado += `\n... e mais ${naoEncontrados.size - 15} nomes.`;
+          }
+          msgResultado += `\n\nVerifique a grafia dos nomes na aba "Policiais / Servidores".`;
+        }
+
+        alert(msgResultado);
 
         if (scopeTarget === 'CRF') {
           renderGestaoCrfModule('gestao-crf-container');
