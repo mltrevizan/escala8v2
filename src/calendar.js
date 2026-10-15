@@ -2,7 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, isProtectedAdminAccount, PERFIS } from './permissions.js';
 import { abrirModalHistoricoLogs, registrarLogTroca } from './logs.js';
-import { syncDocToFirestore } from './db.js';
+import { syncDocToFirestore, loadAllDataFromFirestore } from './db.js';
 
 window.abrirModalHistoricoLogs = abrirModalHistoricoLogs;
 
@@ -150,11 +150,16 @@ function obterOpcoesDelegaciaEscala(selectedDelegaciaId, scope) {
   ).join('');
 }
 
-export function renderCalendarGrid(containerId, scope = 'CRF') {
+export async function renderCalendarGrid(containerId, scope = 'CRF') {
   const container = document.getElementById(containerId);
   if (!container) return;
 
   appState.calendarScope = scope;
+
+  // Garante que os dados do mês atual sejam checados e validados no db.js
+  if (typeof loadAllDataFromFirestore === 'function') {
+    await loadAllDataFromFirestore(false);
+  }
 
   // RESOLUÇÃO DELEGACIA INICIAL (Previne calendário zerado no modo público e privado)
   if (scope === 'DELEGACIA') {
@@ -171,7 +176,6 @@ export function renderCalendarGrid(containerId, scope = 'CRF') {
       idCandidato = String(appState.currentUser.delegaciaId);
     }
 
-    // Se o ID candidato não existir na lista válida (ou estiver vazio), pega a 1ª delegacia da lista
     if (listaValida.length > 0 && (!idCandidato || !listaValida.some(d => String(d.id) === String(idCandidato)))) {
       idCandidato = String(listaValida[0].id);
     }
@@ -583,7 +587,7 @@ function setupCalendarEvents(containerId, scope) {
 
   const btnPrev = container.querySelector('#btn-prev-month');
   if (btnPrev) {
-    btnPrev.addEventListener('click', (e) => {
+    btnPrev.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (appState.currentMonth === 0) {
         appState.currentMonth = 11;
@@ -591,13 +595,13 @@ function setupCalendarEvents(containerId, scope) {
       } else {
         appState.currentMonth--;
       }
-      renderCalendarGrid(containerId, scope);
+      await renderCalendarGrid(containerId, scope);
     });
   }
 
   const btnNext = container.querySelector('#btn-next-month');
   if (btnNext) {
-    btnNext.addEventListener('click', (e) => {
+    btnNext.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (appState.currentMonth === 11) {
         appState.currentMonth = 0;
@@ -605,7 +609,7 @@ function setupCalendarEvents(containerId, scope) {
       } else {
         appState.currentMonth++;
       }
-      renderCalendarGrid(containerId, scope);
+      await renderCalendarGrid(containerId, scope);
     });
   }
 }
