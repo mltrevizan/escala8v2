@@ -112,9 +112,10 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const precisaAtualizarDelegacias = forceRefresh || cacheExpirado || (versoesRemotas.delegacias !== versoesLocais.delegacias) || !cacheDados.delegacias;
     const precisaAtualizarFeriados = forceRefresh || cacheExpirado || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
     const precisaAtualizarSdps = forceRefresh || cacheExpirado || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
+    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
     const precisaAtualizarEscalasMes = forceRefresh || cacheExpirado || (versoesRemotas[chaveMesEscalas] !== versoesLocais[chaveMesEscalas]) || !cacheDados[chaveMesEscalas];
     
-    const precisaAtualizarServidores = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores);
+    // Férias e Logs continuam restritos ao usuário autenticado
     const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
     const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
@@ -150,7 +151,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('servidores', async () => {
-        if (!isAutenticado) return cacheDados.servidores || [];
         const snap = await db.collection('servidores').get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
@@ -195,7 +195,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       }
     });
 
-    // Formatação segura de servidores
+    // Formatação e segurança de exibição dos telefones
     appState.servidores = (servidoresData || []).map(srv => {
       const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
 
