@@ -45,6 +45,16 @@ export function initAuthModule() {
         subdivisao: srv ? srv.subdivisao : '8ª SDP',
         forcarTrocaSenha: srv?.forcarTrocaSenha || srv?.senhaResetada || false
       };
+
+      // 🔑 Desmascara imediatamente todos os telefones no appState ao confirmar login
+      if (appState.servidores && appState.servidores.length > 0) {
+        appState.servidores.forEach(s => {
+          if (s._telefoneOriginal) {
+            s.telefone = s._telefoneOriginal;
+          }
+        });
+      }
+
     } else {
       appState.currentUser = null;
       await loadAllDataFromFirestore();
@@ -337,7 +347,8 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
 window.salvarNovaSenhaObrigatoria = async function(e) {
   e.preventDefault();
   const novoEmail = document.getElementById('pwd-email-recuperacao').value.trim().toLowerCase();
-  const nova = document.getElementById('pwd-[#pwd-nova]') ? document.getElementById('pwd-nova').value : document.getElementById('pwd-nova').value;
+  const elNova = document.getElementById('pwd-nova');
+  const nova = elNova ? elNova.value : '';
   const confirma = document.getElementById('pwd-confirma').value;
   const msgErro = document.getElementById('pwd-erro-msg');
 
@@ -378,10 +389,10 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
     const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId) || obterEmailAutenticacao(s) === (user.email || '').toLowerCase());
 
-    // 🔑 Atualização segura da senha no Firebase Auth
+    // 🔑 Atualização da senha diretamente no Firebase Auth
     await user.updatePassword(nova);
 
-    // 🔑 Salva o e-mail de recuperação e limpa as travas no Firestore
+    // 🔑 Salva o e-mail de recuperação e limpa as travas de primeiro acesso no Firestore
     if (srv) {
       srv.emailRecuperacao = novoEmail;
       if (!srv.email || srv.email.endsWith('@policiacivil.pr.gov.br')) {
