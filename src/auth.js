@@ -276,7 +276,7 @@ window.executarLoginFirebase = async function(e) {
       }
     }
 
-    // 🔑 MIGRAÇÃO AUTOMÁTICA DE CONTA FICTÍCIA PARA REAL (IGNORA CONTA ADMINISTRADOR)
+    // MIGRAÇÃO AUTOMÁTICA DE CONTA FICTÍCIA PARA REAL (IGNORA CONTA ADMINISTRADOR)
     const isAdmin = isProtectedAdminAccount(srv) || (srv?.nivelAcesso || srv?.perfil || '').toUpperCase() === 'ADMINISTRADOR' || srv?.login === 'admin';
 
     if (!isAdmin && userCredential && userCredential.user && password !== 'Central123') {
@@ -411,74 +411,85 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
     return;
   }
 
-  if (nova.length < 6) {
+  if (nova.length < 6 || nova === 'Central123' || nova !== confirma) {
     if (msgErro) {
-      msgErro.innerText = "A nova senha deve ter no mínimo 6 caracteres.";
-      msgErro.classList.remove('hidden');
-    }
-    return;
-  }
-
-  if (nova === 'Central123') {
-    if (msgErro) {
-      msgErro.innerText = "Você deve escolher uma senha diferente da senha padrão Central123.";
-      msgErro.classList.remove('hidden');
-    }
-    return;
-  }
-
-  if (nova !== confirma) {
-    if (msgErro) {
-      msgErro.innerText = "A confirmação de senha não confere com a nova senha.";
+      msgErro.innerText = "Verifique os requisitos da nova senha (mínimo 6 caracteres e diferente de Central123).";
       msgErro.classList.remove('hidden');
     }
     return;
   }
 
   try {
-    const user = userParaTrocaSenha || firebase.auth().currentUser;
+    const currentUserAuth = firebase.auth().currentUser;
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
-    const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId) || obterEmailAutenticacao(s) === (user.email || '').toLowerCase());
+    
+    // Localiza o servidor correto pelo ID original guardado na sessão do appState
+    let srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
+
+    if (!srv && currentUserAuth) {
+      srv = (appState.servidores || []).find(s => s.email?.toLowerCase() === currentUserAuth.email?.toLowerCase());
+    }
 
     const isAdmin = isProtectedAdminAccount(srv) || (srv?.nivelAcesso || srv?.perfil || '').toUpperCase() === 'ADMINISTRADOR' || srv?.login === 'admin';
 
-    // 🔑 TRANSITION NO PRIMEIRO ACESSO: Cria a conta definitiva com e-mail real no Auth
-    if (!isAdmin) {
-      try {
-        await firebase.auth().createUserWithEmailAndPassword(novoEmail, nova);
-      } catch (createErr) {
-        if (createErr.code === 'auth/email-already-in-use') {
-          await user.updatePassword(nova);
-        } else {
-          await user.updatePassword(nova);
-        }
-      }
-    } else {
-      await user.updatePassword(nova);
-    }
-
+    // 1. ATUALIZA PRIMEIRO O FIRESTORE E A MEMÓRIA LOCAL
     if (srv) {
       srv.email = novoEmail;
       srv.emailRecuperacao = novoEmail;
       srv.senhaResetada = false;
       srv.forcarTrocaSenha = false;
+
+      // Garante que o appState local receba o e-mail imediatamente
+      const idx = appState.servidores.findIndex(s => String(s.id) === String(srv.id));
+      if (idx >= 0) appState.servidores[idx] = srv;
+
       await syncDocToFirestore('servidores', srv.id, srv);
     }
 
-    alert("E-mail para recuperação e nova senha pessoal cadastrados com sucesso!");
+    // 2. CRIA A NOVA CONTA NO AUTH
+    if (!isAdmin) {
+      try {
+        await firebase.auth().createUserWithEmailAndPassword(novoEmail, nova);
+      } catch (createErr) {
+        if (createErr.code === 'auth/email-already-in-use') {
+          await firebase.auth().currentUser?.updatePassword(nova);
+        } else {
+          console.warn("Aviso ao criar conta de transição:", createErr.message);
+        }
+      }
+    } else {
+      if (currentUserAuth) await currentUserAuth.updatePassword(nova);
+    }
+
+    // 3. ATUALIZA O ATRIBUTO CURRENTUSER PARA EVITAR FALLBACK AO ADMIN
+    if (srv) {
+      appState.currentUser = {
+        uid: firebase.auth().currentUser?.uid || srv.id,
+        id: String(srv.id),
+        servidorId: String(srv.id),
+        email: novoEmail,
+        login: srv.login || novoEmail.split('@')[0],
+        nome: srv.nome,
+        cargo: srv.cargo || 'APJ',
+        perfil: srv.nivelAcesso || srv.perfil || 'APJ',
+        delegaciaId: srv.delegaciaId,
+        subdivisao: srv.subdivisao || '8ª SDP',
+        forcarTrocaSenha: false
+      };
+    }
+
+    alert("E-mail e nova senha cadastrados com sucesso!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
+
+    // Atualiza o cabeçalho e as permissões da tela imediatamente
+    if (typeof renderUserStatusHeader === 'function') renderUserStatusHeader();
+    if (typeof applyUIPermissions === 'function') applyUIPermissions();
+
   } catch (err) {
     console.error("Erro ao salvar nova senha no Auth:", err);
-
-    if (err.code === 'auth/requires-recent-login') {
-      alert("Por questões de segurança, faça o login novamente para confirmar a alteração da sua senha.");
-      await firebase.auth().signOut();
-      window.location.reload();
-    } else {
-      if (msgErro) {
-        msgErro.innerText = `Erro ao atualizar cadastro: ${err.message}`;
-        msgErro.classList.remove('hidden');
-      }
+    if (msgErro) {
+      msgErro.innerText = `Erro ao atualizar cadastro: ${err.message}`;
+      msgErro.classList.remove('hidden');
     }
   }
 };
