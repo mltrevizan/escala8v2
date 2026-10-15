@@ -4,7 +4,7 @@ import { appState } from './state.js';
 let isCarregandoDados = false;
 const CHAVE_LOCAL_VERSOES = 'escala8_versoes_cache';
 const CHAVE_LOCAL_DADOS = 'escala8_dados_cache';
-const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000; // 6 Horas
+const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000;
 
 function obterDatasOperacionaisIso() {
   const hoje = new Date();
@@ -48,6 +48,32 @@ function salvarCacheLocal(versoesAtualizadas, dadosAtualizados) {
   }
 }
 
+/**
+ * Garante a criação explícita da coleção 'controle' e do documento 'versoes' no Firestore
+ */
+export async function garantirColecaoControle() {
+  try {
+    const db = firebase.firestore();
+    const docRef = db.collection('controle').doc('versoes');
+    const snap = await docRef.get();
+
+    if (!snap.exists) {
+      console.log("[Firestore] Criando coleção 'controle' e documento 'versoes'...");
+      await docRef.set({
+        servidores: 1,
+        delegacias: 1,
+        feriados: 1,
+        sdps: 1,
+        ferias: 1,
+        logs: 1,
+        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch (err) {
+    console.warn("[Firestore] Não foi possível verificar/criar coleção controle:", err.message);
+  }
+}
+
 async function obterVersoesControleFirestore(db) {
   try {
     const docRef = await db.collection('controle').doc('versoes').get();
@@ -58,12 +84,9 @@ async function obterVersoesControleFirestore(db) {
   return {};
 }
 
-/**
- * Busca a coleção de Servidores SOB DEMANDA caso faltem dados no calendário
- */
 export async function buscarServidoresSobDemanda() {
   try {
-    console.log("[Firestore] Nome de policial ausente no cache. Baixando coleção de servidores sob demanda...");
+    console.log("[Firestore] Atualizando lista de servidores diretamente do banco...");
     const db = firebase.firestore();
     const snap = await db.collection('servidores').get();
     const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -91,7 +114,6 @@ export async function buscarServidoresSobDemanda() {
       };
     });
 
-    // Atualiza o Cache Local com a nova lista de servidores
     const { versoes, dados } = obterCacheLocal();
     salvarCacheLocal(versoes.versoes || {}, { ...dados, servidores: servidoresData });
 
@@ -128,9 +150,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const precisaAtualizarFeriados = forceRefresh || cacheExpirado || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
     const precisaAtualizarSdps = forceRefresh || cacheExpirado || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
     const precisaAtualizarEscalasMes = forceRefresh || cacheExpirado || (versoesRemotas[chaveMesEscalas] !== versoesLocais[chaveMesEscalas]) || !cacheDados[chaveMesEscalas];
-    
-    // Servidores só são baixados inicialmente se estiver LOGADO ou se o cache local não existir
-    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || (isAutenticado && !cacheDados.servidores);
+    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
     const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
     const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
@@ -164,7 +184,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('servidores', async () => {
-        if (!isAutenticado && cacheDados.servidores) return cacheDados.servidores;
         const snap = await db.collection('servidores').get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
@@ -253,6 +272,9 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
     } else {
       await docRef.set(dataObj, { merge: true });
     }
+
+    // Garante que o documento de versões existe antes de incrementar
+    await garantirColecaoControle();
 
     try {
       const controleRef = db.collection('controle').doc('versoes');
