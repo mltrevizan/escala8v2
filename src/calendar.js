@@ -54,7 +54,7 @@ function saoMesmoPolicial(idA, idB) {
   const srvA = (appState.servidores || []).find(s => String(s.id) === String(idA));
   const srvB = (appState.servidores || []).find(s => String(s.id) === String(idB));
 
-  if (srvA && srvB && srvA.id === srvB.id) return true;
+  if (srvA && srvB && String(srvA.id) === String(srvB.id)) return true;
   return false;
 }
 
@@ -153,7 +153,6 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
     await loadAllDataFromFirestore(false);
   }
 
-  // 🔑 GATILHO LAZY: Se existirem escalas sem o policial na memória, busca a coleção de servidores sob demanda
   const temServidorFaltando = (appState.escalas || []).some(esc => 
     esc.servidorId && !(appState.servidores || []).some(s => String(s.id) === String(esc.servidorId) || (s.login && String(s.login) === String(esc.servidorId)))
   );
@@ -330,13 +329,17 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
       return false;
     });
 
+    // 🔑 FILTRO DE ESCALA NORMALIZADO (Trata CRF e Delegacia sem falhar por ID)
     let escalasDoDia = (appState.escalas || []).filter(e => {
       if (e.data !== dateStr) return false;
-      if (e.scope !== scope) return false;
       
-      if (scope === 'DELEGACIA') {
+      const scopeEscala = (e.scope || 'CRF').toUpperCase();
+      const scopeAlvo = scope.toUpperCase();
+      if (scopeEscala !== scopeAlvo) return false;
+      
+      if (scopeAlvo === 'DELEGACIA') {
         if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
-          return String(e.delegaciaId) === String(currentSelectedDelId) || delObj.delegaciasIds.includes(e.delegaciaId);
+          return String(e.delegaciaId) === String(currentSelectedDelId) || delObj.delegaciasIds.map(String).includes(String(e.delegaciaId));
         }
         return String(e.delegaciaId) === String(currentSelectedDelId);
       }
@@ -527,7 +530,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
     return isDelA - isDelB;
   });
 
-  const idsString = ordenadas.map(e => e.id).join(',');
+  const idsString = ordenadas.map(e => String(e.id)).join(',');
   const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
@@ -624,8 +627,8 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
   if (window.innerWidth < 768) return;
 
   try {
-    const ids = idsString.split(',');
-    const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
+    const ids = idsString.split(',').map(String);
+    const escalas = (appState.escalas || []).filter(e => ids.includes(String(e.id)));
     const primeiraEscala = escalas[0];
 
     const podeVerTelefone = canViewPhoneForDate(primeiraEscala?.data);
@@ -721,8 +724,8 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
   const scopeAtual = appState.calendarScope || 'CRF';
   const selectedDelId = appState.selectedDelegaciaId;
 
-  const ids = idsString.split(',');
-  const escalasDoGrupo = (appState.escalas || []).filter(e => ids.includes(e.id));
+  const ids = idsString.split(',').map(String);
+  const escalasDoGrupo = (appState.escalas || []).filter(e => ids.includes(String(e.id)));
   
   const podeVerTelefone = canViewPhoneForDate(dataIso);
   const perfilUser = getPerfilUsuarioLogado();
@@ -1321,7 +1324,7 @@ function criarModalAcaoVincularApjDOM() {
             </div>
           </div>
 
-          <div class="pt-2 border-t flex justify-end gap-2 shrink-0">
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
             <button type="button" onclick="document.getElementById('modal-acao-vincular-apj').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
             <button type="submit" class="px-4 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-xl shadow-xs cursor-pointer">Confirmar Vinculação</button>
           </div>
