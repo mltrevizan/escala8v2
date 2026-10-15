@@ -6,6 +6,22 @@ import { getCurrentUserRole, getCurrentUserDelegaciaId, getAllowedRolesForCreati
 
 let servidoresFiltros = { busca: '', cargo: 'TODOS', delegaciaId: 'TODAS' };
 
+/**
+ * Função auxiliar para resolver e sanitizar dinamicamente a exibição do telefone
+ */
+export function obterTelefoneExibicao(srv) {
+  if (!srv) return '-';
+  
+  const userLogado = appState.currentUser || (firebase.auth && firebase.auth().currentUser);
+  const isAutenticado = !!userLogado;
+  
+  if (isAutenticado || srv.isPlantonistaOperacional) {
+    return srv.telefone || srv._telefoneOriginal || 'Não informado';
+  }
+  
+  return '🔒 [Acesso Restrito]';
+}
+
 export function renderServidoresTable(containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -127,6 +143,7 @@ window.renderTabelaServidoresCorpo = function() {
     const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     const nivel = srv.nivelAcesso || srv.perfil || 'APJ';
     const cargoExibicao = (srv.cargo || '').toUpperCase().includes('DELEGADO') ? 'DELEGADO DE POLÍCIA' : 'APJ';
+    const telExibicao = obterTelefoneExibicao(srv);
 
     let badgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
     if (nivel.toUpperCase() === 'ADMINISTRADOR') badgeClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
@@ -144,7 +161,7 @@ window.renderTabelaServidoresCorpo = function() {
           <span class="px-2 py-0.5 text-[10px] rounded border ${badgeClass}">${nivel}</span>
         </td>
         <td class="p-3 text-slate-600 font-medium">${del ? del.nome : (srv.delegaciaNome || '-')}</td>
-        <td class="p-3 font-mono text-slate-700">${srv.telefone || '-'}</td>
+        <td class="p-3 font-mono text-slate-700">${telExibicao}</td>
         <td class="p-3 text-right space-x-1">
           ${podeEditar ? `
             <button onclick="window.abrirModalServidor('${srv.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
@@ -200,7 +217,7 @@ window.abrirModalServidor = function(srvId = null) {
   document.getElementById('modal-srv-id').value = srvId || '';
   document.getElementById('modal-srv-nome').value = srv ? srv.nome : '';
   document.getElementById('modal-srv-cargo').value = cargoPadrao;
-  document.getElementById('modal-srv-telefone').value = srv ? (srv.telefone || '') : '';
+  document.getElementById('modal-srv-telefone').value = srv ? (srv.telefone || srv._telefoneOriginal || '') : '';
 
   const containerReset = document.getElementById('modal-container-btn-reset');
   if (containerReset) {
@@ -247,7 +264,6 @@ window.salvarServidorModalSubmit = async function(e) {
   const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
   const srvId = idInput || 'srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
-  // GERAÇÃO HIGIENIZADA DO LOGIN E DO E-MAIL
   const loginCalc = srvExistente?.login || normalizeText(nome).replace(/\s+/g, '.').toLowerCase();
   const emailCalc = srvExistente?.email || `${loginCalc}@policiacivil.pr.gov.br`;
 
@@ -262,6 +278,7 @@ window.salvarServidorModalSubmit = async function(e) {
     delegaciaNome: delObj ? delObj.nome : '',
     subdivisao: delObj ? delObj.subdivisao : '8ª SDP',
     telefone: telefone,
+    _telefoneOriginal: telefone,
     login: loginCalc,
     email: emailCalc
   };
