@@ -218,7 +218,6 @@ window.executarLoginFirebase = async function(e) {
     msgErro?.classList.add('hidden');
     let userCredential = null;
 
-    // 🔑 VERIFICADOR DADOS FALTANTES: Se o usuário não for encontrado no appState local, força uma recarga no Firestore
     let srv = (appState.servidores || []).find(s => obterEmailAutenticacao(s) === email.toLowerCase() || (s.email && s.email.toLowerCase() === email.toLowerCase()));
     if (!srv) {
       await loadAllDataFromFirestore(true);
@@ -338,7 +337,7 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
 window.salvarNovaSenhaObrigatoria = async function(e) {
   e.preventDefault();
   const novoEmail = document.getElementById('pwd-email-recuperacao').value.trim().toLowerCase();
-  const nova = document.getElementById('pwd-nova').value;
+  const nova = document.getElementById('pwd-[#pwd-nova]') ? document.getElementById('pwd-nova').value : document.getElementById('pwd-nova').value;
   const confirma = document.getElementById('pwd-confirma').value;
   const msgErro = document.getElementById('pwd-erro-msg');
 
@@ -377,32 +376,29 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   try {
     const user = userParaTrocaSenha || firebase.auth().currentUser;
     const srvId = appState.currentUser?.servidorId || appState.currentUser?.id;
-    const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId) || obterEmailAutenticacao(s) === (user.email || '').toLowerCase());
 
-    try {
-      if (user.email !== novoEmail) {
-        await user.updateEmail(novoEmail);
-      }
-      await user.updatePassword(nova);
-    } catch (authUpdateErr) {
-      console.warn("Troca de e-mail direta no Auth necessita de relogin. Atualizando senha e gravando e-mail de recuperação no Firestore:", authUpdateErr.message);
-      await user.updatePassword(nova);
-    }
+    // 🔑 Atualização segura da senha no Firebase Auth
+    await user.updatePassword(nova);
 
+    // 🔑 Salva o e-mail de recuperação e limpa as travas no Firestore
     if (srv) {
-      srv.email = novoEmail;
+      srv.emailRecuperacao = novoEmail;
+      if (!srv.email || srv.email.endsWith('@policiacivil.pr.gov.br')) {
+        srv.email = novoEmail;
+      }
       srv.senhaResetada = false;
       srv.forcarTrocaSenha = false;
       await syncDocToFirestore('servidores', srv.id, srv);
     }
 
-    alert("E-mail para recuperação de senha e nova senha cadastrados com sucesso!");
+    alert("E-mail de recuperação e nova senha cadastrados com sucesso!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
   } catch (err) {
-    console.error("Erro ao alterar credenciais no Auth:", err);
+    console.error("Erro ao alterar senha no Auth:", err);
 
     if (err.code === 'auth/requires-recent-login') {
-      alert("Por questões de segurança do Firebase, é necessário fazer um novo login para confirmar a alteração da sua senha.");
+      alert("Por questões de segurança, faça o login novamente para confirmar a alteração da senha.");
       await firebase.auth().signOut();
       window.location.reload();
     } else {
