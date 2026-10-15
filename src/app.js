@@ -19,6 +19,9 @@ import {
   podeAcessarAbaFeriados 
 } from './permissions.js';
 
+// Intervalo de 6 Horas para Checagem Silenciosa do Ponteiro de Controle (6 * 60 * 60 * 1000 ms)
+const INTERVALO_CHECAGEM_6H_MS = 21600000;
+
 window.switchTab = function(tabName) {
   if (tabName === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
     tabName = 'crf';
@@ -59,7 +62,7 @@ window.switchTab = function(tabName) {
       renderCalendarGrid('calendar-crf-container', 'CRF');
       break;
     case 'delegacia':
-      // 🔑 CORREÇÃO AQUI: Popula o dropdown e define a delegacia no estado ANTES de desenhar a grade
+      // Popula o dropdown e define a delegacia no estado ANTES de desenhar a grade
       popularDropdownDelegaciasComEscala('select-calendar-delegacia');
       renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
       break;
@@ -147,9 +150,29 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
+/**
+ * Configura a verificação passiva do ponteiro de controle a cada 6 horas para aplicações abertas continuamente.
+ */
+function iniciarChecagemPassiva6Horas() {
+  setInterval(async () => {
+    try {
+      console.log("[Verificação 6h] Checando ponteiro de controle no Firestore...");
+      await loadAllDataFromFirestore(false);
+
+      // Redesenha a aba ativa em segundo plano apenas se houve alguma alteração de dados
+      if (window.switchTab && appState.activeTab) {
+        window.switchTab(appState.activeTab);
+      }
+    } catch (e) {
+      console.warn("[Verificação 6h] Falha na checagem passiva:", e.message);
+    }
+  }, INTERVALO_CHECAGEM_6H_MS);
+}
+
 async function initApp() {
   try {
-    await loadAllDataFromFirestore();
+    // 1. Carregamento inicial inteligente usando Cache e Ponteiro de Controle
+    await loadAllDataFromFirestore(false);
 
     initAuthModule();
 
@@ -162,6 +185,9 @@ async function initApp() {
     }
 
     window.switchTab('crf');
+
+    // 2. Ativa o temporizador de verificação passiva de 6 horas
+    iniciarChecagemPassiva6Horas();
 
   } catch (err) {
     console.error("Erro na inicialização do sistema:", err);
