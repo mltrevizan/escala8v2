@@ -91,7 +91,8 @@ export async function buscarServidoresSobDemanda() {
     const snap = await db.collection('servidores').get();
     const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
+    const userLogado = appState.currentUser || (firebase.auth && firebase.auth().currentUser);
+    const isAutenticado = !!userLogado;
     const datasOperacionais = obterDatasOperacionaisIso();
     const idsPlantonistasOperacionais = new Set();
 
@@ -103,14 +104,17 @@ export async function buscarServidoresSobDemanda() {
 
     appState.servidores = servidoresData.map(srv => {
       const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
+      const telReal = srv.telefone || 'Não informado';
+
       return {
         ...srv,
+        _telefoneOriginal: telReal,
         nome: srv.nome || 'Servidor',
         cargo: srv.cargo || 'APJ',
         delegaciaId: srv.delegaciaId || '',
         delegaciaNome: srv.delegaciaNome || '',
         subdivisao: srv.subdivisao || '',
-        telefone: podeExibirTelefone ? (srv.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
+        telefone: podeExibirTelefone ? telReal : '🔒 [Acesso Restrito]'
       };
     });
 
@@ -130,7 +134,8 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
 
   try {
     const db = firebase.firestore();
-    const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
+    const userLogado = appState.currentUser || (firebase.auth && firebase.auth().currentUser);
+    const isAutenticado = !!userLogado;
 
     const { versoes: cacheVersoesObj, dados: cacheDados } = obterCacheLocal();
     const versoesLocais = cacheVersoesObj.versoes || {};
@@ -227,14 +232,17 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
 
     appState.servidores = (servidoresData || []).map(srv => {
       const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
+      const telReal = srv.telefone || 'Não informado';
+
       return {
         ...srv,
+        _telefoneOriginal: telReal,
         nome: srv.nome || 'Servidor',
         cargo: srv.cargo || 'APJ',
         delegaciaId: srv.delegaciaId || '',
         delegaciaNome: srv.delegaciaNome || '',
         subdivisao: srv.subdivisao || '',
-        telefone: podeExibirTelefone ? (srv.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
+        telefone: podeExibirTelefone ? telReal : '🔒 [Acesso Restrito]'
       };
     });
 
