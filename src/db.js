@@ -4,11 +4,8 @@ import { appState } from './state.js';
 let isCarregandoDados = false;
 const CHAVE_LOCAL_VERSOES = 'escala8_versoes_cache';
 const CHAVE_LOCAL_DADOS = 'escala8_dados_cache';
-const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000; // 6 Horas em milissegundos
+const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000; // 6 Horas
 
-/**
- * Retorna as datas de Ontem, Hoje e Amanhã em formato ISO (YYYY-MM-DD)
- */
 function obterDatasOperacionaisIso() {
   const hoje = new Date();
   const ontem = new Date(hoje);
@@ -26,27 +23,19 @@ function obterDatasOperacionaisIso() {
   return new Set([formatISO(ontem), formatISO(hoje), formatISO(amanha)]);
 }
 
-/**
- * Carrega e recupera os dados salvos em cache no LocalStorage do navegador
- */
 function obterCacheLocal() {
   try {
     const rawVersoes = localStorage.getItem(CHAVE_LOCAL_VERSOES);
     const rawDados = localStorage.getItem(CHAVE_LOCAL_DADOS);
-    
-    const versoes = rawVersoes ? JSON.parse(rawVersoes) : {};
-    const dados = rawDados ? JSON.parse(rawDados) : {};
-    
-    return { versoes, dados };
+    return {
+      versoes: rawVersoes ? JSON.parse(rawVersoes) : {},
+      dados: rawDados ? JSON.parse(rawDados) : {}
+    };
   } catch (e) {
-    console.warn("[Cache Local] Falha ao ler do LocalStorage:", e.message);
     return { versoes: {}, dados: {} };
   }
 }
 
-/**
- * Persiste dados e versões no LocalStorage do navegador
- */
 function salvarCacheLocal(versoesAtualizadas, dadosAtualizados) {
   try {
     localStorage.setItem(CHAVE_LOCAL_VERSOES, JSON.stringify({
@@ -55,51 +44,77 @@ function salvarCacheLocal(versoesAtualizadas, dadosAtualizados) {
     }));
     localStorage.setItem(CHAVE_LOCAL_DADOS, JSON.stringify(dadosAtualizados));
   } catch (e) {
-    console.warn("[Cache Local] Falha ao salvar no LocalStorage:", e.message);
+    console.warn("[Cache Local] Erro ao salvar cache:", e.message);
   }
 }
 
-/**
- * Carrega o documento de controle 'controle/versoes' com apenas 1 leitura no Firestore
- */
 async function obterVersoesControleFirestore(db) {
   try {
     const docRef = await db.collection('controle').doc('versoes').get();
-    if (docRef.exists) {
-      return docRef.data() || {};
-    }
+    if (docRef.exists) return docRef.data() || {};
   } catch (err) {
-    console.warn("[Firestore] Documento controle/versoes não localizado ou sem acesso:", err.message);
+    console.warn("[Firestore] Erro leitura controle/versoes:", err.message);
   }
   return {};
 }
 
 /**
- * Função principal de carregamento inteligente com Ponteiro de Controle e Cache Local.
+ * Busca a coleção de Servidores SOB DEMANDA caso faltem dados no calendário
  */
-export async function loadAllDataFromFirestore(forceRefresh = false) {
-  if (isCarregandoDados) {
-    console.warn("[Aviso DB] Carregamento de dados já em andamento. Ignorando requisição simultânea.");
-    return;
-  }
+export async function buscarServidoresSobDemanda() {
+  try {
+    console.log("[Firestore] Nome de policial ausente no cache. Baixando coleção de servidores sob demanda...");
+    const db = firebase.firestore();
+    const snap = await db.collection('servidores').get();
+    const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+    const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
+    const datasOperacionais = obterDatasOperacionaisIso();
+    const idsPlantonistasOperacionais = new Set();
+
+    (appState.escalas || []).forEach(e => {
+      if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
+        idsPlantonistasOperacionais.add(String(e.servidorId));
+      }
+    });
+
+    appState.servidores = servidoresData.map(srv => {
+      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
+      return {
+        ...srv,
+        nome: srv.nome || 'Servidor',
+        cargo: srv.cargo || 'APJ',
+        delegaciaId: srv.delegaciaId || '',
+        delegaciaNome: srv.delegaciaNome || '',
+        subdivisao: srv.subdivisao || '',
+        telefone: podeExibirTelefone ? (srv.telefone || 'Não informado') : '🔒 [Acesso Restrito]'
+      };
+    });
+
+    // Atualiza o Cache Local com a nova lista de servidores
+    const { versoes, dados } = obterCacheLocal();
+    salvarCacheLocal(versoes.versoes || {}, { ...dados, servidores: servidoresData });
+
+    return appState.servidores;
+  } catch (err) {
+    console.error("Erro ao buscar servidores sob demanda:", err);
+    return [];
+  }
+}
+
+export async function loadAllDataFromFirestore(forceRefresh = false) {
+  if (isCarregandoDados) return;
   isCarregandoDados = true;
 
   try {
     const db = firebase.firestore();
     const isAutenticado = !!(firebase.auth && firebase.auth().currentUser);
 
-    const statusEl = document.getElementById('app-status');
-    if (statusEl && !appState.currentUser) {
-      statusEl.innerHTML = `<span class="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold animate-pulse">Sincronizando dados...</span>`;
-    }
-
     const { versoes: cacheVersoesObj, dados: cacheDados } = obterCacheLocal();
     const versoesLocais = cacheVersoesObj.versoes || {};
     const timestampCache = cacheVersoesObj.timestamp || 0;
     const cacheExpirado = (Date.now() - timestampCache) > TEMPO_EXPIRACAO_CACHE_MS;
 
-    // 1. LEITURA DO PONTEIRO DE CONTROLE (Consome apenas 1 leitura no Firestore)
     let versoesRemotas = {};
     if (!forceRefresh) {
       versoesRemotas = await obterVersoesControleFirestore(db);
@@ -112,14 +127,13 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const precisaAtualizarDelegacias = forceRefresh || cacheExpirado || (versoesRemotas.delegacias !== versoesLocais.delegacias) || !cacheDados.delegacias;
     const precisaAtualizarFeriados = forceRefresh || cacheExpirado || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
     const precisaAtualizarSdps = forceRefresh || cacheExpirado || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
-    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
     const precisaAtualizarEscalasMes = forceRefresh || cacheExpirado || (versoesRemotas[chaveMesEscalas] !== versoesLocais[chaveMesEscalas]) || !cacheDados[chaveMesEscalas];
     
-    // Férias e Logs continuam restritos ao usuário autenticado
+    // Servidores só são baixados inicialmente se estiver LOGADO ou se o cache local não existir
+    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || (isAutenticado && !cacheDados.servidores);
     const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
     const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
-    // Função para buscar dados no Firestore apenas se a versão tiver mudado
     const buscarColecaoOuCache = async (nomeChave, fetchFn) => {
       const precisa = {
         delegacias: precisaAtualizarDelegacias,
@@ -136,7 +150,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       return cacheDados[nomeChave];
     };
 
-    // 2. BUSCAS SELETIVAS NO FIRESTORE (Apenas o que expirou ou mudou)
     const [delegaciasData, feriadosData, sdpsData, servidoresData, feriasData, logsData] = await Promise.all([
       buscarColecaoOuCache('delegacias', async () => {
         const snap = await db.collection('delegacias').get();
@@ -151,6 +164,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('servidores', async () => {
+        if (!isAutenticado && cacheDados.servidores) return cacheDados.servidores;
         const snap = await db.collection('servidores').get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
@@ -166,7 +180,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       })
     ]);
 
-    // Busca de Escalas Seletiva para o Mês Exibido
     let escalasMesData = cacheDados[chaveMesEscalas];
     if (precisaAtualizarEscalasMes || !escalasMesData) {
       const prefixoMesIso = `${ano}-${mesStr}`;
@@ -177,7 +190,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       escalasMesData = snapEscalas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    // 3. ATRIBUIÇÃO AO ESTADO GLOBAL (appState)
     appState.delegacias = delegaciasData || [];
     appState.feriados = feriadosData || [];
     appState.sdps = sdpsData || [];
@@ -185,7 +197,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     appState.ferias = feriasData || [];
     appState.logs = logsData || [];
 
-    // Mapeia IDs dos policiais plantonistas das datas operacionais
     const datasOperacionais = obterDatasOperacionaisIso();
     const idsPlantonistasOperacionais = new Set();
 
@@ -195,10 +206,8 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       }
     });
 
-    // Formatação e segurança de exibição dos telefones
     appState.servidores = (servidoresData || []).map(srv => {
       const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
-
       return {
         ...srv,
         nome: srv.nome || 'Servidor',
@@ -214,13 +223,12 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
     }
 
-    // 4. ATUALIZAÇÃO DO CACHE LOCAL (LOCALSTORAGE)
     const novosDadosCache = {
       ...cacheDados,
       delegacias: delegaciasData,
       feriados: feriadosData,
       sdps: sdpsData,
-      servidores: servidoresData,
+      servidores: appState.servidores,
       ferias: feriasData,
       logs: logsData,
       [chaveMesEscalas]: escalasMesData
@@ -228,23 +236,13 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
 
     salvarCacheLocal(versoesRemotas, novosDadosCache);
 
-    if (statusEl && !appState.currentUser) {
-      statusEl.innerHTML = '';
-    }
-
-    console.log(`[Firestore DB Otimizado] Dados carregados (Modo: ${isAutenticado ? 'Logado' : 'Público'}). Mês Exibido: ${chaveMesEscalas}.`);
-
   } catch (error) {
-    console.error("Erro ao carregar dados otimizados do Firestore:", error);
+    console.error("Erro ao carregar dados do Firestore:", error);
   } finally {
     isCarregandoDados = false;
   }
 }
 
-/**
- * Sincroniza um documento com o Firestore (Criação, Atualização ou Exclusão)
- * E incrementa automaticamente a versão no documento de controle 'controle/versoes'.
- */
 export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
   try {
     const db = firebase.firestore();
@@ -252,13 +250,10 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
 
     if (isDelete) {
       await docRef.delete();
-      console.log(`Documento ${docId} removido da coleção ${collectionName}.`);
     } else {
       await docRef.set(dataObj, { merge: true });
-      console.log(`Documento ${docId} salvo/atualizado na coleção ${collectionName}.`);
     }
 
-    // INCREMENTO DA VERSÃO NO PONTEIRO DE CONTROLE
     try {
       const controleRef = db.collection('controle').doc('versoes');
       let campoIncremento = collectionName;
@@ -276,11 +271,11 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
       }, { merge: true });
 
     } catch (ctrlErr) {
-      console.warn("Aviso ao atualizar ponteiro de versão de controle:", ctrlErr.message);
+      console.warn("Aviso ao atualizar ponteiro de controle:", ctrlErr.message);
     }
 
   } catch (error) {
-    console.error(`Erro ao sincronizar documento na coleção ${collectionName}:`, error);
+    console.error(`Erro ao sincronizar ${collectionName}:`, error);
     throw error;
   }
 }
