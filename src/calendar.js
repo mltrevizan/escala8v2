@@ -2,7 +2,7 @@
 import { appState, normalizeText } from './state.js';
 import { hasPermission, canViewPhoneForDate, getPerfilUsuarioLogado, isProtectedAdminAccount, PERFIS } from './permissions.js';
 import { abrirModalHistoricoLogs, registrarLogTroca } from './logs.js';
-import { syncDocToFirestore, loadAllDataFromFirestore } from './db.js';
+import { syncDocToFirestore, loadAllDataFromFirestore, buscarServidoresSobDemanda } from './db.js';
 
 window.abrirModalHistoricoLogs = abrirModalHistoricoLogs;
 
@@ -151,6 +151,15 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
 
   if (typeof loadAllDataFromFirestore === 'function') {
     await loadAllDataFromFirestore(false);
+  }
+
+  // 🔑 GATILHO LAZY: Se existirem escalas sem o policial na memória, busca a coleção de servidores sob demanda
+  const temServidorFaltando = (appState.escalas || []).some(esc => 
+    esc.servidorId && !(appState.servidores || []).some(s => String(s.id) === String(esc.servidorId) || (s.login && String(s.login) === String(esc.servidorId)))
+  );
+
+  if (temServidorFaltando && typeof buscarServidoresSobDemanda === 'function') {
+    await buscarServidoresSobDemanda();
   }
 
   if (scope === 'DELEGACIA') {
@@ -439,7 +448,6 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
           const idsString = grupo.map(e => e.id).join(',');
 
           let nomesHtml = grupo.map(esc => {
-            // 🔑 RESOLUÇÃO ULTRA-RESILIENTE DO POLICIAL
             const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
             const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
             const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
@@ -523,7 +531,6 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
-    // 🔑 RESOLUÇÃO ULTRA-RESILIENTE DO POLICIAL
     const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
     const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
     const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
