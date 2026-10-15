@@ -63,6 +63,7 @@ export async function garantirColecaoControle() {
         sdps: 1,
         ferias: 1,
         logs: 1,
+        escalas: 1,
         ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
@@ -126,6 +127,7 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
+// 🔑 CARREGAMENTO COMPLETO E SEM RESTRICAO DE MÊS
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -145,15 +147,11 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       versoesRemotas = await obterVersoesControleFirestore(db);
     }
 
-    const ano = appState.currentYear || new Date().getFullYear();
-    const mesStr = String((appState.currentMonth || new Date().getMonth()) + 1).padStart(2, '0');
-    const chaveMesEscalas = `escalas_${ano}_${mesStr}`;
-
     const precisaAtualizarDelegacias = forceRefresh || cacheExpirado || (versoesRemotas.delegacias !== versoesLocais.delegacias) || !cacheDados.delegacias;
     const precisaAtualizarFeriados = forceRefresh || cacheExpirado || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
     const precisaAtualizarSdps = forceRefresh || cacheExpirado || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
-    const precisaAtualizarEscalasMes = forceRefresh || cacheExpirado || (versoesRemotas[chaveMesEscalas] !== versoesLocais[chaveMesEscalas]) || !cacheDados[chaveMesEscalas];
     const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
+    const precisaAtualizarEscalas = forceRefresh || cacheExpirado || (versoesRemotas.escalas !== versoesLocais.escalas) || !cacheDados.escalas;
     const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
     const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
@@ -163,6 +161,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         feriados: precisaAtualizarFeriados,
         sdps: precisaAtualizarSdps,
         servidores: precisaAtualizarServidores,
+        escalas: precisaAtualizarEscalas,
         ferias: precisaAtualizarFerias,
         logs: precisaAtualizarLogs
       }[nomeChave];
@@ -173,7 +172,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       return cacheDados[nomeChave];
     };
 
-    const [delegaciasData, feriadosData, sdpsData, servidoresData, feriasData, logsData] = await Promise.all([
+    const [delegaciasData, feriadosData, sdpsData, servidoresData, escalasData, feriasData, logsData] = await Promise.all([
       buscarColecaoOuCache('delegacias', async () => {
         const snap = await db.collection('delegacias').get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -190,6 +189,11 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         const snap = await db.collection('servidores').get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
+      buscarColecaoOuCache('escalas', async () => {
+        // Busca a coleção de escalas inteira para garantir carregamento na gestão e navegação livre
+        const snap = await db.collection('escalas').get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      }),
       buscarColecaoOuCache('ferias', async () => {
         if (!isAutenticado) return cacheDados.ferias || [];
         const snap = await db.collection('ferias').get();
@@ -202,20 +206,10 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       })
     ]);
 
-    let escalasMesData = cacheDados[chaveMesEscalas];
-    if (precisaAtualizarEscalasMes || !escalasMesData) {
-      const prefixoMesIso = `${ano}-${mesStr}`;
-      const snapEscalas = await db.collection('escalas')
-        .where('data', '>=', `${prefixoMesIso}-01`)
-        .where('data', '<=', `${prefixoMesIso}-31`)
-        .get();
-      escalasMesData = snapEscalas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
     appState.delegacias = delegaciasData || [];
     appState.feriados = feriadosData || [];
     appState.sdps = sdpsData || [];
-    appState.escalas = escalasMesData || [];
+    appState.escalas = escalasData || [];
     appState.ferias = feriasData || [];
     appState.logs = logsData || [];
 
@@ -231,9 +225,9 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       feriados: feriadosData,
       sdps: sdpsData,
       servidores: servidoresData,
+      escalas: escalasData,
       ferias: feriasData,
-      logs: logsData,
-      [chaveMesEscalas]: escalasMesData
+      logs: logsData
     };
 
     salvarCacheLocal(versoesRemotas, novosDadosCache);
@@ -260,17 +254,8 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
 
     try {
       const controleRef = db.collection('controle').doc('versoes');
-      let campoIncremento = collectionName;
-
-      if (collectionName === 'escalas' && dataObj?.data) {
-        const partes = dataObj.data.split('-');
-        if (partes.length === 3) {
-          campoIncremento = `escalas_${partes[0]}_${partes[1]}`;
-        }
-      }
-
       await controleRef.set({
-        [campoIncremento]: firebase.firestore.FieldValue.increment(1),
+        [collectionName]: firebase.firestore.FieldValue.increment(1),
         ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
