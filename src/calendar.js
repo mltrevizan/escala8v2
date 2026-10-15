@@ -20,15 +20,11 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-/**
- * Localiza de forma ultra-robusta o ID do servidor do usuário logado
- */
 function obterServidorIdUsuarioLogado() {
   const user = appState.currentUser;
   if (!user) return '';
 
   const lista = appState.servidores || [];
-
   const idsBusca = [user.servidorId, user.id, user.uid].filter(Boolean).map(String);
   let srvEncontrado = lista.find(s => idsBusca.includes(String(s.id)));
   if (srvEncontrado) return String(srvEncontrado.id);
@@ -101,9 +97,6 @@ function obterHorarioTurnoTexto(esc) {
   return hUteis;
 }
 
-/**
- * Função global para alteração direta da delegacia no filtro do calendário
- */
 window.mudarDelegaciaCalendario = function(delegaciaId) {
   if (delegaciaId) {
     appState.selectedDelegaciaId = String(delegaciaId);
@@ -156,12 +149,10 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // Garante que os dados do mês atual sejam checados e validados no db.js
   if (typeof loadAllDataFromFirestore === 'function') {
     await loadAllDataFromFirestore(false);
   }
 
-  // RESOLUÇÃO DELEGACIA INICIAL (Previne calendário zerado no modo público e privado)
   if (scope === 'DELEGACIA') {
     const listaValida = obterDelegaciasValidasScope('DELEGACIA');
     const selectExistente = document.getElementById('select-calendar-delegacia');
@@ -248,7 +239,7 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
       </div>
     </div>
 
-    <!-- Navegação de Mês + Seletor de Unidade e Botão de Logs alinhados à direita -->
+    <!-- Navegação de Mês + Seletor de Unidade e Botão de Logs -->
     <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 font-sans">
       <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-xs">
         <button id="btn-prev-month" class="px-2.5 py-1 hover:bg-slate-100 text-slate-700 rounded text-xs font-semibold transition cursor-pointer">◀ Anterior</button>
@@ -448,15 +439,19 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
           const idsString = grupo.map(e => e.id).join(',');
 
           let nomesHtml = grupo.map(esc => {
-            const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
-            const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+            // 🔑 RESOLUÇÃO ULTRA-RESILIENTE DO POLICIAL
+            const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
+            const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
+            const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
+
+            const isDel = cargoPolicial.toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
             let corTexto = 'text-slate-900';
             if (isSobreaviso) corTexto = 'text-white font-semibold';
             else if (isExtra) corTexto = 'text-slate-100 font-bold';
 
-            return `<div class="cal-v1-srv-name truncate block ${corTexto}">${srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial'}</div>`;
+            return `<div class="cal-v1-srv-name truncate block ${corTexto}">${formatarNomeOperacional(nomePolicial, prefixo)}</div>`;
           }).join('');
 
           html += `
@@ -518,8 +513,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
 
     if (isExtraA !== isExtraB) return isExtraA - isExtraB;
 
-    const isDelA = srvA?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
-    const isDelB = srvB?.cargo?.toUpperCase().includes('DELEGADO') ? 0 : 1;
+    const isDelA = (srvA?.cargo || a.servidorCargo || '').toUpperCase().includes('DELEGADO') ? 0 : 1;
+    const isDelB = (srvB?.cargo || b.servidorCargo || '').toUpperCase().includes('DELEGADO') ? 0 : 1;
 
     return isDelA - isDelB;
   });
@@ -528,12 +523,16 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
-    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
-    const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+    // 🔑 RESOLUÇÃO ULTRA-RESILIENTE DO POLICIAL
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
+    const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
+    const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
+
+    const isDel = cargoPolicial.toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
     const prefixo = isDel ? 'DEL.' : 'APJ';
-    const nomeExibicao = srv ? formatarNomeOperacional(srv.nome, prefixo) : 'Policial';
+    const nomeExibicao = formatarNomeOperacional(nomePolicial, prefixo);
 
     if (isExtra) {
       return `
@@ -633,7 +632,10 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
     `;
 
     escalas.forEach(esc => {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
+      const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Não informado');
+      const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
+      
       const delServidor = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
@@ -644,10 +646,10 @@ window.mostrarTooltipGrupo = function(event, titulo, horario, idsString) {
       content += `
         <div class="pt-1 border-t border-slate-100 space-y-0.5">
           <div class="font-bold ${isExtra ? 'text-amber-700' : 'text-slate-800'} text-xs flex items-center justify-between">
-            <span>${srv?.nome || 'Não informado'}</span>
+            <span>${nomePolicial}</span>
             ${isExtra ? '<span class="text-[8px] bg-slate-700 text-pcpr-gold border border-slate-800 px-1 rounded font-bold">EXTRA</span>' : ''}
           </div>
-          <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${srv?.cargo || 'APJ'}</div>
+          <div class="text-[10px] text-slate-600"><b>Cargo:</b> ${cargoPolicial}</div>
           <div class="text-[10px] text-slate-600"><b>Lotação de Origem:</b> ${lotacaoOrigem}</div>
           <div class="text-[10px] text-slate-600"><b>Horário do Turno:</b> ${horarioEfetivo}</div>
           <div class="text-[10px] text-slate-600"><b>Telefone:</b> ${telExibicao}</div>
@@ -698,9 +700,6 @@ window.ocultarTooltip = function() {
   }
 };
 
-// =========================================================================
-// MODAL DE DETALHES DIRECIONADO AO BALÃO / TURNO ESPECÍFICO
-// =========================================================================
 window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, dataIso) {
   let modal = document.getElementById('modal-detalhes-plantao');
   if (!modal) {
@@ -743,15 +742,19 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
 
     const temApjNoPlantaoRegular = plantaoRegular.some(esc => {
       const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
-      return srv && !(srv.cargo || '').toUpperCase().includes('DELEGADO');
+      const cargo = srv ? srv.cargo : esc.servidorCargo;
+      return cargo && !(cargo.toUpperCase().includes('DELEGADO'));
     });
 
     let cardsHtml = escalasDoGrupo.map(esc => {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
+      const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial Não Informado');
+      const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
+
       const delServidor = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Central CRF');
 
-      const isDel = srv?.cargo?.toUpperCase().includes('DELEGADO');
+      const isDel = cargoPolicial.toUpperCase().includes('DELEGADO');
       const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
       const telExibicao = podeVerTelefone ? (srv?.telefone || 'Não informado') : '🔒 [Acesso Restrito]';
       const horarioEfetivo = obterHorarioTurnoTexto(esc);
@@ -784,8 +787,8 @@ window.abrirModalDetalhesTurno = function(tituloGrupo, horarioGrupo, idsString, 
 
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-bold text-slate-900 text-xs block">${srv ? srv.nome : 'Policial Não Informado'}</span>
-              <span class="text-[10px] text-slate-500 font-semibold">${srv ? srv.cargo : 'APJ'}</span>
+              <span class="font-bold text-slate-900 text-xs block">${nomePolicial}</span>
+              <span class="text-[10px] text-slate-500 font-semibold">${cargoPolicial}</span>
             </div>
 
             <div class="text-[11px] text-slate-600 space-y-0.5 font-medium border-t border-slate-200/60 pt-1">
@@ -824,11 +827,6 @@ window.fecharModalDetalhesPlantao = function() {
   document.getElementById('modal-detalhes-plantao')?.classList.add('hidden');
 };
 
-// =========================================================================
-// MODAIS DE AÇÃO COM RECORREÇÃO DA POOL E DAS TRAVAS POR PERFIL
-// =========================================================================
-
-// --- A) MODAL TROCAR DELEGADO ---
 window.abrirModalTrocarDelegado = function(escalaId, dataIso, turnoStr) {
   let modal = document.getElementById('modal-acao-trocar-delegado');
   if (!modal) {
@@ -922,6 +920,10 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
   esc.servidorId = novoServidorId;
+  if (srvNovo) {
+    esc.servidorNome = srvNovo.nome;
+    esc.servidorCargo = srvNovo.cargo || 'DELEGADO';
+  }
 
   try {
     await syncDocToFirestore('escalas', esc.id, esc);
@@ -946,7 +948,6 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
   }
 };
 
-// --- B) MODAL TROCAR APJ ---
 window.abrirModalTrocarApj = function(escalaId, dataIso, turnoStr) {
   let modal = document.getElementById('modal-acao-trocar-apj');
   if (!modal) {
@@ -1040,6 +1041,10 @@ window.salvarTrocaApjSubmit = async function(e) {
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
   esc.servidorId = novoServidorId;
+  if (srvNovo) {
+    esc.servidorNome = srvNovo.nome;
+    esc.servidorCargo = srvNovo.cargo || 'APJ';
+  }
 
   try {
     await syncDocToFirestore('escalas', esc.id, esc);
@@ -1064,7 +1069,6 @@ window.salvarTrocaApjSubmit = async function(e) {
   }
 };
 
-// --- C) MODAL VINCULAR APJ ---
 window.abrirModalVincularApjAcao = function(escalaDelegadoId, dataIso, turnoStr) {
   let modal = document.getElementById('modal-acao-vincular-apj');
   if (!modal) {
@@ -1162,6 +1166,8 @@ window.salvarVincularApjSubmit = async function(e) {
     id: newEscId,
     data: dataIso,
     servidorId: apjId,
+    servidorNome: srvApj ? srvApj.nome : 'Policial',
+    servidorCargo: srvApj ? (srvApj.cargo || 'APJ') : 'APJ',
     delegaciaId: srvApj ? srvApj.delegaciaId : '',
     scope: 'CRF',
     tipo: 'PLANTÃO',
@@ -1194,7 +1200,6 @@ window.salvarVincularApjSubmit = async function(e) {
   }
 };
 
-// --- CRIAÇÃO DOS DOMs DOS MODAIS DE AÇÃO ---
 function criarModalAcaoTrocarDelegadoDOM() {
   const html = `
     <div id="modal-acao-trocar-delegado" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
