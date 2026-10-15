@@ -363,16 +363,18 @@ window.excluirTodosFiltradosCrf = async function() {
   const confirm2 = confirm(`Confirmação final: Esta ação removerá ${filtrados.length} plantões da CRF do banco de dados permanentemente.`);
   if (!confirm2) return;
 
-  const idsParaRemover = new Set(filtrados.map(e => e.id));
-  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(e.id));
+  const idsParaRemover = new Set(filtrados.map(e => String(e.id)));
+  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(String(e.id)));
 
-  for (const escId of idsParaRemover) {
-    await syncDocToFirestore('escalas', escId, null, true);
+  for (const esc of filtrados) {
+    await syncDocToFirestore('escalas', esc.id, { data: esc.data }, true);
   }
 
   alert(`Sucesso! ${filtrados.length} lançamentos da CRF foram excluídos.`);
   renderGestaoCrfModule('gestao-crf-container');
-  renderCalendarGrid('calendar-crf-container', 'CRF');
+  if (typeof renderCalendarGrid === 'function') {
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+  }
 };
 
 // =========================================================================
@@ -694,16 +696,18 @@ window.excluirTodosFiltradosDelegacia = async function() {
   const confirm2 = confirm(`Confirmação final: Esta ação removerá ${filtrados.length} plantões do banco de dados permanentemente.`);
   if (!confirm2) return;
 
-  const idsParaRemover = new Set(filtrados.map(e => e.id));
-  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(e.id));
+  const idsParaRemover = new Set(filtrados.map(e => String(e.id)));
+  appState.escalas = (appState.escalas || []).filter(e => !idsParaRemover.has(String(e.id)));
 
-  for (const escId of idsParaRemover) {
-    await syncDocToFirestore('escalas', escId, null, true);
+  for (const esc of filtrados) {
+    await syncDocToFirestore('escalas', esc.id, { data: esc.data }, true);
   }
 
   alert(`Sucesso! ${filtrados.length} lançamentos excluídos.`);
   renderGestaoDelegaciasModule('gestao-delegacias-container');
-  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  if (typeof renderCalendarGrid === 'function') {
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
 };
 
 // =========================================================================
@@ -966,7 +970,7 @@ function criarModalLancamentoCrfDOM() {
 }
 
 // =========================================================================
-// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA (REORGANIZADO COM ALERTAS)
+// 4. MODAL DEDICADO: NOVO LANÇAMENTO GESTÃO POR DELEGACIA
 // =========================================================================
 window.abrirModalLancamentoDelegacia = function() {
   let modal = document.getElementById('modal-lancamento-delegacia');
@@ -1185,7 +1189,9 @@ window.salvarLancamentoDelegaciaModal = async function(e) {
   window.fecharModalLancamentoDelegacia();
 
   renderGestaoDelegaciasModule('gestao-delegacias-container');
-  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  if (typeof renderCalendarGrid === 'function') {
+    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  }
 };
 
 function criarModalLancamentoDelegaciaDOM() {
@@ -1283,18 +1289,33 @@ function criarModalLancamentoDelegaciaDOM() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
+// 🔑 CORREÇÃO CRÍTICA DE EXCLUSÃO
 window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
+  if (!id) return;
   if (!confirm("Deseja realmente remover este lançamento de escala?")) return;
 
-  appState.escalas = (appState.escalas || []).filter(e => e.id !== id);
-  await syncDocToFirestore('escalas', id, null, true);
+  const escObj = (appState.escalas || []).find(e => String(e.id) === String(id));
+  const dataRef = escObj ? escObj.data : null;
 
-  if (scopeTarget === 'CRF') {
-    renderGestaoCrfModule('gestao-crf-container');
-    renderCalendarGrid('calendar-crf-container', 'CRF');
-  } else {
-    renderGestaoDelegaciasModule('gestao-delegacias-container');
-    renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+  appState.escalas = (appState.escalas || []).filter(e => String(e.id) !== String(id));
+  
+  try {
+    await syncDocToFirestore('escalas', String(id), dataRef ? { data: dataRef } : null, true);
+
+    if (scopeTarget === 'CRF') {
+      renderGestaoCrfModule('gestao-crf-container');
+      if (typeof renderCalendarGrid === 'function') {
+        renderCalendarGrid('calendar-crf-container', 'CRF');
+      }
+    } else {
+      renderGestaoDelegaciasModule('gestao-delegacias-container');
+      if (typeof renderCalendarGrid === 'function') {
+        renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao excluir escala:", err);
+    alert(`Erro ao excluir lançamento: ${err.message}`);
   }
 };
 
@@ -1387,10 +1408,10 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
 
         if (scopeTarget === 'CRF') {
           renderGestaoCrfModule('gestao-crf-container');
-          renderCalendarGrid('calendar-crf-container', 'CRF');
+          if (typeof renderCalendarGrid === 'function') renderCalendarGrid('calendar-crf-container', 'CRF');
         } else {
           renderGestaoDelegaciasModule('gestao-delegacias-container');
-          renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+          if (typeof renderCalendarGrid === 'function') renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
         }
 
       } catch (err) {
@@ -1573,7 +1594,9 @@ window.confirmarVinculoApjPontual = async function(dataPlantao, turnoPlantao, se
 
   window.renderizarListaPlantoesApenasDelegados();
   renderGestaoCrfModule('gestao-crf-container');
-  renderCalendarGrid('calendar-crf-container', 'CRF');
+  if (typeof renderCalendarGrid === 'function') {
+    renderCalendarGrid('calendar-crf-container', 'CRF');
+  }
 };
 
 function criarModalVincularApjPontualDOM() {
