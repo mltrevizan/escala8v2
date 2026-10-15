@@ -48,9 +48,6 @@ function salvarCacheLocal(versoesAtualizadas, dadosAtualizados) {
   }
 }
 
-/**
- * Garante a criação explícita da coleção 'controle' e do documento 'versoes' no Firestore
- */
 export async function garantirColecaoControle() {
   try {
     const db = firebase.firestore();
@@ -84,6 +81,32 @@ async function obterVersoesControleFirestore(db) {
   return {};
 }
 
+function processarEFormatarServidores(servidoresData) {
+  const datasOperacionais = obterDatasOperacionaisIso();
+  const idsPlantonistasOperacionais = new Set();
+
+  (appState.escalas || []).forEach(e => {
+    if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
+      idsPlantonistasOperacionais.add(String(e.servidorId));
+    }
+  });
+
+  return (servidoresData || []).map(srv => {
+    const telReal = srv.telefone || srv._telefoneOriginal || 'Não informado';
+    return {
+      ...srv,
+      _telefoneOriginal: telReal,
+      nome: srv.nome || 'Servidor',
+      cargo: srv.cargo || 'APJ',
+      delegaciaId: srv.delegaciaId || '',
+      delegaciaNome: srv.delegaciaNome || '',
+      subdivisao: srv.subdivisao || '',
+      telefone: telReal,
+      isPlantonistaOperacional: idsPlantonistasOperacionais.has(String(srv.id))
+    };
+  });
+}
+
 export async function buscarServidoresSobDemanda() {
   try {
     console.log("[Firestore] Atualizando lista de servidores diretamente do banco...");
@@ -91,32 +114,7 @@ export async function buscarServidoresSobDemanda() {
     const snap = await db.collection('servidores').get();
     const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const userLogado = appState.currentUser || (firebase.auth && firebase.auth().currentUser);
-    const isAutenticado = !!userLogado;
-    const datasOperacionais = obterDatasOperacionaisIso();
-    const idsPlantonistasOperacionais = new Set();
-
-    (appState.escalas || []).forEach(e => {
-      if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
-        idsPlantonistasOperacionais.add(String(e.servidorId));
-      }
-    });
-
-    appState.servidores = servidoresData.map(srv => {
-      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
-      const telReal = srv.telefone || 'Não informado';
-
-      return {
-        ...srv,
-        _telefoneOriginal: telReal,
-        nome: srv.nome || 'Servidor',
-        cargo: srv.cargo || 'APJ',
-        delegaciaId: srv.delegaciaId || '',
-        delegaciaNome: srv.delegaciaNome || '',
-        subdivisao: srv.subdivisao || '',
-        telefone: podeExibirTelefone ? telReal : '🔒 [Acesso Restrito]'
-      };
-    });
+    appState.servidores = processarEFormatarServidores(servidoresData);
 
     const { versoes, dados } = obterCacheLocal();
     salvarCacheLocal(versoes.versoes || {}, { ...dados, servidores: servidoresData });
@@ -221,30 +219,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     appState.ferias = feriasData || [];
     appState.logs = logsData || [];
 
-    const datasOperacionais = obterDatasOperacionaisIso();
-    const idsPlantonistasOperacionais = new Set();
-
-    appState.escalas.forEach(e => {
-      if (e.data && datasOperacionais.has(e.data) && e.servidorId) {
-        idsPlantonistasOperacionais.add(String(e.servidorId));
-      }
-    });
-
-    appState.servidores = (servidoresData || []).map(srv => {
-      const podeExibirTelefone = isAutenticado || idsPlantonistasOperacionais.has(String(srv.id));
-      const telReal = srv.telefone || 'Não informado';
-
-      return {
-        ...srv,
-        _telefoneOriginal: telReal,
-        nome: srv.nome || 'Servidor',
-        cargo: srv.cargo || 'APJ',
-        delegaciaId: srv.delegaciaId || '',
-        delegaciaNome: srv.delegaciaNome || '',
-        subdivisao: srv.subdivisao || '',
-        telefone: podeExibirTelefone ? telReal : '🔒 [Acesso Restrito]'
-      };
-    });
+    appState.servidores = processarEFormatarServidores(servidoresData);
 
     if (appState.delegacias.length > 0 && !appState.selectedDelegaciaId) {
       appState.selectedDelegaciaId = appState.delegacias[0].id;
@@ -255,7 +230,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       delegacias: delegaciasData,
       feriados: feriadosData,
       sdps: sdpsData,
-      servidores: appState.servidores,
+      servidores: servidoresData,
       ferias: feriasData,
       logs: logsData,
       [chaveMesEscalas]: escalasMesData
@@ -281,7 +256,6 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
       await docRef.set(dataObj, { merge: true });
     }
 
-    // Garante que o documento de versões existe antes de incrementar
     await garantirColecaoControle();
 
     try {
