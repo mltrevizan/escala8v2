@@ -329,7 +329,6 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
       return false;
     });
 
-    // 🔑 FILTRO DE ESCALA NORMALIZADO (Trata CRF e Delegacia sem falhar por ID)
     let escalasDoDia = (appState.escalas || []).filter(e => {
       if (e.data !== dateStr) return false;
       
@@ -448,14 +447,14 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
             rotuloTipo = 'EXTRA';
           }
 
-          const idsString = grupo.map(e => e.id).join(',');
+          const idsString = grupo.map(e => String(e.id)).join(',');
 
           let nomesHtml = grupo.map(esc => {
             const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
             const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
             const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
 
-            const isDel = cargoPolicial.toUpperCase().includes('DELEGADO');
+            const isDel = String(cargoPolicial).toUpperCase().includes('DELEGADO');
             const prefixo = isDel ? 'DEL.' : 'APJ';
             
             let corTexto = 'text-slate-900';
@@ -505,8 +504,9 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
   return `${prefixo} ${primeiroNome} ${ultimoSobrenome}`;
 }
 
+// 🔑 RENDERIZADOR DE BALÃO COM BUSCA DE SERVIDOR TOLERANTE
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
-  if (escalasArray.length === 0) {
+  if (!escalasArray || escalasArray.length === 0) {
     return `
       <div class="p-0.5 px-1 rounded border ${bgStyle} opacity-40 flex items-center justify-between">
         <span class="cal-v1-header-title">${titulo}</span>
@@ -516,8 +516,8 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   }
 
   const ordenadas = [...escalasArray].sort((a, b) => {
-    const srvA = (appState.servidores || []).find(s => String(s.id) === String(a.servidorId));
-    const srvB = (appState.servidores || []).find(s => String(s.id) === String(b.servidorId));
+    const srvA = (appState.servidores || []).find(s => String(s.id) === String(a.servidorId) || String(s.id) === String(a.servidorId?.id));
+    const srvB = (appState.servidores || []).find(s => String(s.id) === String(b.servidorId) || String(s.id) === String(b.servidorId?.id));
 
     const isExtraA = a.tipo === 'EXTRAJORNADA' || a.tipo === 'SDP' ? 1 : 0;
     const isExtraB = b.tipo === 'EXTRAJORNADA' || b.tipo === 'SDP' ? 1 : 0;
@@ -534,11 +534,15 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   const isNoturno = titulo === 'NOTURNO';
 
   let listaHtml = ordenadas.map(esc => {
-    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId) || (s.login && esc.servidorId && String(s.login) === String(esc.servidorId)));
-    const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial');
-    const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
+    const srv = (appState.servidores || []).find(s => 
+      String(s.id) === String(esc.servidorId) || 
+      (s.login && esc.servidorId && String(s.login) === String(esc.servidorId))
+    );
 
-    const isDel = cargoPolicial.toUpperCase().includes('DELEGADO');
+    const nomePolicial = srv ? srv.nome : (esc.servidorNome || esc.nomeServidor || esc.nome || 'Policial Escalado');
+    const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'DELEGADO');
+
+    const isDel = String(cargoPolicial).toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
     const prefixo = isDel ? 'DEL.' : 'APJ';
@@ -555,7 +559,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
 
     const corNome = isNoturno ? 'text-white' : 'text-[#3E300E]';
     return `
-      <div class="cal-v1-srv-name ${corNome} truncate">
+      <div class="cal-v1-srv-name ${corNome} truncate font-bold">
         ${nomeExibicao}
       </div>
     `;
