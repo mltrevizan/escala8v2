@@ -553,6 +553,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
+// 🔑 LÓGICA DE GERAÇÃO EM LOTE REAJUSTADA PARA ROTACIONAR CORRETAMENTE O SOBREAVISO
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -563,7 +564,6 @@ window.executarGeradorLote = async function(e) {
   const tipoModalidade = document.getElementById('ger-modalidade').value;
   const regraDias = document.getElementById('ger-regra-dias').value;
 
-  // VALIDAÇÃO FLEXÍVEL DE PERMISSÃO COMPATÍVEL COM PLANTÕES UNIFICADOS
   if (!podeModificarEscalaDelegacia(delegaciaId)) {
     alert("Ação Bloqueada: O seu perfil não possui autorização para gerar escalas para esta delegacia.");
     return;
@@ -574,9 +574,11 @@ window.executarGeradorLote = async function(e) {
   const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
   const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
 
-  let duracaoDiasTurno = 1;
-  if (turnoPadraoCalculado.includes('dias')) {
-    duracaoDiasTurno = parseInt(turnoPadraoCalculado) || 1;
+  // Se o turno configurado for em blocos de dias (ex: 2 dias), calcula a duração do bloco.
+  // Caso contrário (24h / 12h), cada plantão dura 1 dia.
+  let duracaoDiasBloco = 1;
+  if (turnoPadraoCalculado.includes('dias') && !isSobreaviso) {
+    duracaoDiasBloco = parseInt(turnoPadraoCalculado) || 1;
   }
 
   if (!dataInicio || !dataFim || dataFim < dataInicio) {
@@ -641,13 +643,13 @@ window.executarGeradorLote = async function(e) {
   let idxDia = 0;
   while (idxDia < diasValidos.length) {
     const dtIso = diasValidos[idxDia];
-    const datasDoTurno = gerarDatasMultiplasContinuas(dtIso, duracaoDiasTurno);
+    const datasDoBloco = gerarDatasMultiplasContinuas(dtIso, duracaoDiasBloco);
 
     if (geradorState.modo === 'INDIVIDUAL') {
       const sId = geradorState.policiaisSelecionados[filaIndex % geradorState.policiaisSelecionados.length];
       filaIndex++;
 
-      for (const dataSubsequent of datasDoTurno) {
+      for (const dataSubsequent of datasDoBloco) {
         const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
         const novaEscala = {
           id: newEscId,
@@ -656,7 +658,7 @@ window.executarGeradorLote = async function(e) {
           delegaciaId: delegaciaId,
           scope: scope,
           tipo: tipoModalidade,
-          turno: turnoPadraoCalculado,
+          turno: isSobreaviso ? '24h' : turnoPadraoCalculado,
           vtr: geradorState.vtrIndividual || ''
         };
 
@@ -672,7 +674,7 @@ window.executarGeradorLote = async function(e) {
       filaIndex++;
 
       for (const sId of equipeAtiva.membros) {
-        for (const dataSubsequent of datasDoTurno) {
+        for (const dataSubsequent of datasDoBloco) {
           const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
           const novaEscala = {
             id: newEscId,
@@ -681,7 +683,7 @@ window.executarGeradorLote = async function(e) {
             delegaciaId: delegaciaId,
             scope: scope,
             tipo: tipoModalidade,
-            turno: turnoPadraoCalculado,
+            turno: isSobreaviso ? '24h' : turnoPadraoCalculado,
             vtr: equipeAtiva.vtr || ''
           };
 
@@ -695,7 +697,7 @@ window.executarGeradorLote = async function(e) {
       }
     }
 
-    idxDia += duracaoDiasTurno;
+    idxDia += duracaoDiasBloco;
   }
 
   window.fecharModalGeradorLote();
