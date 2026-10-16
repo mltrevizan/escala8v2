@@ -223,6 +223,26 @@ window.fecharModalLoginApp = function() {
   document.getElementById('modal-login-app')?.classList.add('hidden');
 };
 
+// 🔑 FORÇA A RECARGA DE SERVIDORES DIRETO DO FIRESTORE QUANDO SOLICITADO NO LOGIN
+window.forcarAtualizacaoListaServidoresLogin = async function() {
+  const containerSugestoes = document.getElementById('login-sugestoes-lista');
+  const inputNome = document.getElementById('login-nome-busca');
+  const termoAtual = inputNome?.value || '';
+
+  if (containerSugestoes) {
+    containerSugestoes.innerHTML = `<div class="p-3 text-center text-amber-800 bg-amber-50 font-bold text-xs animate-pulse">🔄 Buscando dados atualizados no servidor...</div>`;
+  }
+
+  try {
+    await loadAllDataFromFirestore(true);
+    if (typeof window.filtrarPolicialLogin === 'function') {
+      window.filtrarPolicialLogin(termoAtual);
+    }
+  } catch (err) {
+    console.error("Erro ao forçar atualização no login:", err);
+  }
+};
+
 window.filtrarPolicialLogin = function(termo) {
   const containerSugestoes = document.getElementById('login-sugestoes-lista');
   const badgeSel = document.getElementById('login-badge-servidor-sel');
@@ -246,14 +266,22 @@ window.filtrarPolicialLogin = function(termo) {
     return nomeNorm.includes(busca) || cargoNorm.includes(busca) || loginNorm.includes(busca);
   }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
+  containerSugestoes.innerHTML = '';
+
   if (servidoresMatcheados.length === 0) {
-    containerSugestoes.innerHTML = `<div class="p-2 text-center text-slate-400 italic text-xs">Nenhum policial localizado com esse nome.</div>`;
+    containerSugestoes.innerHTML = `
+      <div class="p-3 text-center space-y-2">
+        <div class="text-slate-500 italic text-xs">Nenhum policial localizado com esse nome.</div>
+        <button type="button" onclick="window.forcarAtualizacaoListaServidoresLogin()" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-xl font-bold text-xs cursor-pointer shadow-xs">
+          🔄 Não encontrou seu nome? Clique para atualizar a lista
+        </button>
+      </div>
+    `;
     return;
   }
 
-  containerSugestoes.innerHTML = '';
   servidoresMatcheados.slice(0, 6).forEach(srv => {
-    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     const emailCalculado = obterEmailAutenticacao(srv);
     const nivelExibicao = srv.nivelAcesso || srv.perfil || 'APJ';
 
@@ -273,6 +301,16 @@ window.filtrarPolicialLogin = function(termo) {
 
     containerSugestoes.appendChild(itemDiv);
   });
+
+  // Botão fixo no rodapé das sugestões para garantir acesso mesmo quando há resultados
+  const footerAtualizar = document.createElement('div');
+  footerAtualizar.className = 'p-1.5 bg-slate-50 border-t border-slate-200 text-center';
+  footerAtualizar.innerHTML = `
+    <button type="button" onclick="window.forcarAtualizacaoListaServidoresLogin()" class="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer">
+      🔄 Não encontrou seu nome na lista? Clique para atualizar
+    </button>
+  `;
+  containerSugestoes.appendChild(footerAtualizar);
 };
 
 window.selecionarPolicialLogin = function(id, nome, email, cargo) {
