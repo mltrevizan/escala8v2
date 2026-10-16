@@ -1,7 +1,7 @@
 // src/auth.js
 import { appState, normalizeText } from './state.js';
 import { applyUIPermissions, isProtectedAdminAccount } from './permissions.js';
-import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
+import { loadAllDataFromFirestore, syncDocToFirestore, obterMetricasLeitura } from './db.js';
 import { criarContaFirebaseAuth } from './authSync.js';
 
 let loginSearchState = {
@@ -83,6 +83,72 @@ export function initAuthModule() {
   renderUserStatusHeader();
 }
 
+window.atualizarBadgeLeiturasAdmin = function() {
+  const el = document.getElementById('badge-leituras-admin-val');
+  if (el && typeof obterMetricasLeitura === 'function') {
+    const metricas = obterMetricasLeitura();
+    el.innerText = `${metricas.total} docs`;
+  }
+};
+
+window.exibirModalMetricasLeitura = function() {
+  const metricas = typeof obterMetricasLeitura === 'function' ? obterMetricasLeitura() : { total: 0, historico: [] };
+  
+  let modal = document.getElementById('modal-metricas-leituras');
+  if (modal) modal.remove();
+
+  const linhas = metricas.historico.map(h => `
+    <tr class="border-b border-slate-100 text-[11px] font-mono">
+      <td class="p-2 text-slate-500">${h.hora}</td>
+      <td class="p-2 font-bold text-slate-800">${h.colecao}</td>
+      <td class="p-2 text-right font-bold text-amber-800">+${h.quantidadeDocs}</td>
+      <td class="p-2 text-right text-slate-600">${h.acumulado}</td>
+    </tr>
+  `).join('');
+
+  const modalHtml = `
+    <div id="modal-metricas-leituras" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-3 border-t-4 border-amber-500">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+            📊 Auditoria de Leituras no Firestore
+          </h3>
+          <button type="button" onclick="document.getElementById('modal-metricas-leituras').remove()" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+        </div>
+
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
+          <span class="font-bold text-amber-900">Total Acumulado na Sessão:</span>
+          <span class="font-mono text-base font-black text-amber-900">${metricas.total} documentos</span>
+        </div>
+
+        <div class="max-h-64 overflow-y-auto border border-slate-200 rounded-xl">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-[10px] text-slate-600 font-bold uppercase border-b">
+                <th class="p-2">Hora</th>
+                <th class="p-2">Coleção</th>
+                <th class="p-2 text-right">Docs</th>
+                <th class="p-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhas || '<tr><td colspan="4" class="p-4 text-center text-slate-400 italic">Nenhuma leitura gravada ainda.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pt-2 border-t flex justify-end">
+          <button type="button" onclick="document.getElementById('modal-metricas-leituras').remove()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
 export function renderUserStatusHeader() {
   const container = document.getElementById('app-status');
   if (!container) return;
@@ -91,13 +157,25 @@ export function renderUserStatusHeader() {
 
   if (user) {
     const perfilStr = user.perfil || 'Visualizador';
+    const isAdmin = perfilStr.toUpperCase() === 'ADMINISTRADOR';
+
     let badgePerfilClass = 'bg-slate-100 text-slate-800 border-slate-300';
-    if (perfilStr.toUpperCase() === 'ADMINISTRADOR') badgePerfilClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
+    if (isAdmin) badgePerfilClass = 'bg-black text-[#BEA55A] border-[#BEA55A] font-extrabold';
     else if (perfilStr.toUpperCase() === 'DELEGADO') badgePerfilClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A] font-bold';
     else if (perfilStr.toUpperCase() === 'COORDENADOR') badgePerfilClass = 'bg-[#2A2B2D] text-white border-[#57585A] font-bold';
 
+    const metricas = typeof obterMetricasLeitura === 'function' ? obterMetricasLeitura() : { total: 0 };
+
+    const widgetLeiturasHtml = isAdmin ? `
+      <button onclick="window.exibirModalMetricasLeitura()" title="Clique para ver o relatório detalhado de leituras da sessão" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 font-mono font-bold text-[11px] rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+        <span>📊 Leituras:</span>
+        <span id="badge-leituras-admin-val">${metricas.total} docs</span>
+      </button>
+    ` : '';
+
     container.innerHTML = `
       <div class="flex items-center gap-2 font-sans">
+        ${widgetLeiturasHtml}
         <div class="text-right hidden sm:block">
           <span class="block text-xs font-bold text-slate-900">${user.nome}</span>
           <span class="text-[9.5px] px-1.5 py-0.2 rounded border ${badgePerfilClass}">${perfilStr}</span>
@@ -216,7 +294,6 @@ window.selecionarPolicialLogin = function(id, nome, email, cargo) {
   }
 };
 
-// 🔑 EXECUÇÃO DE LOGIN COM MÚLTIPLAS TENTATIVAS DE E-MAIL (EVITA DESALINHAMENTO COM FIREBASE AUTH)
 window.executarLoginFirebase = async function(e) {
   if (e) e.preventDefault();
 
@@ -387,7 +464,6 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
   }
 };
 
-// 🔑 CADASTRO DE NOVA SENHA E E-MAIL REAL NATIVO NO FIREBASE AUTH
 window.salvarNovaSenhaObrigatoria = async function(e) {
   if (e) e.preventDefault();
   const novoEmail = document.getElementById('pwd-email-recuperacao')?.value.trim().toLowerCase();
@@ -447,7 +523,6 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
 
     const emailAtualAuth = (user.email || '').toLowerCase();
 
-    // 1. ATUALIZA O E-MAIL DO USUÁRIO NO FIREBASE AUTH
     if (emailAtualAuth !== novoEmail) {
       try {
         await user.updateEmail(novoEmail);
@@ -460,10 +535,8 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       }
     }
 
-    // 2. ATUALIZA A SENHA NO FIREBASE AUTH
     await user.updatePassword(nova);
 
-    // 3. REGISTRA NO FIRESTORE
     if (srv) {
       srv.email = novoEmail;
       srv.emailRecuperacao = novoEmail;
@@ -503,7 +576,6 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
   }
 };
 
-// 🔑 RESET ADMINISTRATIVO DE ACESSO (SEM DEPENDER DE ENVIO DE E-MAIL)
 window.resetarAcessoServidorAdmin = async function(servidorId) {
   if (!servidorId) return;
 
