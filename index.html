@@ -6,7 +6,7 @@
   
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚔</text></svg>">
 
-  <!-- PREVENÇÃO RIGOROSA DE CACHE -->
+  <!-- PREVENÇÃO RIGOROSA DE CACHE NO NAVEGADOR -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -43,16 +43,27 @@
     }
   </script>
 
-  <!-- ARQUIVO DE ESTILOS DA PASTA css/ -->
-  <link rel="stylesheet" href="./css/styles.css?v=8.0.1">
+  <!-- ARQUIVO DE ESTILOS DA PASTA css/ (Com versão para quebra de cache) -->
+  <link rel="stylesheet" href="./css/styles.css?v=13.0.0">
 
   <!-- SDK Firebase v8 (App, Firestore e Auth) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
-  <!-- CREDENCIAIS OFICIAIS DO PROJETO ESCALA8V2 -->
+  <!-- CREDENCIAIS OFICIAIS E CONTROLE DE CACHE FORÇADO -->
   <script>
+    // 🔑 LIMPEZA AUTOMÁTICA DE CACHE EM MUDANÇAS DE VERSÃO
+    const APP_BUILD_VERSION = '13.0.0';
+    const VERSAO_SALVA = localStorage.getItem('escala8_build_version');
+
+    if (VERSAO_SALVA !== APP_BUILD_VERSION) {
+      console.log(`[Cache System] Nova versão detectada (${APP_BUILD_VERSION}). Limpando caches obsoletos...`);
+      localStorage.removeItem('escala8_versoes_cache');
+      localStorage.removeItem('escala8_dados_cache');
+      localStorage.setItem('escala8_build_version', APP_BUILD_VERSION);
+    }
+
     if (!firebase.apps.length) {
       const firebaseConfig = {
         apiKey: "AIzaSyAupeszDjCFIhxdz0AlGNgTOws1L4oC8ZE",
@@ -64,7 +75,7 @@
       };
       firebase.initializeApp(firebaseConfig);
 
-      // 🔑 ATIVAÇÃO DO CACHE EM DISCO DO FIRESTORE (Despenca o consumo de leituras)
+      // Activacão da persistência offline/cache do Firestore
       firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
         console.warn("Aviso ao ativar cache local do Firestore:", err.message);
       });
@@ -159,7 +170,7 @@
 
   </div>
 
-  <!-- Script Principal ES6 (Versão Incrementada v12.3.1 para quebrar cache antigo) -->
-  <script type="module" src="./src/app.js?v=12.3.1"></script>
+  <!-- Script Principal ES6 (Versão Incrementada v13.0.0 para quebrar cache antigo) -->
+  <script type="module" src="./src/app.js?v=13.0.0"></script>
 </body>
 </html>
