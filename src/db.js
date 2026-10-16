@@ -6,6 +6,40 @@ const CHAVE_LOCAL_VERSOES = 'escala8_versoes_cache';
 const CHAVE_LOCAL_DADOS = 'escala8_dados_cache';
 const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000;
 
+// 📊 RASTREADOR DE LEITURAS DO FIRESTORE EM MEMÓRIA
+let totalLeiturasSessao = 0;
+let historicoLeiturasSessao = [];
+
+export function registrarLeituraFirestore(colecao, quantidadeDocs) {
+  const qtd = Number(quantidadeDocs) || 0;
+  totalLeiturasSessao += qtd;
+  
+  const registro = {
+    hora: new Date().toLocaleTimeString(),
+    colecao,
+    quantidadeDocs: qtd,
+    acumulado: totalLeiturasSessao
+  };
+  
+  historicoLeiturasSessao.unshift(registro);
+  if (historicoLeiturasSessao.length > 50) historicoLeiturasSessao.pop();
+
+  console.log(`[Firestore Tracker] 📥 +${qtd} docs lidos de '${colecao}' | Total Sessão: ${totalLeiturasSessao}`);
+  
+  if (typeof window.atualizarBadgeLeiturasAdmin === 'function') {
+    window.atualizarBadgeLeiturasAdmin();
+  }
+}
+
+export function obterMetricasLeitura() {
+  return {
+    total: totalLeiturasSessao,
+    historico: historicoLeiturasSessao
+  };
+}
+
+window.obterMetricasLeitura = obterMetricasLeitura;
+
 function obterDatasOperacionaisIso() {
   const hoje = new Date();
   const ontem = new Date(hoje);
@@ -53,6 +87,8 @@ export async function garantirColecaoControle() {
     const db = firebase.firestore();
     const docRef = db.collection('controle').doc('versoes');
     const snap = await docRef.get();
+    
+    registrarLeituraFirestore('controle/versoes', snap.exists ? 1 : 0);
 
     if (!snap.exists) {
       console.log("[Firestore] Criando coleção 'controle' e documento 'versoes'...");
@@ -75,6 +111,7 @@ export async function garantirColecaoControle() {
 async function obterVersoesControleFirestore(db) {
   try {
     const docRef = await db.collection('controle').doc('versoes').get();
+    registrarLeituraFirestore('controle/versoes', docRef.exists ? 1 : 0);
     if (docRef.exists) return docRef.data() || {};
   } catch (err) {
     console.warn("[Firestore] Erro leitura controle/versoes:", err.message);
@@ -113,6 +150,9 @@ export async function buscarServidoresSobDemanda() {
     console.log("[Firestore] Atualizando lista de servidores diretamente do banco...");
     const db = firebase.firestore();
     const snap = await db.collection('servidores').get();
+    
+    registrarLeituraFirestore('servidores (sob demanda)', snap.docs.length);
+
     const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     appState.servidores = processarEFormatarServidores(servidoresData);
@@ -127,7 +167,6 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
-// 🔑 CARREGAMENTO COMPLETO E SEM RESTRICAO DE MÊS
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -175,33 +214,39 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const [delegaciasData, feriadosData, sdpsData, servidoresData, escalasData, feriasData, logsData] = await Promise.all([
       buscarColecaoOuCache('delegacias', async () => {
         const snap = await db.collection('delegacias').get();
+        registrarLeituraFirestore('delegacias', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('feriados', async () => {
         const snap = await db.collection('feriados').get();
+        registrarLeituraFirestore('feriados', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('sdps', async () => {
         const snap = await db.collection('sdps').get();
+        registrarLeituraFirestore('sdps', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('servidores', async () => {
         const snap = await db.collection('servidores').get();
+        registrarLeituraFirestore('servidores', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('escalas', async () => {
-        // Busca a coleção de escalas inteira para garantir carregamento na gestão e navegação livre
         const snap = await db.collection('escalas').get();
+        registrarLeituraFirestore('escalas', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('ferias', async () => {
         if (!isAutenticado) return cacheDados.ferias || [];
         const snap = await db.collection('ferias').get();
+        registrarLeituraFirestore('ferias', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }),
       buscarColecaoOuCache('logs', async () => {
         if (!isAutenticado) return cacheDados.logs || [];
         const snap = await db.collection('logs').get();
+        registrarLeituraFirestore('logs', snap.docs.length);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       })
     ]);
