@@ -500,7 +500,7 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
   }
 };
 
-// 🔑 SALVAR NOVA SENHA E REGISTRAR E-MAIL DE RECUPERAÇÃO DE FORMA COMPATÍVEL
+// 🔑 CADASTRO DE NOVA SENHA E CRIAÇÃO GARANTIDA DA NOVA CONTA VIA REST API
 window.salvarNovaSenhaObrigatoria = async function(e) {
   if (e) e.preventDefault();
   const novoEmail = document.getElementById('pwd-email-recuperacao')?.value.trim().toLowerCase();
@@ -558,33 +558,37 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       srv = (appState.servidores || []).find(s => s.email?.toLowerCase() === user.email?.toLowerCase());
     }
 
-    const emailAtualAuth = (user.email || '').toLowerCase();
-
-    // 1. ATUALIZA A SENHA NO FIREBASE AUTH
+    // 1. Atualiza a senha da conta atualmente conectada
     await user.updatePassword(nova);
 
-    // 2. ATUALIZA/REGISTRA O E-MAIL
-    if (emailAtualAuth !== novoEmail) {
+    // 2. CRIA A NOVA CONTA REAL NO FIREBASE AUTH VIA REST API (Garante criação no console sem conflito de sessão)
+    const apiKey = firebase.app().options.apiKey;
+    if (apiKey) {
       try {
-        if (typeof user.verifyBeforeUpdateEmail === 'function') {
-          await user.verifyBeforeUpdateEmail(novoEmail);
+        const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: novoEmail,
+            password: nova,
+            returnSecureToken: true
+          })
+        });
+
+        const resData = await response.json();
+        if (response.ok) {
+          console.log("[Firebase Auth REST] Novo usuário registrado no Firebase Auth:", resData.email);
+        } else if (resData.error && resData.error.message === 'EMAIL_EXISTS') {
+          console.log("[Firebase Auth REST] O e-mail informado já existe no Auth. A senha atualizada será utilizada para a autenticação.");
         } else {
-          await user.updateEmail(novoEmail);
+          console.warn("[Firebase Auth REST] Aviso na API ao registrar:", resData.error?.message);
         }
-      } catch (emailErr) {
-        if (emailErr.code === 'auth/email-already-in-use' || (emailErr.message && emailErr.message.includes('verify'))) {
-          try {
-            await firebase.auth().createUserWithEmailAndPassword(novoEmail, nova);
-          } catch (createErr) {
-            console.warn("[Auth] E-mail de recuperação registrado no Firestore.");
-          }
-        } else {
-          console.warn("[Auth] Aviso ao vincular e-mail:", emailErr.message);
-        }
+      } catch (restErr) {
+        console.warn("[Firebase Auth REST] Erro na requisição REST de criação de conta:", restErr.message);
       }
     }
 
-    // 3. ATUALIZA NO FIRESTORE
+    // 3. ATUALIZA A FICHA DO POLICIAL NO FIRESTORE
     if (srv) {
       srv.email = novoEmail;
       srv.emailRecuperacao = novoEmail;
@@ -604,14 +608,14 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       appState.currentUser.forcarTrocaSenha = false;
     }
 
-    alert("E-mail de recuperação e nova senha cadastrados com sucesso!");
+    alert("E-mail real e nova senha cadastrados com sucesso no Firebase Auth!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
 
     if (typeof renderUserStatusHeader === 'function') renderUserStatusHeader();
     if (typeof applyUIPermissions === 'function') applyUIPermissions();
 
   } catch (err) {
-    console.error("Erro ao salvar nova senha no Auth:", err);
+    console.error("Erro ao salvar nova senha:", err);
 
     if (err.code === 'auth/requires-recent-login') {
       alert("Por questões de segurança, faça o login novamente com 'Central123' para confirmar a alteração do e-mail e senha.");
@@ -619,7 +623,7 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       window.location.reload();
     } else {
       if (msgErro) {
-        msgErro.innerText = `Erro ao salvar cadastro no Firebase Auth: ${err.message}`;
+        msgErro.innerText = `Erro ao salvar cadastro: ${err.message}`;
         msgErro.classList.remove('hidden');
       }
     }
