@@ -6,7 +6,7 @@ const CHAVE_LOCAL_VERSOES = 'escala8_versoes_cache';
 const CHAVE_LOCAL_DADOS = 'escala8_dados_cache';
 const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000;
 
-// 📊 RASTREADOR DE LEITURAS DO FIRESTORE EM MEMÓRIA
+// 📊 RASTREADOR DE LEITURAS EM MEMÓRIA
 let totalLeiturasSessao = 0;
 let historicoLeiturasSessao = [];
 
@@ -111,7 +111,7 @@ export async function garantirColecaoControle() {
 async function obterVersoesControleFirestore(db) {
   try {
     const docRef = await db.collection('controle').doc('versoes').get();
-    registrarLeituraFirestore('controle/versoes', docRef.exists ? 1 : 0);
+    registrarLeituraFirestore('controle/versoes (checagem)', docRef.exists ? 1 : 0);
     if (docRef.exists) return docRef.data() || {};
   } catch (err) {
     console.warn("[Firestore] Erro leitura controle/versoes:", err.message);
@@ -167,6 +167,7 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
+// 🔑 CARREGAMENTO DE DADOS COM CACHE INTELIGENTE DE BAIXO CONSUMO
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -180,6 +181,34 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const versoesLocais = cacheVersoesObj.versoes || {};
     const timestampCache = cacheVersoesObj.timestamp || 0;
     const cacheExpirado = (Date.now() - timestampCache) > TEMPO_EXPIRACAO_CACHE_MS;
+
+    // Se já temos dados na memória/cache e não foi forçada atualização nem expirou, não busca no Firestore!
+    if (!forceRefresh && !cacheExpirado && cacheDados.escalas && appState.escalas && appState.escalas.length > 0) {
+      // Faz apenas 1 leitura leve para checar se algum documento mudou no banco
+      const versoesRemotas = await obterVersoesControleFirestore(db);
+      
+      const mudouDelegacias = versoesRemotas.delegacias !== versoesLocais.delegacias;
+      const mudouFeriados = versoesRemotas.feriados !== versoesLocais.feriados;
+      const mudouSdps = versoesRemotas.sdps !== versoesLocais.sdps;
+      const mudouServidores = versoesRemotas.servidores !== versoesLocais.servidores;
+      const mudouEscalas = versoesRemotas.escalas !== versoesLocais.escalas;
+      const mudouFerias = isAutenticado && (versoesRemotas.ferias !== versoesLocais.ferias);
+      const mudouLogs = isAutenticado && (versoesRemotas.logs !== versoesLocais.logs);
+
+      if (!mudouDelegacias && !mudouFeriados && !mudouSdps && !mudouServidores && !mudouEscalas && !mudouFerias && !mudouLogs) {
+        // NADA MUDOU NO BANCO: Usa os dados da memória/cache local sem gastar NENHUMA leitura extra!
+        appState.delegacias = cacheDados.delegacias || appState.delegacias || [];
+        appState.feriados = cacheDados.feriados || appState.feriados || [];
+        appState.sdps = cacheDados.sdps || appState.sdps || [];
+        appState.escalas = cacheDados.escalas || appState.escalas || [];
+        appState.ferias = cacheDados.ferias || appState.ferias || [];
+        appState.logs = cacheDados.logs || appState.logs || [];
+        appState.servidores = processarEFormatarServidores(cacheDados.servidores || appState.servidores || []);
+        
+        isCarregandoDados = false;
+        return;
+      }
+    }
 
     let versoesRemotas = {};
     if (!forceRefresh) {
