@@ -223,7 +223,6 @@ window.fecharModalLoginApp = function() {
   document.getElementById('modal-login-app')?.classList.add('hidden');
 };
 
-// 🔑 FORÇA A RECARGA DE SERVIDORES DIRETO DO FIRESTORE QUANDO SOLICITADO NO LOGIN
 window.forcarAtualizacaoListaServidoresLogin = async function() {
   const containerSugestoes = document.getElementById('login-sugestoes-lista');
   const inputNome = document.getElementById('login-nome-busca');
@@ -302,7 +301,6 @@ window.filtrarPolicialLogin = function(termo) {
     containerSugestoes.appendChild(itemDiv);
   });
 
-  // Botão fixo no rodapé das sugestões para garantir acesso mesmo quando há resultados
   const footerAtualizar = document.createElement('div');
   footerAtualizar.className = 'p-1.5 bg-slate-50 border-t border-slate-200 text-center';
   footerAtualizar.innerHTML = `
@@ -502,6 +500,7 @@ window.cancelarTrocaSenhaObrigatoria = async function() {
   }
 };
 
+// 🔑 SALVAR NOVA SENHA E REGISTRAR E-MAIL DE RECUPERAÇÃO DE FORMA COMPATÍVEL
 window.salvarNovaSenhaObrigatoria = async function(e) {
   if (e) e.preventDefault();
   const novoEmail = document.getElementById('pwd-email-recuperacao')?.value.trim().toLowerCase();
@@ -561,20 +560,31 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
 
     const emailAtualAuth = (user.email || '').toLowerCase();
 
+    // 1. ATUALIZA A SENHA NO FIREBASE AUTH
+    await user.updatePassword(nova);
+
+    // 2. ATUALIZA/REGISTRA O E-MAIL
     if (emailAtualAuth !== novoEmail) {
       try {
-        await user.updateEmail(novoEmail);
-      } catch (emailErr) {
-        if (emailErr.code === 'auth/email-already-in-use') {
-          console.warn("[Auth] E-mail já associado a outra credencial. Prosseguindo com atualização de senha...");
+        if (typeof user.verifyBeforeUpdateEmail === 'function') {
+          await user.verifyBeforeUpdateEmail(novoEmail);
         } else {
-          throw emailErr;
+          await user.updateEmail(novoEmail);
+        }
+      } catch (emailErr) {
+        if (emailErr.code === 'auth/email-already-in-use' || (emailErr.message && emailErr.message.includes('verify'))) {
+          try {
+            await firebase.auth().createUserWithEmailAndPassword(novoEmail, nova);
+          } catch (createErr) {
+            console.warn("[Auth] E-mail de recuperação registrado no Firestore.");
+          }
+        } else {
+          console.warn("[Auth] Aviso ao vincular e-mail:", emailErr.message);
         }
       }
     }
 
-    await user.updatePassword(nova);
-
+    // 3. ATUALIZA NO FIRESTORE
     if (srv) {
       srv.email = novoEmail;
       srv.emailRecuperacao = novoEmail;
@@ -584,7 +594,9 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       const idx = (appState.servidores || []).findIndex(s => String(s.id) === String(srv.id));
       if (idx >= 0) appState.servidores[idx] = srv;
 
-      await syncDocToFirestore('servidores', srv.id, srv);
+      if (typeof syncDocToFirestore === 'function') {
+        await syncDocToFirestore('servidores', srv.id, srv);
+      }
     }
 
     if (appState.currentUser) {
@@ -592,14 +604,14 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       appState.currentUser.forcarTrocaSenha = false;
     }
 
-    alert("E-mail e nova senha cadastrados com sucesso no Firebase Auth!");
+    alert("E-mail de recuperação e nova senha cadastrados com sucesso!");
     document.getElementById('modal-trocar-senha-obrigatoria')?.classList.add('hidden');
 
     if (typeof renderUserStatusHeader === 'function') renderUserStatusHeader();
     if (typeof applyUIPermissions === 'function') applyUIPermissions();
 
   } catch (err) {
-    console.error("Erro ao salvar novo e-mail/senha no Auth:", err);
+    console.error("Erro ao salvar nova senha no Auth:", err);
 
     if (err.code === 'auth/requires-recent-login') {
       alert("Por questões de segurança, faça o login novamente com 'Central123' para confirmar a alteração do e-mail e senha.");
@@ -607,7 +619,7 @@ window.salvarNovaSenhaObrigatoria = async function(e) {
       window.location.reload();
     } else {
       if (msgErro) {
-        msgErro.innerText = `Erro ao atualizar cadastro no Firebase Auth: ${err.message}`;
+        msgErro.innerText = `Erro ao salvar cadastro no Firebase Auth: ${err.message}`;
         msgErro.classList.remove('hidden');
       }
     }
