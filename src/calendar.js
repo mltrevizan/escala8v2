@@ -149,16 +149,9 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
+  // 🔑 CARREGAMENTO INTELIGENTE: Lê cache local se o Firestore não sofreu atualizações (0 a 1 leitura)
   if (typeof loadAllDataFromFirestore === 'function') {
     await loadAllDataFromFirestore(false);
-  }
-
-  const temServidorFaltando = (appState.escalas || []).some(esc => 
-    esc.servidorId && !(appState.servidores || []).some(s => String(s.id) === String(esc.servidorId) || (s.login && String(s.login) === String(esc.servidorId)))
-  );
-
-  if (temServidorFaltando && typeof buscarServidoresSobDemanda === 'function') {
-    await buscarServidoresSobDemanda();
   }
 
   if (scope === 'DELEGACIA') {
@@ -504,7 +497,6 @@ function formatarNomeOperacional(nomeCompleto, prefixo) {
   return `${prefixo} ${primeiroNome} ${ultimoSobrenome}`;
 }
 
-// 🔑 RENDERIZADOR DE BALÃO COM BUSCA DE SERVIDOR TOLERANTE
 function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
   if (!escalasArray || escalasArray.length === 0) {
     return `
