@@ -168,7 +168,7 @@ window.renderTabelaServidoresCorpo = function() {
               ✏️ Editar
             </button>
             ${podeResetar ? `
-              <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Solicitar redefinição obrigatória de senha e e-mail para o policial" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
+              <button onclick="window.resetarSenhaServidorDirect('${srv.id}')" title="Resetar senha do policial para Central123" class="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300 rounded font-bold text-[10px] shadow-xs cursor-pointer">
                 🔑 Resetar Senha
               </button>
             ` : ''}
@@ -337,28 +337,26 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  if (!confirm(`Deseja marcar a conta de ${srv.nome} para redefinição obrigatória de e-mail de recuperação e senha no próximo acesso?`)) {
-    return;
+  // 🔑 UTILIZA O RESET ADMINISTRATIVO UNIFICADO (COM CONFIRMAÇÃO E SEM DEPENDER NATIVAMENTE DO E-MAIL)
+  if (typeof window.resetarAcessoServidorAdmin === 'function') {
+    await window.resetarAcessoServidorAdmin(srv.id);
+  } else {
+    try {
+      srv.senhaResetada = true;
+      srv.forcarTrocaSenha = true;
+      await syncDocToFirestore('servidores', srv.id, srv);
+      alert(`Sucesso! O acesso de ${srv.nome} foi marcado para redefinição.`);
+    } catch (err) {
+      alert(`Erro ao resetar: ${err.message}`);
+    }
   }
 
-  try {
-    srv.senhaResetada = true;
-    srv.forcarTrocaSenha = true;
-    await syncDocToFirestore('servidores', srv.id, srv);
+  if (document.getElementById('modal-cadastro-servidor')) {
+    window.fecharModalServidor();
+  }
 
-    alert(`Sucesso! A conta de ${srv.nome} foi marcada para redefinição. No próximo acesso, o sistema exigirá o cadastro de e-mail para recuperação de senha e uma nova senha pessoal.`);
-
-    if (document.getElementById('modal-cadastro-servidor')) {
-      window.fecharModalServidor();
-    }
-
-    if (window.renderServidoresTable) {
-      renderServidoresTable('servidores-table-container');
-    }
-
-  } catch (err) {
-    console.error("Erro ao resetar senha no banco:", err);
-    alert(`Erro ao salvar redefinição no banco de dados: ${err.message}`);
+  if (window.renderServidoresTable) {
+    renderServidoresTable('servidores-table-container');
   }
 };
 
