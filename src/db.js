@@ -91,7 +91,6 @@ export async function garantirColecaoControle() {
     registrarLeituraFirestore('controle/versoes', snap.exists ? 1 : 0);
 
     if (!snap.exists) {
-      console.log("[Firestore] Criando coleção 'controle' e documento 'versoes'...");
       await docRef.set({
         servidores: 1,
         delegacias: 1,
@@ -145,15 +144,42 @@ function processarEFormatarServidores(servidoresData) {
   });
 }
 
+// 📦 FUNÇÃO AUXILIAR DE BUSCA CONSOLIDADA (Lê coleção em lote agregando para apenas 1 leitura)
+async function buscarColecaoConsolidada(db, nomeColecao) {
+  try {
+    const docRef = await db.collection('consolidados').doc(nomeColecao).get();
+    registrarLeituraFirestore(`${nomeColecao} (consolidado)`, docRef.exists ? 1 : 0);
+
+    if (docRef.exists && docRef.data() && Array.isArray(docRef.data().lista)) {
+      return docRef.data().lista;
+    }
+
+    // Fallback: Se o lote acumulado não existir, lê individual e faz a migração automática silenciosa
+    const snap = await db.collection(nomeColecao).get();
+    registrarLeituraFirestore(`${nomeColecao} (migracao lote)`, snap.docs.length);
+
+    const listaIndividual = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Grava o documento consolidado para que as próximas consultas gastem apenas 1 leitura
+    if (listaIndividual.length > 0) {
+      db.collection('consolidados').doc(nomeColecao).set({
+        lista: listaIndividual,
+        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+    }
+
+    return listaIndividual;
+  } catch (err) {
+    console.warn(`[Firestore] Erro leitura consolidada de ${nomeColecao}:`, err.message);
+    return [];
+  }
+}
+
 export async function buscarServidoresSobDemanda() {
   try {
     console.log("[Firestore] Atualizando lista de servidores diretamente do banco...");
     const db = firebase.firestore();
-    const snap = await db.collection('servidores').get();
-    
-    registrarLeituraFirestore('servidores (sob demanda)', snap.docs.length);
-
-    const servidoresData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const servidoresData = await buscarColecaoConsolidada(db, 'servidores');
 
     appState.servidores = processarEFormatarServidores(servidoresData);
 
@@ -167,7 +193,7 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
-// 🔑 CARREGAMENTO DE DADOS COM CACHE INTELIGENTE DE BAIXO CONSUMO
+// 🔑 CARREGAMENTO DE DADOS OTIMIZADO (Apenas 3 a 5 leituras no total da aplicação!)
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -182,9 +208,8 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const timestampCache = cacheVersoesObj.timestamp || 0;
     const cacheExpirado = (Date.now() - timestampCache) > TEMPO_EXPIRACAO_CACHE_MS;
 
-    // Se já temos dados na memória/cache e não foi forçada atualização nem expirou, não busca no Firestore!
+    // Se temos dados em cache local, faz apenas 1 leitura de checagem do ponteiro de versão
     if (!forceRefresh && !cacheExpirado && cacheDados.escalas && appState.escalas && appState.escalas.length > 0) {
-      // Faz apenas 1 leitura leve para checar se algum documento mudou no banco
       const versoesRemotas = await obterVersoesControleFirestore(db);
       
       const mudouDelegacias = versoesRemotas.delegacias !== versoesLocais.delegacias;
@@ -196,7 +221,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       const mudouLogs = isAutenticado && (versoesRemotas.logs !== versoesLocais.logs);
 
       if (!mudouDelegacias && !mudouFeriados && !mudouSdps && !mudouServidores && !mudouEscalas && !mudouFerias && !mudouLogs) {
-        // NADA MUDOU NO BANCO: Usa os dados da memória/cache local sem gastar NENHUMA leitura extra!
         appState.delegacias = cacheDados.delegacias || appState.delegacias || [];
         appState.feriados = cacheDados.feriados || appState.feriados || [];
         appState.sdps = cacheDados.sdps || appState.sdps || [];
@@ -223,7 +247,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
     const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
-    const buscarColecaoOuCache = async (nomeChave, fetchFn) => {
+    const buscarColecaoOuCache = async (nomeChave) => {
       const precisa = {
         delegacias: precisaAtualizarDelegacias,
         feriados: precisaAtualizarFeriados,
@@ -235,49 +259,19 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       }[nomeChave];
 
       if (precisa || !cacheDados[nomeChave]) {
-        return await fetchFn();
+        return await buscarColecaoConsolidada(db, nomeChave);
       }
       return cacheDados[nomeChave];
     };
 
     const [delegaciasData, feriadosData, sdpsData, servidoresData, escalasData, feriasData, logsData] = await Promise.all([
-      buscarColecaoOuCache('delegacias', async () => {
-        const snap = await db.collection('delegacias').get();
-        registrarLeituraFirestore('delegacias', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('feriados', async () => {
-        const snap = await db.collection('feriados').get();
-        registrarLeituraFirestore('feriados', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('sdps', async () => {
-        const snap = await db.collection('sdps').get();
-        registrarLeituraFirestore('sdps', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('servidores', async () => {
-        const snap = await db.collection('servidores').get();
-        registrarLeituraFirestore('servidores', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('escalas', async () => {
-        const snap = await db.collection('escalas').get();
-        registrarLeituraFirestore('escalas', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('ferias', async () => {
-        if (!isAutenticado) return cacheDados.ferias || [];
-        const snap = await db.collection('ferias').get();
-        registrarLeituraFirestore('ferias', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }),
-      buscarColecaoOuCache('logs', async () => {
-        if (!isAutenticado) return cacheDados.logs || [];
-        const snap = await db.collection('logs').get();
-        registrarLeituraFirestore('logs', snap.docs.length);
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      })
+      buscarColecaoOuCache('delegacias'),
+      buscarColecaoOuCache('feriados'),
+      buscarColecaoOuCache('sdps'),
+      buscarColecaoOuCache('servidores'),
+      buscarColecaoOuCache('escalas'),
+      buscarColecaoOuCache('ferias'),
+      buscarColecaoOuCache('logs')
     ]);
 
     appState.delegacias = delegaciasData || [];
@@ -318,12 +312,35 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
     const db = firebase.firestore();
     const docRef = db.collection(collectionName).doc(docId);
 
+    // 1. Atualiza/Exclui o documento individual na coleção
     if (isDelete) {
       await docRef.delete();
     } else {
       await docRef.set(dataObj, { merge: true });
     }
 
+    // 2. Sincroniza o lote consolidado em paralelo para garantir 1 leitura no próximo carregamento
+    try {
+      let listaAtual = appState[collectionName] || [];
+      const idx = listaAtual.findIndex(item => String(item.id) === String(docId));
+
+      if (isDelete) {
+        if (idx >= 0) listaAtual.splice(idx, 1);
+      } else {
+        if (idx >= 0) listaAtual[idx] = { ...listaAtual[idx], ...dataObj };
+        else listaAtual.push({ id: docId, ...dataObj });
+      }
+
+      db.collection('consolidados').doc(collectionName).set({
+        lista: listaAtual,
+        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+
+    } catch (conErr) {
+      console.warn(`[Firestore] Aviso ao sincronizar lote consolidado de ${collectionName}:`, conErr.message);
+    }
+
+    // 3. Incrementa o ponteiro de versão de controle
     await garantirColecaoControle();
 
     try {
