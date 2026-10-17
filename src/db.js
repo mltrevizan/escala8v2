@@ -144,23 +144,22 @@ function processarEFormatarServidores(servidoresData) {
   });
 }
 
-// 📦 FUNÇÃO AUXILIAR DE BUSCA CONSOLIDADA (Lê coleção em lote agregando para apenas 1 leitura)
+// 📦 FUNÇÃO AUXILIAR DE BUSCA CONSOLIDADA (1 Leitura Por Coleção)
 async function buscarColecaoConsolidada(db, nomeColecao) {
   try {
     const docRef = await db.collection('consolidados').doc(nomeColecao).get();
     registrarLeituraFirestore(`${nomeColecao} (consolidado)`, docRef.exists ? 1 : 0);
 
-    if (docRef.exists && docRef.data() && Array.isArray(docRef.data().lista)) {
+    if (docRef.exists && docRef.data() && Array.isArray(docRef.data().lista) && docRef.data().lista.length > 0) {
       return docRef.data().lista;
     }
 
-    // Fallback: Se o lote acumulado não existir, lê individual e faz a migração automática silenciosa
+    // Fallback: Se o lote consolidado ainda não existe, busca individual e faz o primeiro agrupamento na nuvem
     const snap = await db.collection(nomeColecao).get();
     registrarLeituraFirestore(`${nomeColecao} (migracao lote)`, snap.docs.length);
 
     const listaIndividual = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // Grava o documento consolidado para que as próximas consultas gastem apenas 1 leitura
     if (listaIndividual.length > 0) {
       db.collection('consolidados').doc(nomeColecao).set({
         lista: listaIndividual,
@@ -193,7 +192,7 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
-// 🔑 CARREGAMENTO DE DADOS OTIMIZADO (Apenas 3 a 5 leituras no total da aplicação!)
+// 🔑 CARREGAMENTO DE DADOS OTIMIZADO E COM AUTO-RECUPERAÇÃO DE CACHE
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -203,13 +202,24 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const userLogado = appState.currentUser || (firebase.auth && firebase.auth().currentUser);
     const isAutenticado = !!userLogado;
 
-    const { versoes: cacheVersoesObj, dados: cacheDados } = obterCacheLocal();
+    let { versoes: cacheVersoesObj, dados: cacheDados } = obterCacheLocal();
+
+    // 🛡️ TRAVA DE SEGURANÇA: Se o cache local estiver sem dados válidos/zerado, força a recuperação imediata do banco
+    const cacheInvalido = !cacheDados || !cacheDados.escalas || cacheDados.escalas.length === 0;
+    if (cacheInvalido) {
+      console.warn("[Auto-Recuperação] Cache local zerado/inválido detectado. Limpando memória para recarregar...");
+      localStorage.removeItem(CHAVE_LOCAL_DADOS);
+      localStorage.removeItem(CHAVE_LOCAL_VERSOES);
+      cacheDados = {};
+      cacheVersoesObj = {};
+    }
+
     const versoesLocais = cacheVersoesObj.versoes || {};
     const timestampCache = cacheVersoesObj.timestamp || 0;
     const cacheExpirado = (Date.now() - timestampCache) > TEMPO_EXPIRACAO_CACHE_MS;
 
-    // Se temos dados em cache local, faz apenas 1 leitura de checagem do ponteiro de versão
-    if (!forceRefresh && !cacheExpirado && cacheDados.escalas && appState.escalas && appState.escalas.length > 0) {
+    // Se temos dados em cache local VÁLIDOS, checa apenas o ponteiro de versão (1 leitura leve)
+    if (!forceRefresh && !cacheExpirado && !cacheInvalido && appState.escalas && appState.escalas.length > 0) {
       const versoesRemotas = await obterVersoesControleFirestore(db);
       
       const mudouDelegacias = versoesRemotas.delegacias !== versoesLocais.delegacias;
@@ -239,13 +249,13 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
       versoesRemotas = await obterVersoesControleFirestore(db);
     }
 
-    const precisaAtualizarDelegacias = forceRefresh || cacheExpirado || (versoesRemotas.delegacias !== versoesLocais.delegacias) || !cacheDados.delegacias;
-    const precisaAtualizarFeriados = forceRefresh || cacheExpirado || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
-    const precisaAtualizarSdps = forceRefresh || cacheExpirado || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
-    const precisaAtualizarServidores = forceRefresh || cacheExpirado || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
-    const precisaAtualizarEscalas = forceRefresh || cacheExpirado || (versoesRemotas.escalas !== versoesLocais.escalas) || !cacheDados.escalas;
-    const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
-    const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
+    const precisaAtualizarDelegacias = forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.delegacias !== versoesLocais.delegacias) || !cacheDados.delegacias;
+    const precisaAtualizarFeriados = forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.feriados !== versoesLocais.feriados) || !cacheDados.feriados;
+    const precisaAtualizarSdps = forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.sdps !== versoesLocais.sdps) || !cacheDados.sdps;
+    const precisaAtualizarServidores = forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.servidores !== versoesLocais.servidores) || !cacheDados.servidores;
+    const precisaAtualizarEscalas = forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.escalas !== versoesLocais.escalas) || !cacheDados.escalas;
+    const precisaAtualizarFerias = isAutenticado && (forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.ferias !== versoesLocais.ferias) || !cacheDados.ferias);
+    const precisaAtualizarLogs = isAutenticado && (forceRefresh || cacheExpirado || cacheInvalido || (versoesRemotas.logs !== versoesLocais.logs) || !cacheDados.logs);
 
     const buscarColecaoOuCache = async (nomeChave) => {
       const precisa = {
