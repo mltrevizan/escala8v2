@@ -343,7 +343,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
   }
 }
 
-// 🛡️ SINCRONIZAÇÃO ATÔMICA (TRANSAÇÃO NO BANCO PARA EVITAR SOBREPOSIÇÃO SIMULTÂNEA)
+// 🛡️ SINCRONIZAÇÃO ATÔMICA CORRIGIDA (LEITURAS PRIMEIRO, ESCRITAS DEPOIS)
 export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
   try {
     const db = firebase.firestore();
@@ -351,23 +351,21 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
     const consolidadoRef = db.collection('consolidados').doc(collectionName);
     const controleRef = db.collection('controle').doc('versoes');
 
-    // Executa uma transação no Firestore: lê a versão oficial da nuvem e grava com consistência garantida
+    // Transação do Firestore com ordem correta: READS primeiro, WRITES por último
     await db.runTransaction(async (transaction) => {
-      // 1. Gravação do documento individual
-      if (isDelete) {
-        transaction.delete(docRef);
-      } else {
-        transaction.set(docRef, dataObj, { merge: true });
-      }
-
-      // 2. Leitura atômica da lista consolidada na nuvem
+      // -------------------------------------------------------------
+      // 1. FASE DE LEITURAS (READS) - OBRIGATORIAMENTE PRIMEIRO
+      // -------------------------------------------------------------
       const consolidadoDoc = await transaction.get(consolidadoRef);
+      
       let listaNuvem = [];
       if (consolidadoDoc.exists && Array.isArray(consolidadoDoc.data().lista)) {
         listaNuvem = consolidadoDoc.data().lista;
       }
 
-      // 3. Atualização atômica do lote
+      // -------------------------------------------------------------
+      // 2. PROCESSAMENTO EM MEMÓRIA DA LISTA
+      // -------------------------------------------------------------
       const idx = listaNuvem.findIndex(item => String(item.id) === String(docId));
       if (isDelete) {
         if (idx >= 0) listaNuvem.splice(idx, 1);
@@ -379,20 +377,30 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
         }
       }
 
-      // 4. Salva a lista consolidada atualizada na nuvem
+      // -------------------------------------------------------------
+      // 3. FASE DE ESCRITAS (WRITES) - OBRIGATORIAMENTE POR ÚLTIMO
+      // -------------------------------------------------------------
+      // Write A: Atualiza/Deleta o documento individual
+      if (isDelete) {
+        transaction.delete(docRef);
+      } else {
+        transaction.set(docRef, dataObj, { merge: true });
+      }
+
+      // Write B: Salva o lote consolidado atualizado
       transaction.set(consolidadoRef, {
         lista: listaNuvem,
         ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
-      // 5. Incrementa o ponteiro de versão global no controle
+      // Write C: Incrementa o ponteiro de versão global no controle
       transaction.set(controleRef, {
         [collectionName]: firebase.firestore.FieldValue.increment(1),
         ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     });
 
-    // 6. Atualiza a memória local após confirmação da transação na nuvem
+    // 4. Atualiza a memória local após confirmação com sucesso da transação
     if (!appState[collectionName]) appState[collectionName] = [];
     const idxLocal = appState[collectionName].findIndex(item => String(item.id) === String(docId));
     if (isDelete) {
