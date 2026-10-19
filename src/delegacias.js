@@ -35,8 +35,7 @@ function extrairHorariosInicioFim(strHorario, padraoInicio = '08:00', padraoFim 
  * Preenche o dropdown da aba 'Escala por Delegacia' apenas com delegacias que possuem 
  * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
  * 
- * Ajustado para localizar prioritariamente o ID do elemento usado no calendário: 'select-calendar-delegacia'
- * e sincronizar perfeitamente com o appState.selectedDelegaciaId.
+ * Execução 100% em memória local (0 leituras).
  */
 export function popularDropdownDelegaciasComEscala(selectElementId = 'select-calendar-delegacia') {
   const select = document.getElementById(selectElementId) || document.getElementById('select-escala-delegacia');
@@ -45,7 +44,7 @@ export function popularDropdownDelegaciasComEscala(selectElementId = 'select-cal
   const escalas = appState.escalas || [];
   const delegacias = appState.delegacias || [];
 
-  // Mapeia IDs ou nomes de delegacias que possuem escalas registradas
+  // Mapeia IDs ou nomes de delegacias que possuem escalas registradas na memória local
   const idsComEscala = new Set(
     escalas
       .filter(e => e.delegaciaId || e.delegacia)
