@@ -1,6 +1,6 @@
 // src/logs.js
 import { appState } from './state.js';
-import { syncDocToFirestore, registrarLeituraFirestore } from './db.js';
+import { syncDocToFirestore } from './db.js';
 import { getPerfilUsuarioLogado } from './permissions.js';
 
 let logsFiltrosState = {
@@ -49,7 +49,7 @@ export async function registrarLogTroca({ scope, delegaciaId = null, tipoAcao, d
 }
 
 /**
- * Abre e inicializa o modal do Histórico de Logs com busca sob demanda no Firestore
+ * Abre e inicializa o modal do Histórico de Logs utilizando 100% os dados da memória RAM (0 Leituras)
  */
 export async function abrirModalHistoricoLogs(scope, delegaciaId = null) {
   let modal = document.getElementById('modal-historico-logs');
@@ -71,7 +71,6 @@ export async function abrirModalHistoricoLogs(scope, delegaciaId = null) {
   const inputBusca = document.getElementById('modal-logs-busca');
   const inputIni = document.getElementById('modal-logs-data-inicio');
   const inputFim = document.getElementById('modal-logs-data-fim');
-  const corpoTabela = document.getElementById('tabela-logs-corpo');
 
   if (inputBusca) inputBusca.value = '';
   if (inputIni) inputIni.value = '';
@@ -85,34 +84,9 @@ export async function abrirModalHistoricoLogs(scope, delegaciaId = null) {
     tituloEl.innerText = `📋 Histórico de Alterações de Escala — ${nomeUnidade}`;
   }
 
-  if (corpoTabela) {
-    corpoTabela.innerHTML = `
-      <tr>
-        <td colspan="4" class="p-6 text-center text-amber-800 font-bold bg-amber-50 animate-pulse text-xs">
-          ⏳ Carregando histórico recente do banco de dados...
-        </td>
-      </tr>
-    `;
-  }
-
   modal.classList.remove('hidden');
 
-  // 🔑 BUSCA SOB DEMANDA: Consulta os últimos 50 logs no Firestore de forma leve
-  try {
-    if (window.firebase && firebase.firestore) {
-      const db = firebase.firestore();
-      const snap = await db.collection('logs').orderBy('timestamp', 'desc').limit(50).get();
-      
-      if (typeof registrarLeituraFirestore === 'function') {
-        registrarLeituraFirestore('logs (sob demanda)', snap.docs.length);
-      }
-
-      appState.logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-  } catch (err) {
-    console.warn("[Logs] Aviso ao buscar logs sob demanda do Firestore:", err.message);
-  }
-
+  // Renderiza instantaneamente em memória local (0 leituras no Firestore)
   window.renderTabelaLogsCorpo();
 }
 
@@ -156,7 +130,7 @@ window.renderTabelaLogsCorpo = function() {
   const { busca, dataInicio, dataFim, sortColuna, sortDirecao } = logsFiltrosState;
   const delObj = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
 
-  // 1. FILTRAGEM
+  // 1. FILTRAGEM EM MEMÓRIA LOCAL
   let logsFiltrados = (appState.logs || []).filter(l => {
     // Filtro por escopo e delegacia
     if (l.scope !== scope) return false;
@@ -190,7 +164,7 @@ window.renderTabelaLogsCorpo = function() {
     return true;
   });
 
-  // 2. ORDENAÇÃO
+  // 2. ORDENAÇÃO LOCAL
   logsFiltrados.sort((a, b) => {
     let valA = '', valB = '';
 
