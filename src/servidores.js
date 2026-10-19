@@ -337,7 +337,6 @@ window.resetarSenhaServidorDirect = async function(srvId = null) {
     return;
   }
 
-  // 🔑 UTILIZA O RESET ADMINISTRATIVO UNIFICADO (COM CONFIRMAÇÃO E SEM DEPENDER NATIVAMENTE DO E-MAIL)
   if (typeof window.resetarAcessoServidorAdmin === 'function') {
     await window.resetarAcessoServidorAdmin(srv.id);
   } else {
