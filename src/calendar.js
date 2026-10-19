@@ -149,11 +149,6 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
 
   appState.calendarScope = scope;
 
-  // 🔑 CARREGAMENTO INTELIGENTE: Lê cache local se o Firestore não sofreu atualizações (0 a 1 leitura)
-  if (typeof loadAllDataFromFirestore === 'function') {
-    await loadAllDataFromFirestore(false);
-  }
-
   if (scope === 'DELEGACIA') {
     const listaValida = obterDelegaciasValidasScope('DELEGACIA');
     const selectExistente = document.getElementById('select-calendar-delegacia');
@@ -592,7 +587,7 @@ function setupCalendarEvents(containerId, scope) {
 
   const btnPrev = container.querySelector('#btn-prev-month');
   if (btnPrev) {
-    btnPrev.addEventListener('click', async (e) => {
+    btnPrev.addEventListener('click', (e) => {
       e.stopPropagation();
       if (appState.currentMonth === 0) {
         appState.currentMonth = 11;
@@ -600,13 +595,13 @@ function setupCalendarEvents(containerId, scope) {
       } else {
         appState.currentMonth--;
       }
-      await renderCalendarGrid(containerId, scope);
+      renderCalendarGrid(containerId, scope);
     });
   }
 
   const btnNext = container.querySelector('#btn-next-month');
   if (btnNext) {
-    btnNext.addEventListener('click', async (e) => {
+    btnNext.addEventListener('click', (e) => {
       e.stopPropagation();
       if (appState.currentMonth === 11) {
         appState.currentMonth = 0;
@@ -614,7 +609,7 @@ function setupCalendarEvents(containerId, scope) {
       } else {
         appState.currentMonth++;
       }
-      await renderCalendarGrid(containerId, scope);
+      renderCalendarGrid(containerId, scope);
     });
   }
 }
@@ -1009,8 +1004,7 @@ window.atualizarSelectTrocarApjModal = function(esc, srvAtual, perfil, userSrvId
     if (delFiltro !== 'TODAS' && String(s.delegaciaId) !== String(delFiltro)) return false;
     if (busca && !(s.nome || '').toLowerCase().includes(busca)) return false;
 
-    return true;
-  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+    return true;}).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   let opts = `<option value="">Selecione o Novo APJ (${poolApjs.length})...</option>`;
   poolApjs.forEach(a => {
@@ -1321,7 +1315,7 @@ function criarModalAcaoVincularApjDOM() {
           </div>
 
           <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
-            <button type="button" onclick="document.getElementById('modal-acao-vincular-apj').classList.add('hidden')" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="button" onclick="window.fecharModalDetalhesPlantao()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
             <button type="submit" class="px-4 py-2 bg-[#BEA55A] hover:bg-[#AF9340] text-black font-extrabold border border-black rounded-xl shadow-xs cursor-pointer">Confirmar Vinculação</button>
           </div>
         </form>
