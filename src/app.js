@@ -22,7 +22,7 @@ import {
 // Intervalo de 6 Horas para Checagem Silenciosa do Ponteiro de Controle (6 * 60 * 60 * 1000 ms)
 const INTERVALO_CHECAGEM_6H_MS = 21600000;
 
-window.switchTab = function(tabName) {
+window.switchTab = async function(tabName) {
   if (tabName === 'gestao-crf' && !podeAcessarAbaGestaoCrf()) {
     tabName = 'crf';
   } else if ((tabName === 'gestao-del' || tabName === 'gestao-delegacias') && !podeAcessarAbaGestaoDelegacias()) {
@@ -55,6 +55,12 @@ window.switchTab = function(tabName) {
   const targetContent = document.getElementById(`tab-content-${tabName}`);
   if (targetContent) {
     targetContent.classList.remove('hidden');
+  }
+
+  // 🔑 CHECAGEM LEVE DE VERSÃO (1 LEITURA) APENAS PARA ABAS COM ALTA ROTATIVIDADE
+  const abasComChecagemVersao = ['crf', 'gestao-crf', 'gestao-del', 'gestao-delegacias', 'servidores'];
+  if (abasComChecagemVersao.includes(tabName) && typeof loadAllDataFromFirestore === 'function') {
+    await loadAllDataFromFirestore(false);
   }
 
   switch (tabName) {
@@ -128,7 +134,7 @@ window.corrigirEscalasSdpParaExtrajornadaCRF = async function() {
       await syncDocToFirestore('escalas', escala.id, escala);
       corrigidos++;
     } catch (err) {
-      console.error(`❌ Erro ao atualizar escala CRF ${escala.id}:`, err);
+      console.error("❌ Erro ao atualizar escala CRF:", err);
       erros++;
     }
   }
