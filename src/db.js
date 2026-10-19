@@ -144,30 +144,33 @@ function processarEFormatarServidores(servidoresData) {
   });
 }
 
-// 📦 FUNÇÃO AUXILIAR DE BUSCA CONSOLIDADA (1 Leitura Por Coleção)
+// 📦 BUSCA CONSOLIDADA COM AUTO-RECUPERAÇÃO E MERGE DA BASE INDIVIDUAL
 async function buscarColecaoConsolidada(db, nomeColecao) {
   try {
     const docRef = await db.collection('consolidados').doc(nomeColecao).get();
     registrarLeituraFirestore(`${nomeColecao} (consolidado)`, docRef.exists ? 1 : 0);
 
-    if (docRef.exists && docRef.data() && Array.isArray(docRef.data().lista) && docRef.data().lista.length > 0) {
-      return docRef.data().lista;
+    let listaConsolidada = [];
+    if (docRef.exists && docRef.data() && Array.isArray(docRef.data().lista)) {
+      listaConsolidada = docRef.data().lista;
     }
 
-    // Fallback: Se o lote consolidado ainda não existe, busca individual e faz o primeiro agrupamento na nuvem
-    const snap = await db.collection(nomeColecao).get();
-    registrarLeituraFirestore(`${nomeColecao} (migracao lote)`, snap.docs.length);
+    // Se a coleção consolidada ainda não existe no Firestore, faz a leitura individual e compila o primeiro lote
+    if (listaConsolidada.length === 0) {
+      const snap = await db.collection(nomeColecao).get();
+      registrarLeituraFirestore(`${nomeColecao} (migracao lote)`, snap.docs.length);
 
-    const listaIndividual = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      listaConsolidada = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    if (listaIndividual.length > 0) {
-      db.collection('consolidados').doc(nomeColecao).set({
-        lista: listaIndividual,
-        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true }).catch(() => {});
+      if (listaConsolidada.length > 0) {
+        db.collection('consolidados').doc(nomeColecao).set({
+          lista: listaConsolidada,
+          ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
     }
 
-    return listaIndividual;
+    return listaConsolidada;
   } catch (err) {
     console.warn(`[Firestore] Erro leitura consolidada de ${nomeColecao}:`, err.message);
     return [];
@@ -192,7 +195,7 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
-// 🔑 CARREGAMENTO DE DADOS OTIMIZADO E COM AUTO-RECUPERAÇÃO DE CACHE
+// 🔑 CARREGAMENTO DE DADOS OTIMIZADO COM CHECAGEM DE PONTEIRO GLOBAL
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -204,7 +207,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
 
     let { versoes: cacheVersoesObj, dados: cacheDados } = obterCacheLocal();
 
-    // 🛡️ TRAVA DE SEGURANÇA: Se o cache local estiver sem dados válidos/zerado, força a recuperação imediata do banco
     const cacheInvalido = !cacheDados || !cacheDados.escalas || cacheDados.escalas.length === 0;
     if (cacheInvalido) {
       console.warn("[Auto-Recuperação] Cache local zerado/inválido detectado. Limpando memória para recarregar...");
@@ -218,7 +220,6 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     const timestampCache = cacheVersoesObj.timestamp || 0;
     const cacheExpirado = (Date.now() - timestampCache) > TEMPO_EXPIRACAO_CACHE_MS;
 
-    // Se temos dados em cache local VÁLIDOS, checa apenas o ponteiro de versão (1 leitura leve)
     if (!forceRefresh && !cacheExpirado && !cacheInvalido && appState.escalas && appState.escalas.length > 0) {
       const versoesRemotas = await obterVersoesControleFirestore(db);
       
@@ -317,6 +318,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
   }
 }
 
+// 🛡️ SINCRONIZAÇÃO EM LOTE PROTEGIDA CONTRA PERDA DE DADOS DE OUTROS USUÁRIOS
 export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
   try {
     const db = firebase.firestore();
@@ -329,28 +331,33 @@ export async function syncDocToFirestore(collectionName, docId, dataObj, isDelet
       await docRef.set(dataObj, { merge: true });
     }
 
-    // 2. Sincroniza o lote consolidado em paralelo para garantir 1 leitura no próximo carregamento
-    try {
-      let listaAtual = appState[collectionName] || [];
-      const idx = listaAtual.findIndex(item => String(item.id) === String(docId));
+    // 2. Atualiza o estado da memória local
+    if (!appState[collectionName]) appState[collectionName] = [];
+    const idx = appState[collectionName].findIndex(item => String(item.id) === String(docId));
 
-      if (isDelete) {
-        if (idx >= 0) listaAtual.splice(idx, 1);
+    if (isDelete) {
+      if (idx >= 0) appState[collectionName].splice(idx, 1);
+    } else {
+      if (idx >= 0) {
+        appState[collectionName][idx] = { ...appState[collectionName][idx], ...dataObj };
       } else {
-        if (idx >= 0) listaAtual[idx] = { ...listaAtual[idx], ...dataObj };
-        else listaAtual.push({ id: docId, ...dataObj });
+        appState[collectionName].push({ id: docId, ...dataObj });
       }
+    }
 
-      db.collection('consolidados').doc(collectionName).set({
-        lista: listaAtual,
+    // 3. Atualiza o lote consolidado no Firestore em sincronia total
+    try {
+      const listaParaSalvar = appState[collectionName];
+      await db.collection('consolidados').doc(collectionName).set({
+        lista: listaParaSalvar,
         ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true }).catch(() => {});
+      }, { merge: true });
 
     } catch (conErr) {
       console.warn(`[Firestore] Aviso ao sincronizar lote consolidado de ${collectionName}:`, conErr.message);
     }
 
-    // 3. Incrementa o ponteiro de versão de controle
+    // 4. Incrementa o ponteiro global de versão para avisar todos os outros dispositivos
     await garantirColecaoControle();
 
     try {
