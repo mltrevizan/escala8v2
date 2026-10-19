@@ -2,6 +2,8 @@
 import { appState } from './state.js';
 
 let isCarregandoDados = false;
+let unsubscribeControle = null;
+
 const CHAVE_LOCAL_VERSOES = 'escala8_versoes_cache';
 const CHAVE_LOCAL_DADOS = 'escala8_dados_cache';
 const TEMPO_EXPIRACAO_CACHE_MS = 6 * 60 * 60 * 1000;
@@ -144,7 +146,7 @@ function processarEFormatarServidores(servidoresData) {
   });
 }
 
-// 📦 BUSCA CONSOLIDADA COM AUTO-RECUPERAÇÃO E MERGE DA BASE INDIVIDUAL
+// 📦 BUSCA CONSOLIDADA
 async function buscarColecaoConsolidada(db, nomeColecao) {
   try {
     const docRef = await db.collection('consolidados').doc(nomeColecao).get();
@@ -155,7 +157,6 @@ async function buscarColecaoConsolidada(db, nomeColecao) {
       listaConsolidada = docRef.data().lista;
     }
 
-    // Se a coleção consolidada ainda não existe no Firestore, faz a leitura individual e compila o primeiro lote
     if (listaConsolidada.length === 0) {
       const snap = await db.collection(nomeColecao).get();
       registrarLeituraFirestore(`${nomeColecao} (migracao lote)`, snap.docs.length);
@@ -195,7 +196,29 @@ export async function buscarServidoresSobDemanda() {
   }
 }
 
-// 🔑 CARREGAMENTO DE DADOS OTIMIZADO COM CHECAGEM DE PONTEIRO GLOBAL
+// ⚡ INICIA O ESCUTADOR EM TEMPO REAL LEVE NO PONTEIRO DE VERSÃO
+function iniciarEscutadorTempoRealPonteiro() {
+  if (unsubscribeControle) return;
+
+  try {
+    const db = firebase.firestore();
+    unsubscribeControle = db.collection('controle').doc('versoes').onSnapshot(snap => {
+      registrarLeituraFirestore('controle/versoes (tempo-real)', snap.exists ? 1 : 0);
+      
+      if (snap.exists && !isCarregandoDados) {
+        loadAllDataFromFirestore(false).then(() => {
+          if (window.switchTab && appState.activeTab) {
+            window.switchTab(appState.activeTab);
+          }
+        });
+      }
+    }, err => console.warn("[Tempo Real] Aviso no escutador do ponteiro:", err.message));
+  } catch (e) {
+    console.warn("[Tempo Real] Não foi possível registrar escutador:", e.message);
+  }
+}
+
+// 🔑 CARREGAMENTO DE DADOS OTIMIZADO E EM TEMPO REAL
 export async function loadAllDataFromFirestore(forceRefresh = false) {
   if (isCarregandoDados) return;
   isCarregandoDados = true;
@@ -241,6 +264,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
         appState.servidores = processarEFormatarServidores(cacheDados.servidores || appState.servidores || []);
         
         isCarregandoDados = false;
+        iniciarEscutadorTempoRealPonteiro();
         return;
       }
     }
@@ -310,6 +334,7 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
     };
 
     salvarCacheLocal(versoesRemotas, novosDadosCache);
+    iniciarEscutadorTempoRealPonteiro();
 
   } catch (error) {
     console.error("Erro ao carregar dados do Firestore:", error);
@@ -318,61 +343,70 @@ export async function loadAllDataFromFirestore(forceRefresh = false) {
   }
 }
 
-// 🛡️ SINCRONIZAÇÃO EM LOTE PROTEGIDA CONTRA PERDA DE DADOS DE OUTROS USUÁRIOS
+// 🛡️ SINCRONIZAÇÃO ATÔMICA (TRANSAÇÃO NO BANCO PARA EVITAR SOBREPOSIÇÃO SIMULTÂNEA)
 export async function syncDocToFirestore(collectionName, docId, dataObj, isDelete = false) {
   try {
     const db = firebase.firestore();
     const docRef = db.collection(collectionName).doc(docId);
+    const consolidadoRef = db.collection('consolidados').doc(collectionName);
+    const controleRef = db.collection('controle').doc('versoes');
 
-    // 1. Atualiza/Exclui o documento individual na coleção
-    if (isDelete) {
-      await docRef.delete();
-    } else {
-      await docRef.set(dataObj, { merge: true });
-    }
+    // Executa uma transação no Firestore: lê a versão oficial da nuvem e grava com consistência garantida
+    await db.runTransaction(async (transaction) => {
+      // 1. Gravação do documento individual
+      if (isDelete) {
+        transaction.delete(docRef);
+      } else {
+        transaction.set(docRef, dataObj, { merge: true });
+      }
 
-    // 2. Atualiza o estado da memória local
+      // 2. Leitura atômica da lista consolidada na nuvem
+      const consolidadoDoc = await transaction.get(consolidadoRef);
+      let listaNuvem = [];
+      if (consolidadoDoc.exists && Array.isArray(consolidadoDoc.data().lista)) {
+        listaNuvem = consolidadoDoc.data().lista;
+      }
+
+      // 3. Atualização atômica do lote
+      const idx = listaNuvem.findIndex(item => String(item.id) === String(docId));
+      if (isDelete) {
+        if (idx >= 0) listaNuvem.splice(idx, 1);
+      } else {
+        if (idx >= 0) {
+          listaNuvem[idx] = { ...listaNuvem[idx], ...dataObj };
+        } else {
+          listaNuvem.push({ id: docId, ...dataObj });
+        }
+      }
+
+      // 4. Salva a lista consolidada atualizada na nuvem
+      transaction.set(consolidadoRef, {
+        lista: listaNuvem,
+        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // 5. Incrementa o ponteiro de versão global no controle
+      transaction.set(controleRef, {
+        [collectionName]: firebase.firestore.FieldValue.increment(1),
+        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+
+    // 6. Atualiza a memória local após confirmação da transação na nuvem
     if (!appState[collectionName]) appState[collectionName] = [];
-    const idx = appState[collectionName].findIndex(item => String(item.id) === String(docId));
-
+    const idxLocal = appState[collectionName].findIndex(item => String(item.id) === String(docId));
     if (isDelete) {
-      if (idx >= 0) appState[collectionName].splice(idx, 1);
+      if (idxLocal >= 0) appState[collectionName].splice(idxLocal, 1);
     } else {
-      if (idx >= 0) {
-        appState[collectionName][idx] = { ...appState[collectionName][idx], ...dataObj };
+      if (idxLocal >= 0) {
+        appState[collectionName][idxLocal] = { ...appState[collectionName][idxLocal], ...dataObj };
       } else {
         appState[collectionName].push({ id: docId, ...dataObj });
       }
     }
 
-    // 3. Atualiza o lote consolidado no Firestore em sincronia total
-    try {
-      const listaParaSalvar = appState[collectionName];
-      await db.collection('consolidados').doc(collectionName).set({
-        lista: listaParaSalvar,
-        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-    } catch (conErr) {
-      console.warn(`[Firestore] Aviso ao sincronizar lote consolidado de ${collectionName}:`, conErr.message);
-    }
-
-    // 4. Incrementa o ponteiro global de versão para avisar todos os outros dispositivos
-    await garantirColecaoControle();
-
-    try {
-      const controleRef = db.collection('controle').doc('versoes');
-      await controleRef.set({
-        [collectionName]: firebase.firestore.FieldValue.increment(1),
-        ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-    } catch (ctrlErr) {
-      console.warn("Aviso ao atualizar ponteiro de controle:", ctrlErr.message);
-    }
-
   } catch (error) {
-    console.error(`Erro ao sincronizar ${collectionName}:`, error);
+    console.error(`Erro na transação de sincronização de ${collectionName}:`, error);
     throw error;
   }
 }
