@@ -1,7 +1,7 @@
 import { appState } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
-// Função utilitária segura para registo de logs sem quebrar por falta de exportação
+// Função utilitária segura para registro de logs sem quebrar por falta de exportação
 async function tentarRegistrarLog(modulo, acao, detalhe) {
   try {
     const logsModule = await import('./logs.js');
@@ -513,7 +513,10 @@ export async function salvarSubdivisao(dadosForm) {
  * Helper Utility Functions
  */
 export function carregarListaDelegaciasSelect(selectElementId, sdpFiltroId = null) {
-  const select = document.getElementById(selectElementId);
+  const select = typeof selectElementId === 'string'
+    ? document.getElementById(selectElementId)
+    : selectElementId;
+
   if (!select) return;
 
   const valorAtual = select.value;
@@ -586,4 +589,21 @@ export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId 
   });
 
   select.value = valorAtual || 'TODAS';
+}
+
+/**
+ * Renderiza os cards das delegacias (requerido pelo app.js)
+ */
+export function renderDelegaciasCards(containerId = 'containerDelegaciasCards') {
+  const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+  if (!container) return;
+
+  renderizarTabelaDelegacias();
+}
+
+/**
+ * Renderiza os cards de subdivisões (requerido pelo app.js)
+ */
+export function renderSubdivisoesCards(containerId = 'containerSubdivisoesCards') {
+  carregarListaSubdivisoes();
 }
