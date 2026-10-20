@@ -107,14 +107,12 @@ export function carregarListaSubdivisoes() {
  * Renderiza a Tabela Principal de Delegacias
  */
 export function renderizarTabelaDelegacias() {
-  // Procura o container principal da aba no HTML
   let container = document.getElementById('tab-content-unidades') || 
                   document.getElementById('delegacias-container') || 
                   document.getElementById('tab-content-delegacias');
 
   if (!container) return;
 
-  // Se o container ainda não tiver a estrutura da tabela e filtros, injeta automaticamente
   let tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
   if (!tbody) {
     container.innerHTML = `
@@ -177,7 +175,6 @@ export function renderizarTabelaDelegacias() {
 
   let lista = [...(appState.delegacias || [])];
 
-  // Filtro por SDP
   if (sdpFiltro !== 'TODAS') {
     lista = lista.filter(d => 
       String(d.sdpId) === String(sdpFiltro) || 
@@ -185,7 +182,6 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
-  // Filtro por Busca de Texto
   if (busca) {
     lista = lista.filter(d => 
       (d.nome || '').toLowerCase().includes(busca) ||
@@ -193,7 +189,6 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
-  // Ordenação Alfabética / Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (lista.length === 0) {
@@ -255,13 +250,13 @@ export function abrirModalDelegacia(id = null) {
       if (document.getElementById('delTipo')) document.getElementById('delTipo').value = del.tipo || 'UNIDADE';
       if (document.getElementById('delIsConsorcio')) document.getElementById('delIsConsorcio').checked = Boolean(del.isConsorcio);
 
-      // Configurações de Plantão
+      // Restauração integral dos campos de configuração de plantão
       if (document.getElementById('plantaoRegime')) document.getElementById('plantaoRegime').value = del.plantaoConfig?.regime || 'ININTERRUPTA';
       if (document.getElementById('plantaoIntervalo')) document.getElementById('plantaoIntervalo').value = del.plantaoConfig?.intervalo || '24h';
       if (document.getElementById('plantaoUteis')) document.getElementById('plantaoUteis').value = del.plantaoConfig?.uteis || '08:00 às 08:00';
       if (document.getElementById('plantaoNaoUteis')) document.getElementById('plantaoNaoUteis').value = del.plantaoConfig?.naoUteis || '08:00 às 08:00';
 
-      // Configurações de Sobreaviso
+      // Restauração integral dos campos de configuração de sobreaviso
       if (document.getElementById('sobreavisoRegime')) document.getElementById('sobreavisoRegime').value = del.sobreavisoConfig?.regime || 'INTERMITENTE';
       if (document.getElementById('sobreavisoIntervalo')) document.getElementById('sobreavisoIntervalo').value = del.sobreavisoConfig?.intervalo || '24h';
       if (document.getElementById('sobreavisoUteis')) document.getElementById('sobreavisoUteis').value = del.sobreavisoConfig?.uteis || '18:00 às 08:00';
@@ -518,11 +513,7 @@ async function handleSalvarSubdivisao(e) {
     return;
   }
 
-  const dados = {
-    id: subdivisaoEmEdicaoId,
-    nome: nomeInput
-  };
-
+  const dados = { id: subdivisaoEmEdicaoId, nome: nomeInput };
   const sucesso = await salvarSubdivisao(dados);
   if (sucesso) {
     if (modalSubdivisaoInstance) modalSubdivisaoInstance.hide();
@@ -581,25 +572,17 @@ export async function salvarSubdivisao(dadosForm) {
  * Helper Utility Functions
  */
 export function carregarListaDelegaciasSelect(selectElementId, sdpFiltroId = null) {
-  const select = typeof selectElementId === 'string'
-    ? document.getElementById(selectElementId)
-    : selectElementId;
-
+  const select = typeof selectElementId === 'string' ? document.getElementById(selectElementId) : selectElementId;
   if (!select) return;
 
   const valorAtual = select.value;
   select.innerHTML = '<option value="">Selecione uma Delegacia...</option>';
 
   let lista = [...(appState.delegacias || [])];
-
   if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
-    lista = lista.filter(d => 
-      String(d.sdpId) === String(sdpFiltroId) || 
-      String(d.subdivisao) === String(sdpFiltroId)
-    );
+    lista = lista.filter(d => String(d.sdpId) === String(sdpFiltroId) || String(d.subdivisao) === String(sdpFiltroId));
   }
 
-  // Ordenação Alfabética e Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   lista.forEach(del => {
@@ -625,29 +608,18 @@ export function isUnidadeAtiva(delegacia) {
   return delegacia.status !== 'INATIVA';
 }
 
-/**
- * Popula dropdowns de delegacias considerando apenas unidades ativas ou registradas em escalas
- */
 export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId = null) {
-  const select = typeof selectElementId === 'string' 
-    ? document.getElementById(selectElementId) 
-    : selectElementId;
-
+  const select = typeof selectElementId === 'string' ? document.getElementById(selectElementId) : selectElementId;
   if (!select) return;
 
   const valorAtual = select.value;
   select.innerHTML = '<option value="TODAS">Todas as Delegacias</option>';
 
   let lista = [...(appState.delegacias || [])];
-
   if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
-    lista = lista.filter(d => 
-      String(d.sdpId) === String(sdpFiltroId) || 
-      String(d.subdivisao) === String(sdpFiltroId)
-    );
+    lista = lista.filter(d => String(d.sdpId) === String(sdpFiltroId) || String(d.subdivisao) === String(sdpFiltroId));
   }
 
-  // Ordenação Alfabética e Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   lista.forEach(del => {
@@ -660,16 +632,10 @@ export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId 
   select.value = valorAtual || 'TODAS';
 }
 
-/**
- * Renderiza os cards das delegacias (requerido pelo app.js)
- */
 export function renderDelegaciasCards(containerId = 'containerDelegaciasCards') {
   renderizarTabelaDelegacias();
 }
 
-/**
- * Renderiza os cards de subdivisões (requerido pelo app.js)
- */
 export function renderSubdivisoesCards(containerId = 'containerSubdivisoesCards') {
   carregarListaSubdivisoes();
 }
