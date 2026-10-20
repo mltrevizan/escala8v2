@@ -9,7 +9,10 @@ import {
   renderizarTabelaDelegacias, 
   renderDelegaciasCards, 
   popularDropdownDelegaciasComEscala,
-  carregarListaSubdivisoes 
+  carregarListaSubdivisoes,
+  abrirModalDelegacia,
+  abrirModalSubdivisao,
+  excluirDelegacia
 } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
@@ -220,8 +223,11 @@ async function initApp() {
   }
 }
 
-// Expõe métodos essenciais no escopo global
+// Expõe métodos essenciais no escopo global para acesso seguro por eventos no DOM
 window.alternarAbaDirect = window.switchTab;
 window.popularDropdownDelegaciasComEscala = popularDropdownDelegaciasComEscala;
+window.abrirModalDelegaciaDirect = abrirModalDelegacia;
+window.abrirModalSubdivisaoDirect = abrirModalSubdivisao;
+window.excluirDelegaciaDirect = excluirDelegacia;
 
 document.addEventListener('DOMContentLoaded', initApp);
