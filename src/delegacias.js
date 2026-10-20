@@ -1,3 +1,4 @@
+// src/delegacias.js
 import { appState } from './state.js';
 import { syncDocToFirestore } from './db.js';
 
@@ -73,7 +74,9 @@ export function carregarListaSubdivisoes() {
   const selectFiltro = document.getElementById('filtroSdpDelegacias');
   const selectForm = document.getElementById('delSubdivisao');
 
-  const sdps = appState.sdps || [];
+  const sdps = [...(appState.sdps || [])].sort((a, b) => 
+    (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })
+  );
 
   if (selectFiltro) {
     const valorAtual = selectFiltro.value;
@@ -112,7 +115,7 @@ export function renderizarTabelaDelegacias() {
   const busca = (document.getElementById('buscaDelegacia')?.value || '').toLowerCase();
   const sdpFiltro = document.getElementById('filtroSdpDelegacias')?.value || 'TODAS';
 
-  let lista = appState.delegacias || [];
+  let lista = [...(appState.delegacias || [])];
 
   // Filtro por SDP
   if (sdpFiltro !== 'TODAS') {
@@ -130,7 +133,7 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
-  // Ordenação Alfabética / Numérica Natural
+  // Ordenação Alfabética / Numérica Natural PT-BR (Garante 14ª DRP após a 13ª DRP)
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (lista.length === 0) {
@@ -153,10 +156,10 @@ export function renderizarTabelaDelegacias() {
       </td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-primary me-1 btn-editar-del" data-id="${del.id}" title="Editar">
-          <i class="bi bi-pencil"></i>
+          <i class="bi bi-pencil"></i> ✏️
         </button>
         <button class="btn btn-sm btn-outline-danger btn-excluir-del" data-id="${del.id}" title="Excluir">
-          <i class="bi bi-trash"></i>
+          <i class="bi bi-trash"></i> 🗑️
         </button>
       </td>
     `;
@@ -189,7 +192,7 @@ export function abrirModalDelegacia(id = null) {
   const elModal = document.getElementById('modalDelegacia');
   if (!elModal) return;
 
-  if (!modalDelegaciaInstance) {
+  if (!modalDelegaciaInstance && typeof bootstrap !== 'undefined') {
     modalDelegaciaInstance = new bootstrap.Modal(elModal);
   }
 
@@ -223,7 +226,11 @@ export function abrirModalDelegacia(id = null) {
     if (titulo) titulo.textContent = 'Nova Delegacia';
   }
 
-  modalDelegaciaInstance.show();
+  if (modalDelegaciaInstance) {
+    modalDelegaciaInstance.show();
+  } else {
+    elModal.classList.remove('hidden');
+  }
 }
 
 /**
@@ -247,7 +254,7 @@ async function handleSalvarDelegacia(e) {
     id: delegaciaEmEdicaoId,
     nome: nomeInput,
     subdivisao: sdpTexto,
-    sdpId: sdpValor, // Preserva e garante o ID relacional da SDP
+    sdpId: sdpValor,
     tipo: document.getElementById('delTipo')?.value || 'UNIDADE',
     isConsorcio: document.getElementById('delIsConsorcio')?.checked || false,
     delegaciasIds: [],
@@ -269,8 +276,9 @@ async function handleSalvarDelegacia(e) {
   };
 
   const sucesso = await salvarDelegacia(dados);
-  if (sucesso && modalDelegaciaInstance) {
-    modalDelegaciaInstance.hide();
+  if (sucesso) {
+    if (modalDelegaciaInstance) modalDelegaciaInstance.hide();
+    else document.getElementById('modalDelegacia')?.classList.add('hidden');
   }
 }
 
@@ -286,7 +294,7 @@ export async function salvarDelegacia(dadosForm) {
       id: idExistente || `del_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       nome: dadosForm.nome.trim(),
       subdivisao: dadosForm.subdivisao || sdpValor,
-      sdpId: sdpValor, // ESTRUTURA COMPLETA V1
+      sdpId: sdpValor,
       tipo: dadosForm.tipo || "UNIDADE",
       isConsorcio: Boolean(dadosForm.isConsorcio),
       delegaciasIds: Array.isArray(dadosForm.delegaciasIds) ? dadosForm.delegaciasIds : [],
@@ -424,7 +432,7 @@ export function abrirModalSubdivisao(id = null) {
   const elModal = document.getElementById('modalSubdivisao');
   if (!elModal) return;
 
-  if (!modalSubdivisaoInstance) {
+  if (!modalSubdivisaoInstance && typeof bootstrap !== 'undefined') {
     modalSubdivisaoInstance = new bootstrap.Modal(elModal);
   }
 
@@ -443,7 +451,11 @@ export function abrirModalSubdivisao(id = null) {
     if (titulo) titulo.textContent = 'Nova Subdivisão';
   }
 
-  modalSubdivisaoInstance.show();
+  if (modalSubdivisaoInstance) {
+    modalSubdivisaoInstance.show();
+  } else {
+    elModal.classList.remove('hidden');
+  }
 }
 
 async function handleSalvarSubdivisao(e) {
@@ -461,8 +473,9 @@ async function handleSalvarSubdivisao(e) {
   };
 
   const sucesso = await salvarSubdivisao(dados);
-  if (sucesso && modalSubdivisaoInstance) {
-    modalSubdivisaoInstance.hide();
+  if (sucesso) {
+    if (modalSubdivisaoInstance) modalSubdivisaoInstance.hide();
+    else document.getElementById('modalSubdivisao')?.classList.add('hidden');
   }
 }
 
@@ -522,7 +535,7 @@ export function carregarListaDelegaciasSelect(selectElementId, sdpFiltroId = nul
   const valorAtual = select.value;
   select.innerHTML = '<option value="">Selecione uma Delegacia...</option>';
 
-  let lista = appState.delegacias || [];
+  let lista = [...(appState.delegacias || [])];
 
   if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
     lista = lista.filter(d => 
@@ -531,6 +544,7 @@ export function carregarListaDelegaciasSelect(selectElementId, sdpFiltroId = nul
     );
   }
 
+  // Ordenação Alfabética e Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   lista.forEach(del => {
@@ -569,7 +583,7 @@ export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId 
   const valorAtual = select.value;
   select.innerHTML = '<option value="TODAS">Todas as Delegacias</option>';
 
-  let lista = appState.delegacias || [];
+  let lista = [...(appState.delegacias || [])];
 
   if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
     lista = lista.filter(d => 
@@ -578,7 +592,7 @@ export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId 
     );
   }
 
-  // Ordenação alfabética e numérica natural (pt-BR)
+  // Ordenação Alfabética e Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   lista.forEach(del => {
@@ -607,3 +621,7 @@ export function renderDelegaciasCards(containerId = 'containerDelegaciasCards') 
 export function renderSubdivisoesCards(containerId = 'containerSubdivisoesCards') {
   carregarListaSubdivisoes();
 }
+
+// Vincula atalhos globais diretos na janela para botões dinâmicos do DOM
+window.abrirModalDelegaciaDirect = abrirModalDelegacia;
+window.excluirDelegaciaDirect = excluirDelegacia;
