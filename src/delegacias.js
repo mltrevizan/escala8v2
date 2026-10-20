@@ -552,3 +552,38 @@ export function isUnidadeAtiva(delegacia) {
   if (!delegacia) return false;
   return delegacia.status !== 'INATIVA';
 }
+
+/**
+ * Popula dropdowns de delegacias considerando apenas unidades ativas ou registradas em escalas
+ */
+export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId = null) {
+  const select = typeof selectElementId === 'string' 
+    ? document.getElementById(selectElementId) 
+    : selectElementId;
+
+  if (!select) return;
+
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="TODAS">Todas as Delegacias</option>';
+
+  let lista = appState.delegacias || [];
+
+  if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
+    lista = lista.filter(d => 
+      String(d.sdpId) === String(sdpFiltroId) || 
+      String(d.subdivisao) === String(sdpFiltroId)
+    );
+  }
+
+  // Ordenação alfabética e numérica natural (pt-BR)
+  lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
+
+  lista.forEach(del => {
+    const opt = document.createElement('option');
+    opt.value = del.id;
+    opt.textContent = del.nome;
+    select.appendChild(opt);
+  });
+
+  select.value = valorAtual || 'TODAS';
+}
