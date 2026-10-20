@@ -181,7 +181,6 @@ function iniciarChecagemPassiva6Horas() {
       console.log("[Verificação 6h] Checando ponteiro de controle no Firestore...");
       await loadAllDataFromFirestore(false);
 
-      // Redesenha a aba ativa em segundo plano apenas se houve alguma alteração de dados
       if (window.switchTab && appState.activeTab) {
         window.switchTab(appState.activeTab);
       }
