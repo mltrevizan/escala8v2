@@ -577,3 +577,106 @@ function criarModalDelegaciaDOM() {
   `;
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
+
+// ==========================================
+// MÓDULO DE GERENCIAMENTO DE SDPs (GERENCIAR SDPs)
+// ==========================================
+
+window.abrirModalGerenciarSdps = function(sdpId = null) {
+  let modal = document.getElementById('modal-sdp');
+  if (!modal) {
+    criarModalSdpDOM();
+    modal = document.getElementById('modal-sdp');
+  }
+
+  const inputId = document.getElementById('sdp-id');
+  const inputNome = document.getElementById('sdp-nome');
+
+  if (sdpId) {
+    const sdp = (appState.sdps || []).find(s => String(s.id) === String(sdpId));
+    if (sdp) {
+      inputId.value = sdp.id;
+      inputNome.value = sdp.nome || '';
+    }
+  } else {
+    inputId.value = '';
+    inputNome.value = '';
+  }
+
+  modal.classList.remove('hidden');
+};
+
+window.fecharModalSdp = function() {
+  document.getElementById('modal-sdp')?.classList.add('hidden');
+};
+
+window.salvarSdpModal = async function(e) {
+  e.preventDefault();
+
+  try {
+    const id = document.getElementById('sdp-id')?.value;
+    const nomeInput = document.getElementById('sdp-nome')?.value || '';
+    const nome = nomeInput.toUpperCase().trim();
+
+    if (!nome) {
+      alert("Por favor, informe o nome da Subdivisão (SDP).");
+      return;
+    }
+
+    const targetId = id || ('sdp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+    let sdpObj = (appState.sdps || []).find(s => String(s.id) === String(targetId)) || { id: targetId };
+
+    sdpObj.nome = nome;
+
+    if (!appState.sdps) appState.sdps = [];
+    const idx = appState.sdps.findIndex(s => String(s.id) === String(targetId));
+    if (idx >= 0) {
+      appState.sdps[idx] = sdpObj;
+    } else {
+      appState.sdps.push(sdpObj);
+    }
+
+    await syncDocToFirestore('sdps', targetId, sdpObj);
+
+    alert("Subdivisão (SDP) salva com sucesso!");
+    window.fecharModalSdp();
+
+    if (typeof renderDelegaciasCards === 'function') {
+      renderDelegaciasCards('delegacias-container');
+    }
+
+  } catch (err) {
+    console.error("Erro ao salvar dados da SDP:", err);
+    alert(`Erro ao salvar alterações da Subdivisão: ${err.message}`);
+  }
+};
+
+function criarModalSdpDOM() {
+  document.getElementById('modal-sdp')?.remove();
+
+  const modalHTML = `
+    <div id="modal-sdp" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">Gerenciamento de Subdivisão (SDP)</h3>
+          <button type="button" onclick="window.fecharModalSdp()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarSdpModal(event)" class="space-y-4 text-xs">
+          <input type="hidden" id="sdp-id">
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nome / Título da Subdivisão (SDP):</label>
+            <input type="text" id="sdp-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 7ª SDP / 8ª SDP / 21ª SDP" class="w-full border rounded-xl p-2.5 bg-slate-50 font-bold text-slate-900 uppercase">
+          </div>
+
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="window.fecharModalSdp()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar SDP</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
