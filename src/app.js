@@ -28,7 +28,6 @@ import {
   podeAcessarAbaFeriados 
 } from './permissions.js';
 
-// Intervalo de 6 Horas para Checagem Silenciosa do Ponteiro de Controle (6 * 60 * 60 * 1000 ms)
 const INTERVALO_CHECAGEM_6H_MS = 21600000;
 
 window.switchTab = async function(tabName) {
@@ -48,7 +47,6 @@ window.switchTab = async function(tabName) {
 
   appState.activeTab = tabName;
 
-  // Atualiza classes dos botões das abas
   document.querySelectorAll('.tab-btn, [id^="tab-btn-"], [id^="btn-tab-"]').forEach(btn => {
     btn.classList.remove('active', 'bg-black', 'text-white', 'shadow-sm');
   });
@@ -58,13 +56,11 @@ window.switchTab = async function(tabName) {
     btnAtivo.classList.add('active');
   }
 
-  // Oculta todos os containers de abas
   document.querySelectorAll('.tab-content, [id^="tab-content-"], .module-container, section[id$="-container"]').forEach(content => {
     content.classList.add('hidden');
     content.style.display = 'none';
   });
 
-  // Busca o container da aba por múltiplos IDs possíveis no HTML
   const targetContent = document.getElementById(`tab-content-${tabName}`) || 
                         document.getElementById(`${tabName}-container`) || 
                         document.getElementById(`container-${tabName}`) || 
@@ -75,7 +71,6 @@ window.switchTab = async function(tabName) {
     targetContent.style.display = 'block';
   }
 
-  // 🔑 CHECAGEM LEVE DE VERSÃO (1 LEITURA) APENAS PARA ABAS COM ALTA ROTATIVIDADE
   const abasComChecagemVersao = ['crf', 'gestao-crf', 'gestao-del', 'gestao-delegacias', 'servidores'];
   if (abasComChecagemVersao.includes(tabName) && typeof loadAllDataFromFirestore === 'function') {
     await loadAllDataFromFirestore(false);
@@ -103,7 +98,6 @@ window.switchTab = async function(tabName) {
     case 'delegacias':
       carregarListaSubdivisoes();
       renderizarTabelaDelegacias();
-      renderDelegaciasCards('delegacias-container');
       break;
     case 'feriados':
       renderFeriadosModule('feriados-container');
@@ -175,15 +169,10 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
-/**
- * Configura a verificação passiva do ponteiro de controle a cada 6 horas para aplicações abertas continuamente.
- */
 function iniciarChecagemPassiva6Horas() {
   setInterval(async () => {
     try {
-      console.log("[Verificação 6h] Checando ponteiro de controle no Firestore...");
       await loadAllDataFromFirestore(false);
-
       if (window.switchTab && appState.activeTab) {
         window.switchTab(appState.activeTab);
       }
@@ -195,12 +184,9 @@ function iniciarChecagemPassiva6Horas() {
 
 async function initApp() {
   try {
-    // 1. Carregamento inicial inteligente usando Cache e Ponteiro de Controle
     await loadAllDataFromFirestore(false);
-
     initAuthModule();
 
-    // Inicializa o módulo de delegacias e escutas do formulário/tabela
     if (typeof initDelegacias === 'function') {
       initDelegacias();
     }
@@ -214,8 +200,6 @@ async function initApp() {
     }
 
     window.switchTab('crf');
-
-    // 2. Ativa o temporizador de verificação passiva de 6 horas
     iniciarChecagemPassiva6Horas();
 
   } catch (err) {
@@ -223,7 +207,6 @@ async function initApp() {
   }
 }
 
-// Expõe métodos essenciais no escopo global para acesso seguro por eventos no DOM
 window.alternarAbaDirect = window.switchTab;
 window.popularDropdownDelegaciasComEscala = popularDropdownDelegaciasComEscala;
 window.abrirModalDelegaciaDirect = abrirModalDelegacia;
