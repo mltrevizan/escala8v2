@@ -22,7 +22,7 @@ let delegaciaEmEdicaoId = null;
 let subdivisaoEmEdicaoId = null;
 
 /**
- * Inicialização dos Módulos e Event Listeners
+ * Inicialização dos Módulos e Event Listeners Nativos
  */
 export function initDelegacias() {
   const btnNovaDelegacia = document.getElementById('btnNovaDelegacia') || document.getElementById('btn-nova-delegacia');
@@ -31,19 +31,19 @@ export function initDelegacias() {
   const formSubdivisao = document.getElementById('formSubdivisao');
 
   if (btnNovaDelegacia) {
-    btnNovaDelegacia.onclick = () => abrirModalDelegacia();
+    btnNovaDelegacia.addEventListener('click', () => abrirModalDelegacia());
   }
 
   if (btnNovaSubdivisao) {
-    btnNovaSubdivisao.onclick = () => abrirModalSubdivisao();
+    btnNovaSubdivisao.addEventListener('click', () => abrirModalSubdivisao());
   }
 
   if (formDelegacia) {
-    formDelegacia.onsubmit = handleSalvarDelegacia;
+    formDelegacia.addEventListener('submit', handleSalvarDelegacia);
   }
 
   if (formSubdivisao) {
-    formSubdivisao.onsubmit = handleSalvarSubdivisao;
+    formSubdivisao.addEventListener('submit', handleSalvarSubdivisao);
   }
 
   initFiltrosDelegacia();
@@ -59,11 +59,11 @@ export function initFiltrosDelegacia() {
   const selectSdp = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
 
   if (inputBusca) {
-    inputBusca.oninput = () => renderizarTabelaDelegacias();
+    inputBusca.addEventListener('input', () => renderizarTabelaDelegacias());
   }
 
   if (selectSdp) {
-    selectSdp.onchange = () => renderizarTabelaDelegacias();
+    selectSdp.addEventListener('change', () => renderizarTabelaDelegacias());
   }
 }
 
@@ -107,66 +107,8 @@ export function carregarListaSubdivisoes() {
  * Renderiza a Tabela Principal de Delegacias
  */
 export function renderizarTabelaDelegacias() {
-  let container = document.getElementById('tab-content-unidades') || 
-                  document.getElementById('delegacias-container') || 
-                  document.getElementById('tab-content-delegacias');
-
-  if (!container) return;
-
-  let tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
-  if (!tbody) {
-    container.innerHTML = `
-      <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Subdivisões</h2>
-            <p class="text-[11px] text-slate-500">Cadastros de unidades, regimes de plantão e consórcios</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="window.abrirModalDelegaciaDirect()" class="px-3 py-2 bg-black hover:bg-slate-800 text-[#BEA55A] border border-[#BEA55A] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-              ➕ Nova Delegacia
-            </button>
-            <button onclick="window.abrirModalSubdivisaoDirect()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-              🏛️ Nova SDP
-            </button>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-xs">
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Buscar Delegacia:</label>
-            <input type="text" id="buscaDelegacia" placeholder="Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ Subdivisão (SDP):</label>
-            <select id="filtroSdpDelegacias" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-              <option value="TODAS">Todas as Subdivisões</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto font-sans">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-              <th class="p-3">Nome da Unidade</th>
-              <th class="p-3">Subdivisão (SDP)</th>
-              <th class="p-3">Regime</th>
-              <th class="p-3">Tipo</th>
-              <th class="p-3">Horários Padronizados</th>
-              <th class="p-3 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyDelegacias" class="divide-y divide-slate-200"></tbody>
-        </table>
-      </div>
-    `;
-
-    initFiltrosDelegacia();
-    carregarListaSubdivisoes();
-    tbody = document.getElementById('tbodyDelegacias');
-  }
+  const tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
+  if (!tbody) return;
 
   tbody.innerHTML = '';
 
@@ -175,6 +117,7 @@ export function renderizarTabelaDelegacias() {
 
   let lista = [...(appState.delegacias || [])];
 
+  // Filtro por SDP
   if (sdpFiltro !== 'TODAS') {
     lista = lista.filter(d => 
       String(d.sdpId) === String(sdpFiltro) || 
@@ -182,6 +125,7 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
+  // Filtro por Busca de Texto
   if (busca) {
     lista = lista.filter(d => 
       (d.nome || '').toLowerCase().includes(busca) ||
@@ -189,15 +133,18 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
+  // Ordenação Natural PT-BR mantida do seu projeto original
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nenhuma delegacia encontrada.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma delegacia encontrada.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = lista.map(del => `
-    <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+  lista.forEach(del => {
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-slate-50 transition border-b border-slate-200 text-xs";
+    tr.innerHTML = `
       <td class="p-3 font-bold text-slate-900">${del.nome || '-'}</td>
       <td class="p-3 font-semibold text-slate-700">${del.subdivisao || del.sdpId || '-'}</td>
       <td class="p-3">
@@ -211,15 +158,31 @@ export function renderizarTabelaDelegacias() {
         S: ${del.sobreavisoConfig?.regime || 'INTERMITENTE'}
       </td>
       <td class="p-3 text-right space-x-1">
-        <button onclick="window.abrirModalDelegaciaDirect('${del.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
+        <button class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer btn-editar-del" data-id="${del.id}">
           ✏️ Editar
         </button>
-        <button onclick="window.excluirDelegaciaDirect('${del.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+        <button class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer btn-excluir-del" data-id="${del.id}">
           🗑️ Excluir
         </button>
       </td>
-    </tr>
-  `).join('');
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Event Listeners seguros nos Botões Nativos
+  tbody.querySelectorAll('.btn-editar-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-id');
+      abrirModalDelegacia(id);
+    });
+  });
+
+  tbody.querySelectorAll('.btn-excluir-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-id');
+      excluirDelegacia(id);
+    });
+  });
 }
 
 /**
@@ -250,13 +213,13 @@ export function abrirModalDelegacia(id = null) {
       if (document.getElementById('delTipo')) document.getElementById('delTipo').value = del.tipo || 'UNIDADE';
       if (document.getElementById('delIsConsorcio')) document.getElementById('delIsConsorcio').checked = Boolean(del.isConsorcio);
 
-      // Restauração integral dos campos de configuração de plantão
+      // Configurações de Plantão
       if (document.getElementById('plantaoRegime')) document.getElementById('plantaoRegime').value = del.plantaoConfig?.regime || 'ININTERRUPTA';
       if (document.getElementById('plantaoIntervalo')) document.getElementById('plantaoIntervalo').value = del.plantaoConfig?.intervalo || '24h';
       if (document.getElementById('plantaoUteis')) document.getElementById('plantaoUteis').value = del.plantaoConfig?.uteis || '08:00 às 08:00';
       if (document.getElementById('plantaoNaoUteis')) document.getElementById('plantaoNaoUteis').value = del.plantaoConfig?.naoUteis || '08:00 às 08:00';
 
-      // Restauração integral dos campos de configuração de sobreaviso
+      // Configurações de Sobreaviso
       if (document.getElementById('sobreavisoRegime')) document.getElementById('sobreavisoRegime').value = del.sobreavisoConfig?.regime || 'INTERMITENTE';
       if (document.getElementById('sobreavisoIntervalo')) document.getElementById('sobreavisoIntervalo').value = del.sobreavisoConfig?.intervalo || '24h';
       if (document.getElementById('sobreavisoUteis')) document.getElementById('sobreavisoUteis').value = del.sobreavisoConfig?.uteis || '18:00 às 08:00';
