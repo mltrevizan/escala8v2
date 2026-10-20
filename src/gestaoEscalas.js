@@ -206,7 +206,7 @@ window.popularFiltrosGestaoCrf = function() {
     (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
 
     let opts = `<option value="TODAS">Todas as SDPs</option>`;
-    [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
+    [...setSdps].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).forEach(s => {
       opts += `<option value="${s}" ${gestaoCrfFiltros.sdp === s ? 'selected' : ''}>${s}</option>`;
     });
     selectSdp.innerHTML = opts;
@@ -215,7 +215,7 @@ window.popularFiltrosGestaoCrf = function() {
   const selectDel = document.getElementById('gest-crf-del');
   if (selectDel) {
     let opts = `<option value="TODAS">Todas as Delegacias</option>`;
-    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })).forEach(d => {
       opts += `<option value="${d.id}" ${gestaoCrfFiltros.delegaciaId === d.id ? 'selected' : ''}>${d.nome}</option>`;
     });
     selectDel.innerHTML = opts;
@@ -270,15 +270,24 @@ window.obterEscalasFiltradasGestaoCrf = function() {
     const tipoModalidade = normalizarTipoModalidade(e.tipo);
     if (modalidade !== 'TODAS' && tipoModalidade !== modalidade) return false;
 
-    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
     if (busca && !srv?.nome?.toLowerCase().includes(busca)) return false;
 
     if (sdp !== 'TODAS') {
-      const delObj = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
-      if ((delObj?.subdivisao || '').toUpperCase() !== sdp) return false;
+      const delObj = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
+      const subSrv = (delObj?.subdivisao || srv?.subdivisao || '').toUpperCase();
+      if (!subSrv.includes(sdp.toUpperCase())) return false;
     }
 
-    if (delegaciaId !== 'TODAS' && e.delegaciaId !== delegaciaId && srv?.delegaciaId !== delegaciaId) return false;
+    // 🔴 FILTRO TOLERANTE: Compara por ID ou Nome da Delegacia sem bloquear por sdpId
+    if (delegaciaId !== 'TODAS') {
+      const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
+      const matchId = (String(e.delegaciaId) === String(delegaciaId)) || (srv && String(srv.delegaciaId) === String(delegaciaId));
+      const matchNome = delAlvo && srv && srv.delegaciaNome && 
+                        srv.delegaciaNome.toUpperCase().trim() === delAlvo.nome.toUpperCase().trim();
+
+      if (!matchId && !matchNome) return false;
+    }
 
     return true;
   });
@@ -292,20 +301,20 @@ window.renderTabelaGestaoCrfCorpo = function() {
   let escalasCrf = window.obterEscalasFiltradasGestaoCrf();
 
   escalasCrf.sort((a, b) => {
-    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
-    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
-    const delA = (appState.delegacias || []).find(d => d.id === srvA?.delegaciaId);
-    const delB = (appState.delegacias || []).find(d => d.id === srvB?.delegaciaId);
+    const srvA = (appState.servidores || []).find(s => String(s.id) === String(a.servidorId));
+    const srvB = (appState.servidores || []).find(s => String(s.id) === String(b.servidorId));
+    const delA = (appState.delegacias || []).find(d => String(d.id) === String(srvA?.delegaciaId));
+    const delB = (appState.delegacias || []).find(d => String(d.id) === String(srvB?.delegaciaId));
 
     let valA = '', valB = '';
     if (sortColuna === 'DATA') { valA = a.data || ''; valB = b.data || ''; }
     else if (sortColuna === 'POLICIAL') { valA = srvA?.nome || ''; valB = srvB?.nome || ''; }
     else if (sortColuna === 'CARGO') { valA = srvA?.cargo || ''; valB = srvB?.cargo || ''; }
-    else if (sortColuna === 'LOTACAO') { valA = delA?.nome || ''; valB = delB?.nome || ''; }
+    else if (sortColuna === 'LOTACAO') { valA = delA?.nome || srvA?.delegaciaNome || ''; valB = delB?.nome || srvB?.delegaciaNome || ''; }
     else if (sortColuna === 'TURNO') { valA = a.turno || ''; valB = b.turno || ''; }
     else if (sortColuna === 'MODALIDADE') { valA = normalizarTipoModalidade(a.tipo); valB = normalizarTipoModalidade(b.tipo); }
 
-    const res = valA.localeCompare(valB, undefined, { numeric: true });
+    const res = valA.localeCompare(valB, 'pt-BR', { numeric: true });
     return sortDirecao === 'ASC' ? res : -res;
   });
 
@@ -318,8 +327,8 @@ window.renderTabelaGestaoCrfCorpo = function() {
   }
 
   tbody.innerHTML = escalasCrf.map(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const delOrigem = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+    const delOrigem = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
     const tipoModalidade = normalizarTipoModalidade(esc.tipo);
 
     let badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A]';
@@ -397,7 +406,7 @@ export function renderGestaoDelegaciasModule(containerId) {
       return String(d.id) === String(userDelId);
     }
     return false;
-  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (delegaciasPermitidas.length > 0) {
     const estaAutorizado = delegaciasPermitidas.some(d => String(d.id) === String(appState.selectedDelegaciaId));
@@ -587,7 +596,7 @@ window.obterEscalasFiltradasGestaoDel = function() {
     if (modalidade !== 'TODAS' && tipoModalidade !== modalidade) return false;
 
     if (busca) {
-      const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
       const nomePolicial = (srv?.nome || '').toLowerCase();
       const cargoPolicial = (srv?.cargo || '').toLowerCase();
       const vtrStr = (e.vtr || '').toLowerCase();
@@ -610,8 +619,8 @@ window.renderTabelaGestaoDelCorpo = function() {
   let escalasDel = window.obterEscalasFiltradasGestaoDel();
 
   escalasDel.sort((a, b) => {
-    const srvA = (appState.servidores || []).find(s => s.id === a.servidorId);
-    const srvB = (appState.servidores || []).find(s => s.id === b.servidorId);
+    const srvA = (appState.servidores || []).find(s => String(s.id) === String(a.servidorId));
+    const srvB = (appState.servidores || []).find(s => String(s.id) === String(b.servidorId));
 
     let valA = '', valB = '';
     if (sortColuna === 'DATA') { valA = a.data || ''; valB = b.data || ''; }
@@ -621,7 +630,7 @@ window.renderTabelaGestaoDelCorpo = function() {
     else if (sortColuna === 'TURNO') { valA = a.turno || ''; valB = b.turno || ''; }
     else if (sortColuna === 'MODALIDADE') { valA = normalizarTipoModalidade(a.tipo); valB = normalizarTipoModalidade(b.tipo); }
 
-    const res = valA.localeCompare(valB, undefined, { numeric: true });
+    const res = valA.localeCompare(valB, 'pt-BR', { numeric: true });
     return sortDirecao === 'ASC' ? res : -res;
   });
 
@@ -634,7 +643,7 @@ window.renderTabelaGestaoDelCorpo = function() {
   }
 
   tbody.innerHTML = escalasDel.map(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
     const tipoModalidade = normalizarTipoModalidade(esc.tipo);
 
     let badgeClass = 'bg-[#F7F3E8] text-[#5A4716] border-[#BEA55A]';
@@ -793,7 +802,7 @@ window.atualizarOptionsServidoresCrfModal = function() {
     return true;
   });
 
-  srvs.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  srvs.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   let opts = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
   srvs.forEach(s => {
@@ -805,12 +814,12 @@ window.atualizarOptionsServidoresCrfModal = function() {
 };
 
 window.aoMudarServidorCrf = function(srvId) {
-  const srv = (appState.servidores || []).find(s => s.id === srvId);
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(srvId));
   const campoOrigem = document.getElementById('ml-crf-origem-nome');
   const blocoDelVinculado = document.getElementById('ml-crf-bloco-delegado');
 
   if (srv) {
-    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
     if (campoOrigem) campoOrigem.value = del ? del.nome : (srv.delegaciaNome || 'Central CRF');
 
     const isApj = !(srv.cargo || '').toUpperCase().includes('DELEGADO');
@@ -837,13 +846,13 @@ window.atualizarDelegadosDisponiveisCrf = function() {
 
   const escalasDelegados = (appState.escalas || []).filter(e => {
     if (e.scope !== 'CRF' || e.data !== dataSel || e.turno !== turnoSel) return false;
-    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
     return srv && (srv.cargo || '').toUpperCase().includes('DELEGADO');
   });
 
   let opts = `<option value="">Nenhum vínculo permanente (Avulso)</option>`;
   escalasDelegados.forEach(e => {
-    const srv = (appState.servidores || []).find(s => s.id === e.servidorId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
     if (srv) {
       opts += `<option value="${srv.id}">DEL. ${srv.nome}</option>`;
     }
@@ -866,7 +875,7 @@ window.salvarLancamentoCrfModal = async function(e) {
     return;
   }
 
-  const srv = (appState.servidores || []).find(s => s.id === servidorId);
+  const srv = (appState.servidores || []).find(s => String(s.id) === String(servidorId));
   const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
   const novaEsc = {
@@ -999,7 +1008,7 @@ window.abrirModalLancamentoDelegacia = function() {
   const selectFiltroDelModal = document.getElementById('ml-del-filtro-delegacia');
   if (selectFiltroDelModal) {
     let opts = `<option value="TODAS">Todas as Delegacias</option>`;
-    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+    (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })).forEach(d => {
       opts += `<option value="${d.id}" ${String(d.id) === String(selectedDelegaciaId) ? 'selected' : ''}>${d.nome}</option>`;
     });
     selectFiltroDelModal.innerHTML = opts;
@@ -1095,8 +1104,8 @@ window.atualizarOptionsServidoresDelModal = function() {
     return true;
   });
 
-  const servidoresUnidadeAlvo = srvs.filter(s => String(s.delegaciaId) === String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-  const demaisServidores = srvs.filter(s => String(s.delegaciaId) !== String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  const servidoresUnidadeAlvo = srvs.filter(s => String(s.delegaciaId) === String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
+  const demaisServidores = srvs.filter(s => String(s.delegaciaId) !== String(selectedDelegaciaId)).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   let optsSrv = `<option value="">Selecione o Policial (${srvs.length} Encontrados)...</option>`;
 
@@ -1336,8 +1345,8 @@ window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
 
   let csvContent = "\uFEFFData,Policial,Cargo,Lotacao,Turno,Modalidade,VTR\n";
   escalasFiltradas.forEach(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
     csvContent += `"${esc.data}","${srv?.nome || ''}","${srv?.cargo || ''}","${del?.nome || ''}","${esc.turno || ''}","${normalizarTipoModalidade(esc.tipo)}","${esc.vtr || ''}"\n`;
   });
 
@@ -1382,7 +1391,6 @@ window.importarEscalaCrfCsv = function(scopeTarget = 'CRF') {
           const dataIso = cols[0];
           let nomeBruto = cols[1].toUpperCase();
 
-          // Limpa títulos e prefixos comuns
           nomeBruto = nomeBruto.replace(/^(DEL\.|DELEGADO|DELEGADA|DR\.|DRA\.)\s+/i, '').trim();
 
           const turnoStr = cols[4] || '24h';
@@ -1519,13 +1527,13 @@ window.renderizarListaPlantoesApenasDelegados = function() {
     const lancamentos = gruposDiaTurno[key];
     
     const apenasDelegados = lancamentos.every(esc => {
-      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
       return srv && (srv.cargo || '').toUpperCase().includes('DELEGADO');
     });
 
     if (apenasDelegados && lancamentos.length > 0) {
       const primeiroDelegadoEsc = lancamentos[0];
-      const delegadoSrv = (appState.servidores || []).find(s => s.id === primeiroDelegadoEsc.servidorId);
+      const delegadoSrv = (appState.servidores || []).find(s => String(s.id) === String(primeiroDelegadoEsc.servidorId));
 
       pendencias.push({
         data: primeiroDelegadoEsc.data,
@@ -1560,11 +1568,11 @@ window.renderizarListaPlantoesApenasDelegados = function() {
 
   container.innerHTML = pendencias.map((item, idx) => {
     const poolOrdenada = [...apjsPool].sort((a, b) => {
-      const mesmaDelA = (a.delegaciaId === item.delegadoDelId) ? 1 : 0;
-      const mesmaDelB = (b.delegaciaId === item.delegadoDelId) ? 1 : 0;
+      const mesmaDelA = (String(a.delegaciaId) === String(item.delegadoDelId)) ? 1 : 0;
+      const mesmaDelB = (String(b.delegaciaId) === String(item.delegadoDelId)) ? 1 : 0;
 
       if (mesmaDelA !== mesmaDelB) return mesmaDelB - mesmaDelA;
-      return (a.nome || '').localeCompare(b.nome || '');
+      return (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true });
     });
 
     const poolFiltrada = poolOrdenada.filter(s => {
@@ -1574,7 +1582,7 @@ window.renderizarListaPlantoesApenasDelegados = function() {
 
     let selectOptions = `<option value="">Selecione o APJ...</option>`;
     poolFiltrada.forEach(s => {
-      const eMesmaDel = (s.delegaciaId === item.delegadoDelId);
+      const eMesmaDel = (String(s.delegaciaId) === String(item.delegadoDelId));
       const tagDel = eMesmaDel ? ' (★ Mesma Delegacia)' : '';
       selectOptions += `<option value="${s.id}">${s.nome}${tagDel}</option>`;
     });
@@ -1608,7 +1616,7 @@ window.confirmarVinculoApjPontual = async function(dataPlantao, turnoPlantao, se
     return;
   }
 
-  const srvApj = (appState.servidores || []).find(s => s.id === apjId);
+  const srvApj = (appState.servidores || []).find(s => String(s.id) === String(apjId));
   const newEscId = 'esc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
   const novaEscala = {
