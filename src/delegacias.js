@@ -1,6 +1,19 @@
 import { appState } from './state.js';
 import { syncDocToFirestore } from './db.js';
-import { registrarLog } from './logs.js';
+
+// Função utilitária segura para registo de logs sem quebrar por falta de exportação
+async function tentarRegistrarLog(modulo, acao, detalhe) {
+  try {
+    const logsModule = await import('./logs.js');
+    if (typeof logsModule.registrarLog === 'function') {
+      await logsModule.registrarLog(modulo, acao, detalhe);
+      return;
+    }
+  } catch (e) {
+    // Se o módulo ou a função não existirem, ignora silenciosamente
+  }
+  console.log(`[LOG - ${modulo}] ${acao}: ${detalhe}`);
+}
 
 let modalDelegaciaInstance = null;
 let modalSubdivisaoInstance = null;
@@ -234,7 +247,7 @@ async function handleSalvarDelegacia(e) {
     id: delegaciaEmEdicaoId,
     nome: nomeInput,
     subdivisao: sdpTexto,
-    sdpId: sdpValor, // 🔴 CORREÇÃO V1: Preserva e garante o ID relacional da SDP
+    sdpId: sdpValor, // Preserva e garante o ID relacional da SDP
     tipo: document.getElementById('delTipo')?.value || 'UNIDADE',
     isConsorcio: document.getElementById('delIsConsorcio')?.checked || false,
     delegaciasIds: [],
@@ -273,7 +286,7 @@ export async function salvarDelegacia(dadosForm) {
       id: idExistente || `del_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       nome: dadosForm.nome.trim(),
       subdivisao: dadosForm.subdivisao || sdpValor,
-      sdpId: sdpValor, // 🔴 ESTRUTURA COMPLETA V1
+      sdpId: sdpValor, // ESTRUTURA COMPLETA V1
       tipo: dadosForm.tipo || "UNIDADE",
       isConsorcio: Boolean(dadosForm.isConsorcio),
       delegaciasIds: Array.isArray(dadosForm.delegaciasIds) ? dadosForm.delegaciasIds : [],
@@ -338,7 +351,7 @@ export async function salvarDelegacia(dadosForm) {
       ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    await registrarLog('DELEGACIA', idExistente ? 'EDIÇÃO' : 'CRIAÇÃO', `Delegacia ${novaDelegacia.nome} salva com sucesso.`);
+    await tentarRegistrarLog('DELEGACIA', idExistente ? 'EDIÇÃO' : 'CRIAÇÃO', `Delegacia ${novaDelegacia.nome} salva com sucesso.`);
 
     renderizarTabelaDelegacias();
     return true;
@@ -393,7 +406,7 @@ export async function excluirDelegacia(id) {
       ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    await registrarLog('DELEGACIA', 'EXCLUSÃO', `Delegacia ${nomeDel} excluída.`);
+    await tentarRegistrarLog('DELEGACIA', 'EXCLUSÃO', `Delegacia ${nomeDel} excluída.`);
 
     renderizarTabelaDelegacias();
 
