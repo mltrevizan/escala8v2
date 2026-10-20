@@ -591,20 +591,58 @@ window.abrirModalGerenciarSdps = function(sdpId = null) {
 
   const inputId = document.getElementById('sdp-id');
   const inputNome = document.getElementById('sdp-nome');
+  const btnExcluir = document.getElementById('btn-excluir-sdp');
 
   if (sdpId) {
     const sdp = (appState.sdps || []).find(s => String(s.id) === String(sdpId));
     if (sdp) {
       inputId.value = sdp.id;
       inputNome.value = sdp.nome || '';
+      if (btnExcluir) btnExcluir.classList.remove('hidden');
     }
   } else {
     inputId.value = '';
     inputNome.value = '';
+    if (btnExcluir) btnExcluir.classList.add('hidden');
   }
+
+  // Preenche a lista de delegacias para vincular via checkbox
+  renderizarCheckboxesDelegaciasSdp(sdpId);
 
   modal.classList.remove('hidden');
 };
+
+function renderizarCheckboxesDelegaciasSdp(sdpIdAtual = null) {
+  const container = document.getElementById('sdp-delegacias-lista');
+  if (!container) return;
+
+  const sdpAtual = sdpIdAtual ? (appState.sdps || []).find(s => String(s.id) === String(sdpIdAtual)) : null;
+  const sdpNomeAtual = sdpAtual ? (sdpAtual.nome || '').trim().toUpperCase() : '';
+
+  const delegacias = [...(appState.delegacias || [])].sort((a, b) => 
+    (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })
+  );
+
+  if (delegacias.length === 0) {
+    container.innerHTML = `<p class="text-slate-400 italic text-center p-2">Nenhuma delegacia cadastrada.</p>`;
+    return;
+  }
+
+  container.innerHTML = delegacias.map(del => {
+    const delSdp = (del.subdivisao || '').trim().toUpperCase();
+    const isChecked = sdpNomeAtual && delSdp === sdpNomeAtual;
+
+    return `
+      <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-100 border border-slate-200 cursor-pointer bg-white">
+        <input type="checkbox" name="sdp-delegacias-check" value="${del.id}" ${isChecked ? 'checked' : ''} class="rounded text-black focus:ring-slate-500 w-4 h-4 cursor-pointer">
+        <div class="flex-1 min-w-0">
+          <span class="font-bold text-slate-800 text-xs block truncate">${del.nome}</span>
+          <span class="text-[10px] text-slate-400 block">${del.subdivisao ? 'Atual: ' + del.subdivisao : 'Sem SDP'}</span>
+        </div>
+      </label>
+    `;
+  }).join('');
+}
 
 window.fecharModalSdp = function() {
   document.getElementById('modal-sdp')?.classList.add('hidden');
@@ -628,6 +666,18 @@ window.salvarSdpModal = async function(e) {
 
     sdpObj.nome = nome;
 
+    // Coleta IDs das delegacias marcadas no modal
+    const checkboxes = document.querySelectorAll('input[name="sdp-delegacias-check"]:checked');
+    const idsDelegaciasSelecionadas = Array.from(checkboxes).map(cb => cb.value);
+
+    // Atualiza a propriedade 'subdivisao' nas delegacias afetadas
+    (appState.delegacias || []).forEach(del => {
+      if (idsDelegaciasSelecionadas.includes(String(del.id))) {
+        del.subdivisao = nome;
+        syncDocToFirestore('delegacias', del.id, del);
+      }
+    });
+
     if (!appState.sdps) appState.sdps = [];
     const idx = appState.sdps.findIndex(s => String(s.id) === String(targetId));
     if (idx >= 0) {
@@ -638,7 +688,7 @@ window.salvarSdpModal = async function(e) {
 
     await syncDocToFirestore('sdps', targetId, sdpObj);
 
-    alert("Subdivisão (SDP) salva com sucesso!");
+    alert("Subdivisão (SDP) e vínculos salvos com sucesso!");
     window.fecharModalSdp();
 
     if (typeof renderDelegaciasCards === 'function') {
@@ -651,18 +701,60 @@ window.salvarSdpModal = async function(e) {
   }
 };
 
+window.excluirSdpModal = async function() {
+  const id = document.getElementById('sdp-id')?.value;
+  if (!id) return;
+
+  const sdp = (appState.sdps || []).find(s => String(s.id) === String(id));
+  const nomeSdp = sdp ? sdp.nome : 'esta SDP';
+
+  if (!confirm(`Tem certeza que deseja excluir a Subdivisão "${nomeSdp}"?\n\nAs delegacias vinculadas não serão excluídas, apenas ficarão sem SDP associada.`)) {
+    return;
+  }
+
+  try {
+    // Remove do array local de SDPs
+    appState.sdps = (appState.sdps || []).filter(s => String(s.id) !== String(id));
+
+    // Desvincula as delegacias que pertenciam a essa SDP
+    if (sdp && sdp.nome) {
+      const nomeUpper = sdp.nome.trim().toUpperCase();
+      (appState.delegacias || []).forEach(del => {
+        if ((del.subdivisao || '').trim().toUpperCase() === nomeUpper) {
+          del.subdivisao = '';
+          syncDocToFirestore('delegacias', del.id, del);
+        }
+      });
+    }
+
+    // Remove do Firestore
+    await syncDocToFirestore('sdps', id, null, true);
+
+    alert(`Subdivisão "${nomeSdp}" excluída com sucesso!`);
+    window.fecharModalSdp();
+
+    if (typeof renderDelegaciasCards === 'function') {
+      renderDelegaciasCards('delegacias-container');
+    }
+
+  } catch (err) {
+    console.error("Erro ao excluir SDP:", err);
+    alert(`Erro ao excluir Subdivisão: ${err.message}`);
+  }
+};
+
 function criarModalSdpDOM() {
   document.getElementById('modal-sdp')?.remove();
 
   const modalHTML = `
     <div id="modal-sdp" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
           <h3 class="font-bold text-slate-900 text-sm">Gerenciamento de Subdivisão (SDP)</h3>
           <button type="button" onclick="window.fecharModalSdp()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
         </div>
 
-        <form onsubmit="window.salvarSdpModal(event)" class="space-y-4 text-xs">
+        <form onsubmit="window.salvarSdpModal(event)" class="space-y-4 text-xs flex-1 overflow-y-auto pr-1">
           <input type="hidden" id="sdp-id">
 
           <div>
@@ -670,9 +762,18 @@ function criarModalSdpDOM() {
             <input type="text" id="sdp-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 7ª SDP / 8ª SDP / 21ª SDP" class="w-full border rounded-xl p-2.5 bg-slate-50 font-bold text-slate-900 uppercase">
           </div>
 
-          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
-            <button type="button" onclick="window.fecharModalSdp()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
-            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar SDP</button>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Selecione as Delegacias Vinculadas:</label>
+            <p class="text-[10px] text-slate-500 mb-2">Marque quais unidades pertencem a esta SDP:</p>
+            <div id="sdp-delegacias-lista" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border rounded-xl bg-slate-50"></div>
+          </div>
+
+          <div class="pt-3 border-t flex items-center justify-between shrink-0">
+            <button type="button" id="btn-excluir-sdp" onclick="window.excluirSdpModal()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs cursor-pointer hidden">🗑 Excluir SDP</button>
+            <div class="flex gap-2 ml-auto">
+              <button type="button" onclick="window.fecharModalSdp()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar SDP</button>
+            </div>
           </div>
         </form>
       </div>
