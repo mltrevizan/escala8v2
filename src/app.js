@@ -4,7 +4,13 @@ import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderServidoresTable } from './servidores.js';
-import { renderDelegaciasCards, popularDropdownDelegaciasComEscala } from './delegacias.js';
+import { 
+  initDelegacias, 
+  renderizarTabelaDelegacias, 
+  renderDelegaciasCards, 
+  popularDropdownDelegaciasComEscala,
+  carregarListaSubdivisoes 
+} from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
 import { renderFeriasModule } from './ferias.js';
@@ -39,22 +45,31 @@ window.switchTab = async function(tabName) {
 
   appState.activeTab = tabName;
 
-  document.querySelectorAll('.tab-btn, [id^="tab-btn-"]').forEach(btn => {
+  // Atualiza classes dos botões das abas
+  document.querySelectorAll('.tab-btn, [id^="tab-btn-"], [id^="btn-tab-"]').forEach(btn => {
     btn.classList.remove('active', 'bg-black', 'text-white', 'shadow-sm');
   });
 
-  const btnAtivo = document.getElementById(`tab-btn-${tabName}`);
+  const btnAtivo = document.getElementById(`tab-btn-${tabName}`) || document.getElementById(`btn-tab-${tabName}`);
   if (btnAtivo) {
     btnAtivo.classList.add('active');
   }
 
-  document.querySelectorAll('.tab-content, [id^="tab-content-"]').forEach(content => {
+  // Oculta todos os containers de abas
+  document.querySelectorAll('.tab-content, [id^="tab-content-"], .module-container, section[id$="-container"]').forEach(content => {
     content.classList.add('hidden');
+    content.style.display = 'none';
   });
 
-  const targetContent = document.getElementById(`tab-content-${tabName}`);
+  // Busca o container da aba por múltiplos IDs possíveis no HTML
+  const targetContent = document.getElementById(`tab-content-${tabName}`) || 
+                        document.getElementById(`${tabName}-container`) || 
+                        document.getElementById(`container-${tabName}`) || 
+                        document.getElementById(tabName);
+
   if (targetContent) {
     targetContent.classList.remove('hidden');
+    targetContent.style.display = 'block';
   }
 
   // 🔑 CHECAGEM LEVE DE VERSÃO (1 LEITURA) APENAS PARA ABAS COM ALTA ROTATIVIDADE
@@ -68,7 +83,6 @@ window.switchTab = async function(tabName) {
       renderCalendarGrid('calendar-crf-container', 'CRF');
       break;
     case 'delegacia':
-      // Popula o dropdown e define a delegacia no estado ANTES de desenhar a grade
       popularDropdownDelegaciasComEscala('select-calendar-delegacia');
       renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
       break;
@@ -84,6 +98,8 @@ window.switchTab = async function(tabName) {
       break;
     case 'unidades':
     case 'delegacias':
+      carregarListaSubdivisoes();
+      renderizarTabelaDelegacias();
       renderDelegaciasCards('delegacias-container');
       break;
     case 'feriados':
@@ -182,6 +198,11 @@ async function initApp() {
 
     initAuthModule();
 
+    // Inicializa o módulo de delegacias e escutas do formulário/tabela
+    if (typeof initDelegacias === 'function') {
+      initDelegacias();
+    }
+
     if (typeof initGeradorLoteModule === 'function') {
       initGeradorLoteModule();
     }
@@ -199,5 +220,9 @@ async function initApp() {
     console.error("Erro na inicialização do sistema:", err);
   }
 }
+
+// Expõe métodos essenciais no escopo global
+window.alternarAbaDirect = window.switchTab;
+window.popularDropdownDelegaciasComEscala = popularDropdownDelegaciasComEscala;
 
 document.addEventListener('DOMContentLoaded', initApp);
