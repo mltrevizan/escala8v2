@@ -43,8 +43,8 @@
     }
   </script>
 
-  <!-- ARQUIVO DE ESTILOS DA PASTA css/ (Versão v17.0.0) -->
-  <link rel="stylesheet" href="./css/styles.css?v=17.0.0">
+  <!-- ARQUIVO DE ESTILOS DA PASTA css/ (Com versão v18.0.0 para quebra de cache) -->
+  <link rel="stylesheet" href="./css/styles.css?v=18.0.0">
 
   <!-- SDK Firebase v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -52,7 +52,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
   <script>
-    const APP_BUILD_VERSION = '17.0.0';
+    const APP_BUILD_VERSION = '18.0.0';
     const VERSAO_SALVA = localStorage.getItem('escala8_build_version');
 
     if (VERSAO_SALVA !== APP_BUILD_VERSION) {
@@ -147,8 +147,54 @@
       <div id="feriados-container"></div>
     </main>
 
+    <!-- ESTRUTURA DA ABA UNIDADES / DELEGACIAS (RESTAURADA E COMPATÍVEL COM O DELEGACIAS.JS ORIGINAL) -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      <div id="delegacias-container"></div>
+      <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Subdivisões</h2>
+            <p class="text-[11px] text-slate-500">Cadastros de unidades, regimes de plantão e consórcios</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnNovaDelegacia" class="px-3 py-2 bg-black hover:bg-slate-800 text-[#BEA55A] border border-[#BEA55A] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
+              ➕ Nova Delegacia
+            </button>
+            <button id="btnNovaSubdivisao" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
+              🏛️ Nova SDP
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-xs">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Buscar Delegacia:</label>
+            <input type="text" id="buscaDelegacia" placeholder="Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ Subdivisão (SDP):</label>
+            <select id="filtroSdpDelegacias" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+              <option value="TODAS">Todas as Subdivisões</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto font-sans">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+              <th class="p-3">Nome da Unidade</th>
+              <th class="p-3">Subdivisão (SDP)</th>
+              <th class="p-3">Regime</th>
+              <th class="p-3">Tipo</th>
+              <th class="p-3">Horários Padronizados</th>
+              <th class="p-3 text-right">Ações</th>
+            </tr>
+          </thead>
+          <!-- CORPO DA TABELA REQUERIDO PELO DELEGACIAS.JS -->
+          <tbody id="tbodyDelegacias" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
     </main>
 
     <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -219,6 +265,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=17.0.0"></script>
+  <script type="module" src="./src/app.js?v=18.0.0"></script>
 </body>
 </html>
