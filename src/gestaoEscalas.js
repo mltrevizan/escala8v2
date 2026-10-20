@@ -279,14 +279,17 @@ window.obterEscalasFiltradasGestaoCrf = function() {
       if (!subSrv.includes(sdp.toUpperCase())) return false;
     }
 
-    // 🔴 FILTRO TOLERANTE: Compara por ID ou Nome da Delegacia sem bloquear por sdpId
+    // 🔴 FILTRO TOLERANTE AMPLIADO DA DELEGACIA NA CRF:
+    // Compara o ID selecionado com a Delegacia da Escala, a Delegacia do Servidor ou o Nome exato da Delegacia
     if (delegaciaId !== 'TODAS') {
       const delAlvo = (appState.delegacias || []).find(d => String(d.id) === String(delegaciaId));
-      const matchId = (String(e.delegaciaId) === String(delegaciaId)) || (srv && String(srv.delegaciaId) === String(delegaciaId));
-      const matchNome = delAlvo && srv && srv.delegaciaNome && 
-                        srv.delegaciaNome.toUpperCase().trim() === delAlvo.nome.toUpperCase().trim();
+      
+      const matchEscalaId = String(e.delegaciaId) === String(delegaciaId);
+      const matchServidorDelId = srv && String(srv.delegaciaId) === String(delegaciaId);
+      const matchServidorDelNome = delAlvo && srv && srv.delegaciaNome && 
+                                  srv.delegaciaNome.toUpperCase().trim() === delAlvo.nome.toUpperCase().trim();
 
-      if (!matchId && !matchNome) return false;
+      if (!matchEscalaId && !matchServidorDelId && !matchServidorDelNome) return false;
     }
 
     return true;
