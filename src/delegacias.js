@@ -25,8 +25,8 @@ let subdivisaoEmEdicaoId = null;
  * Inicialização dos Módulos e Event Listeners
  */
 export function initDelegacias() {
-  const btnNovaDelegacia = document.getElementById('btnNovaDelegacia');
-  const btnNovaSubdivisao = document.getElementById('btnNovaSubdivisao');
+  const btnNovaDelegacia = document.getElementById('btnNovaDelegacia') || document.getElementById('btn-nova-delegacia');
+  const btnNovaSubdivisao = document.getElementById('btnNovaSubdivisao') || document.getElementById('btn-nova-subdivisao');
   const formDelegacia = document.getElementById('formDelegacia');
   const formSubdivisao = document.getElementById('formSubdivisao');
 
@@ -55,8 +55,8 @@ export function initDelegacias() {
  * Carrega e Inicializa Filtros de Busca e Subdivisão na Tela
  */
 export function initFiltrosDelegacia() {
-  const inputBusca = document.getElementById('buscaDelegacia');
-  const selectSdp = document.getElementById('filtroSdpDelegacias');
+  const inputBusca = document.getElementById('buscaDelegacia') || document.getElementById('input-busca-delegacia');
+  const selectSdp = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
 
   if (inputBusca) {
     inputBusca.addEventListener('input', () => renderizarTabelaDelegacias());
@@ -71,7 +71,7 @@ export function initFiltrosDelegacia() {
  * Preenche o select de subdivisões (SDPs) nos filtros e modais
  */
 export function carregarListaSubdivisoes() {
-  const selectFiltro = document.getElementById('filtroSdpDelegacias');
+  const selectFiltro = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
   const selectForm = document.getElementById('delSubdivisao');
 
   const sdps = [...(appState.sdps || [])].sort((a, b) => 
@@ -107,13 +107,13 @@ export function carregarListaSubdivisoes() {
  * Renderiza a Tabela Principal de Delegacias
  */
 export function renderizarTabelaDelegacias() {
-  const tbody = document.getElementById('tbodyDelegacias');
+  const tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
   if (!tbody) return;
 
   tbody.innerHTML = '';
 
-  const busca = (document.getElementById('buscaDelegacia')?.value || '').toLowerCase();
-  const sdpFiltro = document.getElementById('filtroSdpDelegacias')?.value || 'TODAS';
+  const busca = (document.getElementById('buscaDelegacia')?.value || document.getElementById('input-busca-delegacia')?.value || '').toLowerCase().trim();
+  const sdpFiltro = document.getElementById('filtroSdpDelegacias')?.value || document.getElementById('select-filtro-sdp')?.value || 'TODAS';
 
   let lista = [...(appState.delegacias || [])];
 
@@ -137,49 +137,34 @@ export function renderizarTabelaDelegacias() {
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma delegacia encontrada.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nenhuma delegacia encontrada.</td></tr>`;
     return;
   }
 
-  lista.forEach(del => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${del.nome || '-'}</strong></td>
-      <td>${del.subdivisao || del.sdpId || '-'}</td>
-      <td><span class="badge ${del.isConsorcio ? 'bg-warning text-dark' : 'bg-secondary'}">${del.isConsorcio ? 'Plantão Unificado' : 'Unidade Simples'}</span></td>
-      <td>${del.tipo || 'UNIDADE'}</td>
-      <td>
-        <small class="text-muted">
-          P: ${del.plantaoConfig?.regime || 'ININTERRUPTA'}<br>
-          S: ${del.sobreavisoConfig?.regime || 'INTERMITENTE'}
-        </small>
+  tbody.innerHTML = lista.map(del => `
+    <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+      <td class="p-3 font-bold text-slate-900">${del.nome || '-'}</td>
+      <td class="p-3 font-semibold text-slate-700">${del.subdivisao || del.sdpId || '-'}</td>
+      <td class="p-3">
+        <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${del.isConsorcio ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-300'}">
+          ${del.isConsorcio ? 'Plantão Unificado' : 'Unidade Simples'}
+        </span>
       </td>
-      <td class="text-end">
-        <button class="btn btn-sm btn-outline-primary me-1 btn-editar-del" data-id="${del.id}" title="Editar">
-          <i class="bi bi-pencil"></i> ✏️
+      <td class="p-3 font-semibold text-slate-600">${del.tipo || 'UNIDADE'}</td>
+      <td class="p-3 font-mono text-[11px] text-slate-500">
+        P: ${del.plantaoConfig?.regime || 'ININTERRUPTA'}<br>
+        S: ${del.sobreavisoConfig?.regime || 'INTERMITENTE'}
+      </td>
+      <td class="p-3 text-right space-x-1">
+        <button onclick="window.abrirModalDelegaciaDirect('${del.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          ✏️ Editar
         </button>
-        <button class="btn btn-sm btn-outline-danger btn-excluir-del" data-id="${del.id}" title="Excluir">
-          <i class="bi bi-trash"></i> 🗑️
+        <button onclick="window.excluirDelegaciaDirect('${del.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+          🗑️ Excluir
         </button>
       </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  // Event Listeners nos Botões de Ação
-  tbody.querySelectorAll('.btn-editar-del').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.getAttribute('data-id');
-      abrirModalDelegacia(id);
-    });
-  });
-
-  tbody.querySelectorAll('.btn-excluir-del').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.getAttribute('data-id');
-      excluirDelegacia(id);
-    });
-  });
+    </tr>
+  `).join('');
 }
 
 /**
@@ -230,6 +215,7 @@ export function abrirModalDelegacia(id = null) {
     modalDelegaciaInstance.show();
   } else {
     elModal.classList.remove('hidden');
+    elModal.style.display = 'flex';
   }
 }
 
@@ -278,7 +264,11 @@ async function handleSalvarDelegacia(e) {
   const sucesso = await salvarDelegacia(dados);
   if (sucesso) {
     if (modalDelegaciaInstance) modalDelegaciaInstance.hide();
-    else document.getElementById('modalDelegacia')?.classList.add('hidden');
+    const elModal = document.getElementById('modalDelegacia');
+    if (elModal) {
+      elModal.classList.add('hidden');
+      elModal.style.display = 'none';
+    }
   }
 }
 
@@ -455,6 +445,7 @@ export function abrirModalSubdivisao(id = null) {
     modalSubdivisaoInstance.show();
   } else {
     elModal.classList.remove('hidden');
+    elModal.style.display = 'flex';
   }
 }
 
@@ -475,7 +466,11 @@ async function handleSalvarSubdivisao(e) {
   const sucesso = await salvarSubdivisao(dados);
   if (sucesso) {
     if (modalSubdivisaoInstance) modalSubdivisaoInstance.hide();
-    else document.getElementById('modalSubdivisao')?.classList.add('hidden');
+    const elModal = document.getElementById('modalSubdivisao');
+    if (elModal) {
+      elModal.classList.add('hidden');
+      elModal.style.display = 'none';
+    }
   }
 }
 
@@ -609,9 +604,6 @@ export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId 
  * Renderiza os cards das delegacias (requerido pelo app.js)
  */
 export function renderDelegaciasCards(containerId = 'containerDelegaciasCards') {
-  const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
-  if (!container) return;
-
   renderizarTabelaDelegacias();
 }
 
