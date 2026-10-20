@@ -31,19 +31,19 @@ export function initDelegacias() {
   const formSubdivisao = document.getElementById('formSubdivisao');
 
   if (btnNovaDelegacia) {
-    btnNovaDelegacia.addEventListener('click', () => abrirModalDelegacia());
+    btnNovaDelegacia.onclick = () => abrirModalDelegacia();
   }
 
   if (btnNovaSubdivisao) {
-    btnNovaSubdivisao.addEventListener('click', () => abrirModalSubdivisao());
+    btnNovaSubdivisao.onclick = () => abrirModalSubdivisao();
   }
 
   if (formDelegacia) {
-    formDelegacia.addEventListener('submit', handleSalvarDelegacia);
+    formDelegacia.onsubmit = handleSalvarDelegacia;
   }
 
   if (formSubdivisao) {
-    formSubdivisao.addEventListener('submit', handleSalvarSubdivisao);
+    formSubdivisao.onsubmit = handleSalvarSubdivisao;
   }
 
   initFiltrosDelegacia();
@@ -59,11 +59,11 @@ export function initFiltrosDelegacia() {
   const selectSdp = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
 
   if (inputBusca) {
-    inputBusca.addEventListener('input', () => renderizarTabelaDelegacias());
+    inputBusca.oninput = () => renderizarTabelaDelegacias();
   }
 
   if (selectSdp) {
-    selectSdp.addEventListener('change', () => renderizarTabelaDelegacias());
+    selectSdp.onchange = () => renderizarTabelaDelegacias();
   }
 }
 
@@ -107,8 +107,68 @@ export function carregarListaSubdivisoes() {
  * Renderiza a Tabela Principal de Delegacias
  */
 export function renderizarTabelaDelegacias() {
-  const tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
-  if (!tbody) return;
+  // Procura o container principal da aba no HTML
+  let container = document.getElementById('tab-content-unidades') || 
+                  document.getElementById('delegacias-container') || 
+                  document.getElementById('tab-content-delegacias');
+
+  if (!container) return;
+
+  // Se o container ainda não tiver a estrutura da tabela e filtros, injeta automaticamente
+  let tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
+  if (!tbody) {
+    container.innerHTML = `
+      <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Subdivisões</h2>
+            <p class="text-[11px] text-slate-500">Cadastros de unidades, regimes de plantão e consórcios</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="window.abrirModalDelegaciaDirect()" class="px-3 py-2 bg-black hover:bg-slate-800 text-[#BEA55A] border border-[#BEA55A] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
+              ➕ Nova Delegacia
+            </button>
+            <button onclick="window.abrirModalSubdivisaoDirect()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
+              🏛️ Nova SDP
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-xs">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Buscar Delegacia:</label>
+            <input type="text" id="buscaDelegacia" placeholder="Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ Subdivisão (SDP):</label>
+            <select id="filtroSdpDelegacias" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
+              <option value="TODAS">Todas as Subdivisões</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto font-sans">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+              <th class="p-3">Nome da Unidade</th>
+              <th class="p-3">Subdivisão (SDP)</th>
+              <th class="p-3">Regime</th>
+              <th class="p-3">Tipo</th>
+              <th class="p-3">Horários Padronizados</th>
+              <th class="p-3 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyDelegacias" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    `;
+
+    initFiltrosDelegacia();
+    carregarListaSubdivisoes();
+    tbody = document.getElementById('tbodyDelegacias');
+  }
 
   tbody.innerHTML = '';
 
@@ -133,7 +193,7 @@ export function renderizarTabelaDelegacias() {
     );
   }
 
-  // Ordenação Alfabética / Numérica Natural PT-BR (Garante 14ª DRP após a 13ª DRP)
+  // Ordenação Alfabética / Numérica Natural PT-BR
   lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
 
   if (lista.length === 0) {
@@ -614,6 +674,7 @@ export function renderSubdivisoesCards(containerId = 'containerSubdivisoesCards'
   carregarListaSubdivisoes();
 }
 
-// Vincula atalhos globais diretos na janela para botões dinâmicos do DOM
+// Vincula atalhos globais diretos na janela para acionamento transparente
 window.abrirModalDelegaciaDirect = abrirModalDelegacia;
+window.abrirModalSubdivisaoDirect = abrirModalSubdivisao;
 window.excluirDelegaciaDirect = excluirDelegacia;
