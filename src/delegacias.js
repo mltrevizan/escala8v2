@@ -1,609 +1,579 @@
 // src/delegacias.js
-import { appState } from './state.js';
+import { appState, normalizeText } from './state.js';
 import { syncDocToFirestore } from './db.js';
+import { renderCalendarGrid } from './calendar.js';
 
-// Função utilitária segura para registro de logs sem quebrar por falta de exportação
-async function tentarRegistrarLog(modulo, acao, detalhe) {
-  try {
-    const logsModule = await import('./logs.js');
-    if (typeof logsModule.registrarLog === 'function') {
-      await logsModule.registrarLog(modulo, acao, detalhe);
-      return;
-    }
-  } catch (e) {
-    // Se o módulo ou a função não existirem, ignora silenciosamente
-  }
-  console.log(`[LOG - ${modulo}] ${acao}: ${detalhe}`);
-}
+let delegaciasFiltroState = { busca: '', sdp: 'TODAS' };
 
-let modalDelegaciaInstance = null;
-let modalSubdivisaoInstance = null;
-let delegaciaEmEdicaoId = null;
-let subdivisaoEmEdicaoId = null;
-
-/**
- * Inicialização dos Módulos e Event Listeners Nativos
- */
-export function initDelegacias() {
-  const btnNovaDelegacia = document.getElementById('btnNovaDelegacia') || document.getElementById('btn-nova-delegacia');
-  const btnNovaSubdivisao = document.getElementById('btnNovaSubdivisao') || document.getElementById('btn-nova-subdivisao');
-  const formDelegacia = document.getElementById('formDelegacia');
-  const formSubdivisao = document.getElementById('formSubdivisao');
-
-  if (btnNovaDelegacia) {
-    btnNovaDelegacia.addEventListener('click', () => abrirModalDelegacia());
-  }
-
-  if (btnNovaSubdivisao) {
-    btnNovaSubdivisao.addEventListener('click', () => abrirModalSubdivisao());
-  }
-
-  if (formDelegacia) {
-    formDelegacia.addEventListener('submit', handleSalvarDelegacia);
-  }
-
-  if (formSubdivisao) {
-    formSubdivisao.addEventListener('submit', handleSalvarSubdivisao);
-  }
-
-  initFiltrosDelegacia();
-  carregarListaSubdivisoes();
-  renderizarTabelaDelegacias();
+function limparSujeiraHorario(str) {
+  if (!str) return '08:00 às 08:00';
+  return str.replace(/[\x00-\x1F\x7F-\x9F]/g, '').replace(/ert\{\}/gi, '').trim();
 }
 
 /**
- * Carrega e Inicializa Filtros de Busca e Subdivisão na Tela
+ * Função utilitária para extrair Início e Fim de strings no formato "HH:MM às HH:MM"
  */
-export function initFiltrosDelegacia() {
-  const inputBusca = document.getElementById('buscaDelegacia') || document.getElementById('input-busca-delegacia');
-  const selectSdp = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
-
-  if (inputBusca) {
-    inputBusca.addEventListener('input', () => renderizarTabelaDelegacias());
+function extrairHorariosInicioFim(strHorario, padraoInicio = '08:00', padraoFim = '08:00') {
+  if (!strHorario || typeof strHorario !== 'string') {
+    return { inicio: padraoInicio, fim: padraoFim };
   }
 
-  if (selectSdp) {
-    selectSdp.addEventListener('change', () => renderizarTabelaDelegacias());
+  const partes = strHorario.split(/\s+às\s+/i);
+  if (partes.length === 2) {
+    const inicio = partes[0].trim().slice(0, 5);
+    const fim = partes[1].trim().slice(0, 5);
+    return {
+      inicio: /^\d{2}:\d{2}$/.test(inicio) ? inicio : padraoInicio,
+      fim: /^\d{2}:\d{2}$/.test(fim) ? fim : padraoFim
+    };
   }
+
+  return { inicio: padraoInicio, fim: padraoFim };
 }
 
 /**
- * Preenche o select de subdivisões (SDPs) nos filtros e modais
+ * Preenche o dropdown da aba 'Escala por Delegacia' apenas com delegacias que possuem 
+ * lançamentos de escala vigentes/registrados e seleciona automaticamente a primeira opção válida.
+ * 
+ * Execução 100% em memória local (0 leituras).
  */
-export function carregarListaSubdivisoes() {
-  const selectFiltro = document.getElementById('filtroSdpDelegacias') || document.getElementById('select-filtro-sdp');
-  const selectForm = document.getElementById('delSubdivisao');
+export function popularDropdownDelegaciasComEscala(selectElementId = 'select-calendar-delegacia') {
+  const select = document.getElementById(selectElementId) || document.getElementById('select-escala-delegacia');
+  if (!select) return null;
 
-  const sdps = [...(appState.sdps || [])].sort((a, b) => 
-    (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })
+  const escalas = appState.escalas || [];
+  const delegacias = appState.delegacias || [];
+
+  // Mapeia IDs ou nomes de delegacias que possuem escalas registradas na memória local
+  const idsComEscala = new Set(
+    escalas
+      .filter(e => e.delegaciaId || e.delegacia)
+      .map(e => String(e.delegaciaId || e.delegacia).trim())
   );
 
-  if (selectFiltro) {
-    const valorAtual = selectFiltro.value;
-    selectFiltro.innerHTML = '<option value="TODAS">Todas as Subdivisões</option>';
-    sdps.forEach(sdp => {
-      const opt = document.createElement('option');
-      opt.value = sdp.id || sdp.nome;
-      opt.textContent = sdp.nome;
-      selectFiltro.appendChild(opt);
-    });
-    selectFiltro.value = valorAtual || 'TODAS';
+  // Filtra apenas as delegacias que possuem lançamentos vinculados
+  const delegaciasComEscala = delegacias.filter(d => 
+    idsComEscala.has(String(d.id)) || idsComEscala.has(String(d.nome).trim())
+  );
+
+  // Se não houver delegacias com escala cadastrada, exibe mensagem informativa
+  if (delegaciasComEscala.length === 0) {
+    select.innerHTML = `<option value="">Nenhuma delegacia com escala registrada</option>`;
+    select.disabled = true;
+    appState.selectedDelegaciaId = null;
+    return null;
   }
 
-  if (selectForm) {
-    const valorAtual = selectForm.value;
-    selectForm.innerHTML = '<option value="">Selecione uma Subdivisão...</option>';
-    sdps.forEach(sdp => {
-      const opt = document.createElement('option');
-      opt.value = sdp.id || sdp.nome;
-      opt.textContent = sdp.nome;
-      selectForm.appendChild(opt);
-    });
-    selectForm.value = valorAtual || '';
+  // Ordena alfabeticamente pelo nome da delegacia
+  delegaciasComEscala.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+  // Gera as opções do dropdown
+  let optionsHTML = delegaciasComEscala
+    .map(del => `<option value="${del.id}">${del.nome}</option>`)
+    .join('');
+
+  select.innerHTML = optionsHTML;
+  select.disabled = false;
+
+  // Define a primeira delegacia válida da lista
+  const primeiraDelegaciaId = delegaciasComEscala[0].id;
+
+  // Sincroniza o estado global se estiver vazio ou se a delegacia selecionada anteriormente não tiver escalas
+  if (!appState.selectedDelegaciaId || !delegaciasComEscala.some(d => String(d.id) === String(appState.selectedDelegaciaId))) {
+    appState.selectedDelegaciaId = primeiraDelegaciaId;
   }
+
+  // Ajusta o valor visual do seletor conforme o estado global
+  select.value = appState.selectedDelegaciaId;
+
+  return appState.selectedDelegaciaId;
 }
 
-/**
- * Renderiza a Tabela Principal de Delegacias
- */
-export function renderizarTabelaDelegacias() {
-  const tbody = document.getElementById('tbodyDelegacias') || document.getElementById('tabela-delegacias-corpo');
-  if (!tbody) return;
+export function renderDelegaciasCards(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
 
-  tbody.innerHTML = '';
+  const html = `
+    <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-sm text-slate-800">Hierarquia de SDPs e Delegacias</h2>
+          <p class="text-[11px] text-slate-500">Gestão de Subdivisões (SDPs) e Unidades Vinculadas</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="window.abrirModalGerenciarSdps()" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ⚙ Gerenciar SDPs
+          </button>
+          <button onclick="window.abrirModalDelegacia()" class="px-3 py-2 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1">
+            ➕ Nova Delegacia
+          </button>
+        </div>
+      </div>
 
-  const busca = (document.getElementById('buscaDelegacia')?.value || document.getElementById('input-busca-delegacia')?.value || '').toLowerCase().trim();
-  const sdpFiltro = document.getElementById('filtroSdpDelegacias')?.value || document.getElementById('select-filtro-sdp')?.value || 'TODAS';
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+        <div class="sm:col-span-2">
+          <input type="text" id="filtro-del-busca" oninput="window.atualizarFiltrosDelegaciasList()" placeholder="🔍 Filtrar por nome da delegacia ou SDP..." class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-medium focus:outline-none">
+        </div>
+        <div>
+          <select id="filtro-del-sdp" onchange="window.atualizarFiltrosDelegaciasList()" class="w-full text-xs border border-slate-300 rounded-xl p-2 bg-white font-bold text-slate-800">
+          </select>
+        </div>
+      </div>
+    </div>
 
-  let lista = [...(appState.delegacias || [])];
+    <div id="lista-delegacias-tronco" class="p-4 space-y-6 font-sans"></div>
+  `;
 
-  // Filtro por SDP
-  if (sdpFiltro !== 'TODAS') {
-    lista = lista.filter(d => 
-      String(d.sdpId) === String(sdpFiltro) || 
-      String(d.subdivisao) === String(sdpFiltro)
-    );
+  container.innerHTML = html;
+  window.popularFiltroSdpsSelect();
+  window.renderizarListaTroncoGalhos();
+}
+
+window.popularFiltroSdpsSelect = function() {
+  const select = document.getElementById('filtro-del-sdp');
+  if (!select) return;
+
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  let opts = `<option value="TODAS">Todas as SDPs (Subdivisões)</option>`;
+  [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(sdp => {
+    opts += `<option value="${sdp}">${sdp}</option>`;
+  });
+
+  select.innerHTML = opts;
+};
+
+window.atualizarFiltrosDelegaciasList = function() {
+  delegaciasFiltroState.busca = document.getElementById('filtro-del-busca')?.value?.toLowerCase() || '';
+  delegaciasFiltroState.sdp = document.getElementById('filtro-del-sdp')?.value || 'TODAS';
+
+  window.renderizarListaTroncoGalhos();
+};
+
+window.renderizarListaTroncoGalhos = function() {
+  const container = document.getElementById('lista-delegacias-tronco');
+  if (!container) return;
+
+  const { busca, sdp } = delegaciasFiltroState;
+
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  let sdpsLista = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  if (sdp !== 'TODAS') {
+    sdpsLista = sdpsLista.filter(s => s === sdp);
   }
 
-  // Filtro por Busca de Texto
-  if (busca) {
-    lista = lista.filter(d => 
-      (d.nome || '').toLowerCase().includes(busca) ||
-      (d.subdivisao || '').toLowerCase().includes(busca)
-    );
-  }
-
-  // Ordenação Natural PT-BR mantida do seu projeto original
-  lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
-
-  if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma delegacia encontrada.</td></tr>`;
+  if (sdpsLista.length === 0) {
+    container.innerHTML = `<p class="text-xs text-slate-400 italic text-center p-8">Nenhuma subdivisão localizada para os filtros.</p>`;
     return;
   }
 
-  lista.forEach(del => {
-    const tr = document.createElement('tr');
-    tr.className = "hover:bg-slate-50 transition border-b border-slate-200 text-xs";
-    tr.innerHTML = `
-      <td class="p-3 font-bold text-slate-900">${del.nome || '-'}</td>
-      <td class="p-3 font-semibold text-slate-700">${del.subdivisao || del.sdpId || '-'}</td>
-      <td class="p-3">
-        <span class="px-2 py-0.5 text-[10px] font-bold rounded border ${del.isConsorcio ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-300'}">
-          ${del.isConsorcio ? 'Plantão Unificado' : 'Unidade Simples'}
-        </span>
-      </td>
-      <td class="p-3 font-semibold text-slate-600">${del.tipo || 'UNIDADE'}</td>
-      <td class="p-3 font-mono text-[11px] text-slate-500">
-        P: ${del.plantaoConfig?.regime || 'ININTERRUPTA'}<br>
-        S: ${del.sobreavisoConfig?.regime || 'INTERMITENTE'}
-      </td>
-      <td class="p-3 text-right space-x-1">
-        <button class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer btn-editar-del" data-id="${del.id}">
-          ✏️ Editar
-        </button>
-        <button class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer btn-excluir-del" data-id="${del.id}">
-          🗑️ Excluir
-        </button>
-      </td>
+  let htmlTotal = '';
+
+  sdpsLista.forEach(sdpNome => {
+    let delVinculadas = (appState.delegacias || []).filter(d => {
+      const delSdp = (d.subdivisao || '8ª SDP').trim().toUpperCase();
+      if (delSdp !== sdpNome) return false;
+
+      if (busca) {
+        const bateuNome = (d.nome || '').toLowerCase().includes(busca);
+        const bateuSdp = delSdp.toLowerCase().includes(busca);
+        if (!bateuNome && !bateuSdp) return false;
+      }
+
+      return true;
+    });
+
+    if (busca && delVinculadas.length === 0 && !sdpNome.toLowerCase().includes(busca)) {
+      return;
+    }
+
+    let linhasTabela = '';
+    if (delVinculadas.length === 0) {
+      linhasTabela = `<tr><td colspan="4" class="p-4 text-center text-slate-400 italic">Nenhuma delegacia vinculada a esta SDP.</td></tr>`;
+    } else {
+      linhasTabela = delVinculadas.map(del => {
+        const p = del.plantaoConfig || {};
+        const s = del.sobreavisoConfig || {};
+        const pIntervalo = p.intervalo || '24h';
+        const pRegime = p.regime || 'ININTERRUPTA';
+        
+        const pUteis = limparSujeiraHorario(p.uteis || del.horarioUteis);
+        const pNaoUteis = limparSujeiraHorario(p.naoUteis || del.horarioNaoUteis);
+
+        const sIntervalo = s.intervalo || '24h';
+        const sRegime = s.regime || 'INTERMITENTE';
+        const sUteis = limparSujeiraHorario(s.uteis || '18:00 às 08:00');
+        const sNaoUteis = limparSujeiraHorario(s.naoUteis || '08:00 às 08:00');
+
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-200 text-xs">
+            <td class="p-3 font-bold text-slate-900 uppercase">
+              <span class="text-sm block">${del.nome}</span>
+            </td>
+            <td class="p-3 font-mono text-[11px] text-slate-700">
+              <span class="font-bold text-slate-800 block">Plantão: ${pIntervalo} (${pRegime})</span>
+              <span class="text-slate-500 text-[10px] block">Úteis: ${pUteis} \vert{} Não Úteis: ${pNaoUteis}</span>
+            </td>
+            <td class="p-3 font-mono text-[11px] text-[#5A4716] bg-[#F7F3E8] rounded-lg border border-[#BEA55A]/40">
+              <span class="font-bold block">Sobreaviso: ${sIntervalo} (${sRegime})</span>
+              <span class="text-[#5A4716]/80 text-[10px] block">Úteis: ${sUteis} \vert{} Não Úteis: ${sNaoUteis}</span>
+            </td>
+            <td class="p-3 text-right space-x-1">
+              <button onclick="window.abrirModalDelegacia('${del.id}')" class="px-2.5 py-1 bg-[#F7F3E8] text-[#5A4716] hover:bg-[#EFE8D3] border border-[#BEA55A] rounded font-bold text-[10px] shadow-xs cursor-pointer">
+                ✏️ Editar
+              </button>
+              <button onclick="window.excluirDelegacia('${del.id}')" class="px-2.5 py-1 bg-[#E2001A] hover:bg-red-700 text-white rounded font-bold text-[10px] shadow-xs cursor-pointer">
+                🗑 Excluir
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const qtdUnidades = delVinculadas.length;
+
+    htmlTotal += `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-3 bg-black text-white flex items-center justify-between font-bold text-xs uppercase tracking-wider border-b border-[#BEA55A]">
+          <div class="flex items-center gap-2">
+            <span>🏛️ SUBDIVISÃO: ${sdpNome}</span>
+            <span class="px-2 py-0.5 bg-slate-800 text-pcpr-gold border border-pcpr-gold font-extrabold text-[10px] rounded-full">${qtdUnidades} Unidades</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse font-sans">
+            <thead>
+              <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+                <th class="p-2.5">Delegacia / Sigla</th>
+                <th class="p-2.5">Regime de Plantão Local</th>
+                <th class="p-2.5">Regime de Sobreaviso</th>
+                <th class="p-2.5 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">${linhasTabela}</tbody>
+          </table>
+        </div>
+      </div>
     `;
-    tbody.appendChild(tr);
   });
 
-  // Event Listeners seguros nos Botões Nativos
-  tbody.querySelectorAll('.btn-editar-del').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.getAttribute('data-id');
-      abrirModalDelegacia(id);
-    });
+  container.innerHTML = htmlTotal;
+};
+
+window.abrirModalDelegacia = function(delId = null) {
+  let modal = document.getElementById('modal-delegacia');
+  if (!modal) {
+    criarModalDelegaciaDOM();
+    modal = document.getElementById('modal-delegacia');
+  }
+
+  const selectSdp = document.getElementById('del-sdp');
+  const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
+  (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(d.subdivisao.trim().toUpperCase()); });
+  (appState.sdps || []).forEach(s => { if (s.nome) setSdps.add(s.nome.trim().toUpperCase()); });
+
+  let sdpOpts = ``;
+  [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).forEach(s => {
+    sdpOpts += `<option value="${s}">${s}</option>`;
   });
+  if (selectSdp) selectSdp.innerHTML = sdpOpts;
 
-  tbody.querySelectorAll('.btn-excluir-del').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.currentTarget.getAttribute('data-id');
-      excluirDelegacia(id);
-    });
-  });
-}
+  const inputId = document.getElementById('del-id');
+  const inputNome = document.getElementById('del-nome');
 
-/**
- * Abre o Modal de Cadastro / Edição de Delegacia
- */
-export function abrirModalDelegacia(id = null) {
-  delegaciaEmEdicaoId = id;
-  carregarListaSubdivisoes();
-
-  const elModal = document.getElementById('modalDelegacia');
-  if (!elModal) return;
-
-  if (!modalDelegaciaInstance && typeof bootstrap !== 'undefined') {
-    modalDelegaciaInstance = new bootstrap.Modal(elModal);
-  }
-
-  const form = document.getElementById('formDelegacia');
-  if (form) form.reset();
-
-  const titulo = document.getElementById('modalDelegaciaTitulo');
-
-  if (id) {
-    if (titulo) titulo.textContent = 'Editar Delegacia';
-    const del = (appState.delegacias || []).find(d => String(d.id) === String(id));
-    if (del) {
-      if (document.getElementById('delNome')) document.getElementById('delNome').value = del.nome || '';
-      if (document.getElementById('delSubdivisao')) document.getElementById('delSubdivisao').value = del.sdpId || del.subdivisao || '';
-      if (document.getElementById('delTipo')) document.getElementById('delTipo').value = del.tipo || 'UNIDADE';
-      if (document.getElementById('delIsConsorcio')) document.getElementById('delIsConsorcio').checked = Boolean(del.isConsorcio);
-
-      // Configurações de Plantão
-      if (document.getElementById('plantaoRegime')) document.getElementById('plantaoRegime').value = del.plantaoConfig?.regime || 'ININTERRUPTA';
-      if (document.getElementById('plantaoIntervalo')) document.getElementById('plantaoIntervalo').value = del.plantaoConfig?.intervalo || '24h';
-      if (document.getElementById('plantaoUteis')) document.getElementById('plantaoUteis').value = del.plantaoConfig?.uteis || '08:00 às 08:00';
-      if (document.getElementById('plantaoNaoUteis')) document.getElementById('plantaoNaoUteis').value = del.plantaoConfig?.naoUteis || '08:00 às 08:00';
-
-      // Configurações de Sobreaviso
-      if (document.getElementById('sobreavisoRegime')) document.getElementById('sobreavisoRegime').value = del.sobreavisoConfig?.regime || 'INTERMITENTE';
-      if (document.getElementById('sobreavisoIntervalo')) document.getElementById('sobreavisoIntervalo').value = del.sobreavisoConfig?.intervalo || '24h';
-      if (document.getElementById('sobreavisoUteis')) document.getElementById('sobreavisoUteis').value = del.sobreavisoConfig?.uteis || '18:00 às 08:00';
-      if (document.getElementById('sobreavisoNaoUteis')) document.getElementById('sobreavisoNaoUteis').value = del.sobreavisoConfig?.naoUteis || '08:00 às 08:00';
-    }
-  } else {
-    if (titulo) titulo.textContent = 'Nova Delegacia';
-  }
-
-  if (modalDelegaciaInstance) {
-    modalDelegaciaInstance.show();
-  } else {
-    elModal.classList.remove('hidden');
-    elModal.style.display = 'flex';
-  }
-}
-
-/**
- * Event Handler para Salvar Delegacia do Formulário
- */
-async function handleSalvarDelegacia(e) {
-  e.preventDefault();
-
-  const nomeInput = document.getElementById('delNome')?.value.trim();
-  const selectSubdivisao = document.getElementById('delSubdivisao');
+  const selPRegime = document.getElementById('del-p-regime');
+  const selPIntervalo = document.getElementById('del-p-intervalo');
   
-  if (!nomeInput || !selectSubdivisao || !selectSubdivisao.value) {
-    alert('Por favor, preencha o Nome e a Subdivisão da Delegacia.');
-    return;
-  }
+  const inPUteisInicio = document.getElementById('del-p-uteis-inicio');
+  const inPUteisFim = document.getElementById('del-p-uteis-fim');
+  const inPNaoUteisInicio = document.getElementById('del-p-nao-uteis-inicio');
+  const inPNaoUteisFim = document.getElementById('del-p-nao-uteis-fim');
 
-  const sdpValor = selectSubdivisao.value;
-  const sdpTexto = selectSubdivisao.options[selectSubdivisao.selectedIndex].text;
+  const selSRegime = document.getElementById('del-s-regime');
+  const selSIntervalo = document.getElementById('del-s-intervalo');
+  
+  const inSUteisInicio = document.getElementById('del-s-uteis-inicio');
+  const inSUteisFim = document.getElementById('del-s-uteis-fim');
+  const inSNaoUteisInicio = document.getElementById('del-s-nao-uteis-inicio');
+  const inSNaoUteisFim = document.getElementById('del-s-nao-uteis-fim');
 
-  const dados = {
-    id: delegaciaEmEdicaoId,
-    nome: nomeInput,
-    subdivisao: sdpTexto,
-    sdpId: sdpValor,
-    tipo: document.getElementById('delTipo')?.value || 'UNIDADE',
-    isConsorcio: document.getElementById('delIsConsorcio')?.checked || false,
-    delegaciasIds: [],
-    
-    plantaoConfig: {
-      regime: document.getElementById('plantaoRegime')?.value || 'ININTERRUPTA',
-      intervalo: document.getElementById('plantaoIntervalo')?.value || '24h',
-      uteis: document.getElementById('plantaoUteis')?.value || '08:00 às 08:00',
-      naoUteis: document.getElementById('plantaoNaoUteis')?.value || '08:00 às 08:00'
-    },
-    sobreavisoConfig: {
-      regime: document.getElementById('sobreavisoRegime')?.value || 'INTERMITENTE',
-      intervalo: document.getElementById('sobreavisoIntervalo')?.value || '24h',
-      uteis: document.getElementById('sobreavisoUteis')?.value || '18:00 às 08:00',
-      naoUteis: document.getElementById('sobreavisoNaoUteis')?.value || '08:00 às 08:00'
-    },
-    horarioUteis: document.getElementById('plantaoUteis')?.value || '08:00 às 08:00',
-    horarioNaoUteis: document.getElementById('plantaoNaoUteis')?.value || '08:00 às 08:00'
-  };
+  if (delId) {
+    const del = (appState.delegacias || []).find(d => d.id === delId);
+    if (del) {
+      inputId.value = del.id;
+      inputNome.value = del.nome || '';
+      selectSdp.value = (del.subdivisao || '8ª SDP').trim().toUpperCase();
 
-  const sucesso = await salvarDelegacia(dados);
-  if (sucesso) {
-    if (modalDelegaciaInstance) modalDelegaciaInstance.hide();
-    const elModal = document.getElementById('modalDelegacia');
-    if (elModal) {
-      elModal.classList.add('hidden');
-      elModal.style.display = 'none';
-    }
-  }
-}
+      const p = del.plantaoConfig || {};
+      selPRegime.value = p.regime || 'ININTERRUPTA';
+      selPIntervalo.value = p.intervalo || '24h';
 
-/**
- * Função Core para Salvar Delegacia no Firestore e Consolidado
- */
-export async function salvarDelegacia(dadosForm) {
-  try {
-    const idExistente = dadosForm.id;
-    const sdpValor = dadosForm.sdpId || dadosForm.subdivisao;
+      const pU = extrairHorariosInicioFim(p.uteis || del.horarioUteis, '08:00', '08:00');
+      inPUteisInicio.value = pU.inicio;
+      inPUteisFim.value = pU.fim;
 
-    const novaDelegacia = {
-      id: idExistente || `del_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      nome: dadosForm.nome.trim(),
-      subdivisao: dadosForm.subdivisao || sdpValor,
-      sdpId: sdpValor,
-      tipo: dadosForm.tipo || "UNIDADE",
-      isConsorcio: Boolean(dadosForm.isConsorcio),
-      delegaciasIds: Array.isArray(dadosForm.delegaciasIds) ? dadosForm.delegaciasIds : [],
-      
-      plantaoConfig: dadosForm.plantaoConfig || {
-        intervalo: "24h",
-        naoUteis: "08:00 às 08:00",
-        regime: "ININTERRUPTA",
-        uteis: "08:00 às 08:00"
-      },
-      sobreavisoConfig: dadosForm.sobreavisoConfig || {
-        intervalo: "24h",
-        naoUteis: "08:00 às 08:00",
-        regime: "INTERMITENTE",
-        uteis: "18:00 às 08:00"
-      },
-      horarioUteis: dadosForm.horarioUteis || "08:00 às 08:00",
-      horarioNaoUteis: dadosForm.horarioNaoUteis || "08:00 às 08:00",
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    };
+      const pNU = extrairHorariosInicioFim(p.naoUteis || del.horarioNaoUteis, '08:00', '08:00');
+      inPNaoUteisInicio.value = pNU.inicio;
+      inPNaoUteisFim.value = pNU.fim;
 
-    let listaDelegacias = [...(appState.delegacias || [])];
-    const index = listaDelegacias.findIndex(d => String(d.id) === String(novaDelegacia.id));
+      const s = del.sobreavisoConfig || {};
+      selSRegime.value = s.regime || 'INTERMITENTE';
+      selSIntervalo.value = s.intervalo || '24h';
 
-    if (index >= 0) {
-      listaDelegacias[index] = novaDelegacia;
-    } else {
-      listaDelegacias.push(novaDelegacia);
-    }
+      const sU = extrairHorariosInicioFim(s.uteis, '18:00', '08:00');
+      inSUteisInicio.value = sU.inicio;
+      inSUteisFim.value = sU.fim;
 
-    // 1. Atualiza lote no Firestore (Consolidado de Delegacias)
-    await syncDocToFirestore('consolidados', 'delegacias', {
-      lista: listaDelegacias,
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    // 2. Sincroniza o array `delegaciasIds` dentro da SDP
-    let listaSdps = [...(appState.sdps || [])];
-    listaSdps = listaSdps.map(sdp => {
-      if (String(sdp.id) === String(sdpValor) || String(sdp.nome) === String(novaDelegacia.subdivisao)) {
-        const arr = Array.isArray(sdp.delegaciasIds) ? [...sdp.delegaciasIds] : [];
-        if (!arr.includes(novaDelegacia.id)) arr.push(novaDelegacia.id);
-        return { ...sdp, delegaciasIds: arr };
-      }
-      return sdp;
-    });
-
-    await syncDocToFirestore('consolidados', 'sdps', {
-      lista: listaSdps,
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    // 3. Atualiza estado em memória
-    appState.delegacias = listaDelegacias;
-    appState.sdps = listaSdps;
-
-    // 4. Incrementa versão de controle
-    const db = firebase.firestore();
-    await db.collection('controle').doc('versoes').set({
-      delegacias: firebase.firestore.FieldValue.increment(1),
-      sdps: firebase.firestore.FieldValue.increment(1),
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    await tentarRegistrarLog('DELEGACIA', idExistente ? 'EDIÇÃO' : 'CRIAÇÃO', `Delegacia ${novaDelegacia.nome} salva com sucesso.`);
-
-    renderizarTabelaDelegacias();
-    return true;
-
-  } catch (err) {
-    console.error("Erro ao salvar delegacia:", err);
-    alert("Erro ao salvar delegacia: " + err.message);
-    return false;
-  }
-}
-
-/**
- * Exclui uma Delegacia
- */
-export async function excluirDelegacia(id) {
-  const del = (appState.delegacias || []).find(d => String(d.id) === String(id));
-  const nomeDel = del ? del.nome : id;
-
-  if (!confirm(`Tem certeza que deseja excluir a delegacia "${nomeDel}"?`)) return;
-
-  try {
-    let listaDelegacias = (appState.delegacias || []).filter(d => String(d.id) !== String(id));
-
-    await syncDocToFirestore('consolidados', 'delegacias', {
-      lista: listaDelegacias,
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Remove do array de delegaciasIds na SDP
-    let listaSdps = (appState.sdps || []).map(sdp => {
-      if (Array.isArray(sdp.delegaciasIds)) {
-        return {
-          ...sdp,
-          delegaciasIds: sdp.delegaciasIds.filter(delId => String(delId) !== String(id))
-        };
-      }
-      return sdp;
-    });
-
-    await syncDocToFirestore('consolidados', 'sdps', {
-      lista: listaSdps,
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    appState.delegacias = listaDelegacias;
-    appState.sdps = listaSdps;
-
-    const db = firebase.firestore();
-    await db.collection('controle').doc('versoes').set({
-      delegacias: firebase.firestore.FieldValue.increment(1),
-      sdps: firebase.firestore.FieldValue.increment(1),
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    await tentarRegistrarLog('DELEGACIA', 'EXCLUSÃO', `Delegacia ${nomeDel} excluída.`);
-
-    renderizarTabelaDelegacias();
-
-  } catch (err) {
-    console.error("Erro ao excluir delegacia:", err);
-    alert("Erro ao excluir delegacia: " + err.message);
-  }
-}
-
-/**
- * Modais e Operações de Subdivisão (SDP)
- */
-export function abrirModalSubdivisao(id = null) {
-  subdivisaoEmEdicaoId = id;
-  const elModal = document.getElementById('modalSubdivisao');
-  if (!elModal) return;
-
-  if (!modalSubdivisaoInstance && typeof bootstrap !== 'undefined') {
-    modalSubdivisaoInstance = new bootstrap.Modal(elModal);
-  }
-
-  const form = document.getElementById('formSubdivisao');
-  if (form) form.reset();
-
-  const titulo = document.getElementById('modalSubdivisaoTitulo');
-
-  if (id) {
-    if (titulo) titulo.textContent = 'Editar Subdivisão';
-    const sdp = (appState.sdps || []).find(s => String(s.id) === String(id));
-    if (sdp) {
-      if (document.getElementById('sdpNome')) document.getElementById('sdpNome').value = sdp.nome || '';
+      const sNU = extrairHorariosInicioFim(s.naoUteis, '08:00', '08:00');
+      inSNaoUteisInicio.value = sNU.inicio;
+      inSNaoUteisFim.value = sNU.fim;
     }
   } else {
-    if (titulo) titulo.textContent = 'Nova Subdivisão';
+    inputId.value = '';
+    inputNome.value = '';
+
+    selPRegime.value = 'ININTERRUPTA';
+    selPIntervalo.value = '24h';
+    inPUteisInicio.value = '08:00';
+    inPUteisFim.value = '08:00';
+    inPNaoUteisInicio.value = '08:00';
+    inPNaoUteisFim.value = '08:00';
+
+    selSRegime.value = 'INTERMITENTE';
+    selSIntervalo.value = '24h';
+    inSUteisInicio.value = '18:00';
+    inSUteisFim.value = '08:00';
+    inSNaoUteisInicio.value = '08:00';
+    inSNaoUteisFim.value = '08:00';
   }
 
-  if (modalSubdivisaoInstance) {
-    modalSubdivisaoInstance.show();
-  } else {
-    elModal.classList.remove('hidden');
-    elModal.style.display = 'flex';
-  }
-}
+  modal.classList.remove('hidden');
+};
 
-async function handleSalvarSubdivisao(e) {
+window.fecharModalDelegacia = function() {
+  document.getElementById('modal-delegacia')?.classList.add('hidden');
+};
+
+window.salvarDelegaciaModal = async function(e) {
   e.preventDefault();
 
-  const nomeInput = document.getElementById('sdpNome')?.value.trim();
-  if (!nomeInput) {
-    alert('Por favor, informe o nome da Subdivisão.');
-    return;
-  }
-
-  const dados = { id: subdivisaoEmEdicaoId, nome: nomeInput };
-  const sucesso = await salvarSubdivisao(dados);
-  if (sucesso) {
-    if (modalSubdivisaoInstance) modalSubdivisaoInstance.hide();
-    const elModal = document.getElementById('modalSubdivisao');
-    if (elModal) {
-      elModal.classList.add('hidden');
-      elModal.style.display = 'none';
-    }
-  }
-}
-
-export async function salvarSubdivisao(dadosForm) {
   try {
-    const idExistente = dadosForm.id;
-    const novaSdp = {
-      id: idExistente || `sdp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      nome: dadosForm.nome.trim(),
-      delegaciasIds: [],
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+    const id = document.getElementById('del-id')?.value;
+    const nomeInput = document.getElementById('del-nome')?.value || '';
+    const sdpInput = document.getElementById('del-sdp')?.value || '8ª SDP';
+
+    const nome = nomeInput.toUpperCase().trim();
+    const subdivisao = sdpInput.toUpperCase().trim();
+
+    if (!nome) {
+      alert("Por favor, preencha o nome da delegacia.");
+      return;
+    }
+
+    // Leitura das seleções de tempo nativas (HH:MM)
+    const pUInicio = document.getElementById('del-p-uteis-inicio')?.value || '08:00';
+    const pUFim = document.getElementById('del-p-uteis-fim')?.value || '08:00';
+    const pNUInicio = document.getElementById('del-p-nao-uteis-inicio')?.value || '08:00';
+    const pNUFim = document.getElementById('del-p-nao-uteis-fim')?.value || '08:00';
+
+    const sUInicio = document.getElementById('del-s-uteis-inicio')?.value || '18:00';
+    const sUFim = document.getElementById('del-s-uteis-fim')?.value || '08:00';
+    const sNUInicio = document.getElementById('del-s-nao-uteis-inicio')?.value || '08:00';
+    const sNUFim = document.getElementById('del-s-nao-uteis-fim')?.value || '08:00';
+
+    // Formatação garantida: "HH:MM às HH:MM"
+    const pUteisStr = `${pUInicio} às ${pUFim}`;
+    const pNaoUteisStr = `${pNUInicio} às ${pNUFim}`;
+    const sUteisStr = `${sUInicio} às ${sUFim}`;
+    const sNaoUteisStr = `${sNUInicio} às ${sNUFim}`;
+
+    const plantaoConfig = {
+      regime: document.getElementById('del-p-regime')?.value || 'ININTERRUPTA',
+      intervalo: document.getElementById('del-p-intervalo')?.value || '24h',
+      uteis: pUteisStr,
+      naoUteis: pNaoUteisStr
     };
 
-    let listaSdps = [...(appState.sdps || [])];
-    const index = listaSdps.findIndex(s => String(s.id) === String(novaSdp.id));
+    const sobreavisoConfig = {
+      regime: document.getElementById('del-s-regime')?.value || 'INTERMITENTE',
+      intervalo: document.getElementById('del-s-intervalo')?.value || '24h',
+      uteis: sUteisStr,
+      naoUteis: sNaoUteisStr
+    };
 
-    if (index >= 0) {
-      listaSdps[index] = { ...listaSdps[index], nome: novaSdp.nome };
+    const targetId = id || ('del_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5));
+    let delObj = (appState.delegacias || []).find(d => String(d.id) === String(targetId)) || { id: targetId };
+
+    delObj.nome = nome;
+    delObj.subdivisao = subdivisao;
+    delObj.plantaoConfig = plantaoConfig;
+    delObj.sobreavisoConfig = sobreavisoConfig;
+    delObj.horarioUteis = plantaoConfig.uteis;
+    delObj.horarioNaoUteis = plantaoConfig.naoUteis;
+
+    if (!appState.delegacias) appState.delegacias = [];
+    const idx = appState.delegacias.findIndex(d => String(d.id) === String(targetId));
+    if (idx >= 0) {
+      appState.delegacias[idx] = delObj;
     } else {
-      listaSdps.push(novaSdp);
+      appState.delegacias.push(delObj);
     }
 
-    await syncDocToFirestore('consolidados', 'sdps', {
-      lista: listaSdps,
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await syncDocToFirestore('delegacias', targetId, delObj);
 
-    appState.sdps = listaSdps;
+    alert("Configurações da Delegacia salvas com sucesso!");
+    window.fecharModalDelegacia();
 
-    const db = firebase.firestore();
-    await db.collection('controle').doc('versoes').set({
-      sdps: firebase.firestore.FieldValue.increment(1),
-      ultimaAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    carregarListaSubdivisoes();
-    renderizarTabelaDelegacias();
-    return true;
+    if (typeof renderDelegaciasCards === 'function') {
+      renderDelegaciasCards('delegacias-container');
+    }
+    if (typeof window.atualizarInfoParametrizacaoUnidade === 'function') {
+      window.atualizarInfoParametrizacaoUnidade();
+    }
+    if (typeof renderCalendarGrid === 'function' && appState.activeTab === 'delegacia') {
+      renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+    }
 
   } catch (err) {
-    console.error("Erro ao salvar subdivisao:", err);
-    alert("Erro ao salvar subdivisão: " + err.message);
-    return false;
+    console.error("Erro ao salvar dados da delegacia:", err);
+    alert(`Erro ao salvar alterações da delegacia: ${err.message}`);
   }
+};
+
+window.excluirDelegacia = async function(id) {
+  if (!confirm("Deseja realmente excluir esta delegacia?")) return;
+
+  appState.delegacias = (appState.delegacias || []).filter(d => d.id !== id);
+  await syncDocToFirestore('delegacias', id, null, true);
+
+  renderDelegaciasCards('delegacias-container');
+  renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
+};
+
+function criarModalDelegaciaDOM() {
+  document.getElementById('modal-delegacia')?.remove();
+
+  const modalHTML = `
+    <div id="modal-delegacia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3 shrink-0">
+          <h3 class="font-bold text-slate-900 text-sm">Cadastro de Delegacia</h3>
+          <button type="button" onclick="window.fecharModalDelegacia()" class="text-slate-400 hover:text-slate-600 font-bold p-1 cursor-pointer">✕</button>
+        </div>
+
+        <form onsubmit="window.salvarDelegaciaModal(event)" class="space-y-4 text-xs flex-1 overflow-y-auto pr-1">
+          <input type="hidden" id="del-id">
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Subdivisao (SDP):</label>
+              <select id="del-sdp" required class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase"></select>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block font-bold text-slate-700 mb-1">Sigla / Nome da Delegacia:</label>
+              <input type="text" id="del-nome" required oninput="this.value = this.value.toUpperCase()" placeholder="EX: 1ª SDP / DEL LEOPOLIS" class="w-full border rounded-xl p-2 bg-slate-50 font-bold text-slate-900 uppercase">
+            </div>
+          </div>
+
+          <!-- Configuração do Plantão Local -->
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+            <span class="font-bold text-slate-900 text-xs block">🏢 Configuração do Plantão Local</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Regime:</label>
+                <select id="del-p-regime" class="w-full border rounded-lg p-1.5 font-bold bg-white text-slate-800">
+                  <option value="ININTERRUPTA">ININTERRUPTA (24h direto)</option>
+                  <option value="INTERMITENTE">INTERMITENTE (Suspensão Noturna)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Duração do Turno:</label>
+                <select id="del-p-intervalo" class="w-full border rounded-lg p-1.5 font-bold bg-white text-slate-800">
+                  <option value="12h">12 Horas</option>
+                  <option value="24h">24 Horas (1 Dia)</option>
+                  <option value="2 dias">2 Dias</option>
+                  <option value="3 dias">3 Dias</option>
+                  <option value="4 dias">4 Dias</option>
+                  <option value="7 dias">7 Dias (1 Semana)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Horário Dias Úteis:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-p-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-slate-400">às</span>
+                  <input type="time" id="del-p-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 mb-0.5">Fins de Semana / Feriados:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-p-nao-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-slate-400">às</span>
+                  <input type="time" id="del-p-nao-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Configuração do Sobreaviso -->
+          <div class="p-3 bg-[#F7F3E8] rounded-2xl border border-[#BEA55A]/80 space-y-2">
+            <span class="font-bold text-[#5A4716] text-xs block">📞 Configuração do Sobreaviso</span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Regime:</label>
+                <select id="del-s-regime" class="w-full border rounded-lg p-1.5 font-bold bg-white text-slate-800">
+                  <option value="INTERMITENTE">INTERMITENTE</option>
+                  <option value="ININTERRUPTA">ININTERRUPTA</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Duração do Turno:</label>
+                <select id="del-s-intervalo" class="w-full border rounded-lg p-1.5 font-bold bg-white text-slate-800">
+                  <option value="24h">24 Horas (1 Dia)</option>
+                  <option value="2 dias">2 Dias</option>
+                  <option value="3 dias">3 Dias</option>
+                  <option value="7 dias">7 Dias (1 Semana)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Horário Dias Úteis:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-s-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-[#5A4716]/60">às</span>
+                  <input type="time" id="del-s-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-[#5A4716] mb-0.5">Fins de Semana / Feriados:</label>
+                <div class="flex items-center gap-1">
+                  <input type="time" id="del-s-nao-uteis-inicio" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                  <span class="text-[10px] font-bold text-[#5A4716]/60">às</span>
+                  <input type="time" id="del-s-nao-uteis-fim" required class="w-full border rounded-lg p-1 font-mono text-xs bg-white text-center font-bold">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t flex justify-end gap-2 shrink-0">
+            <button type="button" onclick="window.fecharModalDelegacia()" class="px-4 py-2 border rounded-xl font-bold text-slate-600 hover:bg-slate-100 cursor-pointer">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-black text-pcpr-gold border border-pcpr-gold hover:bg-slate-800 rounded-xl font-bold shadow-xs cursor-pointer">Salvar Delegacia</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
-
-/**
- * Helper Utility Functions
- */
-export function carregarListaDelegaciasSelect(selectElementId, sdpFiltroId = null) {
-  const select = typeof selectElementId === 'string' ? document.getElementById(selectElementId) : selectElementId;
-  if (!select) return;
-
-  const valorAtual = select.value;
-  select.innerHTML = '<option value="">Selecione uma Delegacia...</option>';
-
-  let lista = [...(appState.delegacias || [])];
-  if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
-    lista = lista.filter(d => String(d.sdpId) === String(sdpFiltroId) || String(d.subdivisao) === String(sdpFiltroId));
-  }
-
-  lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
-
-  lista.forEach(del => {
-    const opt = document.createElement('option');
-    opt.value = del.id;
-    opt.textContent = del.nome;
-    select.appendChild(opt);
-  });
-
-  select.value = valorAtual || '';
-}
-
-export function getDelegaciasAtivas() {
-  return (appState.delegacias || []).filter(d => isUnidadeAtiva(d));
-}
-
-export function getDelegaciaById(id) {
-  return (appState.delegacias || []).find(d => String(d.id) === String(id)) || null;
-}
-
-export function isUnidadeAtiva(delegacia) {
-  if (!delegacia) return false;
-  return delegacia.status !== 'INATIVA';
-}
-
-export function popularDropdownDelegaciasComEscala(selectElementId, sdpFiltroId = null) {
-  const select = typeof selectElementId === 'string' ? document.getElementById(selectElementId) : selectElementId;
-  if (!select) return;
-
-  const valorAtual = select.value;
-  select.innerHTML = '<option value="TODAS">Todas as Delegacias</option>';
-
-  let lista = [...(appState.delegacias || [])];
-  if (sdpFiltroId && sdpFiltroId !== 'TODAS') {
-    lista = lista.filter(d => String(d.sdpId) === String(sdpFiltroId) || String(d.subdivisao) === String(sdpFiltroId));
-  }
-
-  lista.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
-
-  lista.forEach(del => {
-    const opt = document.createElement('option');
-    opt.value = del.id;
-    opt.textContent = del.nome;
-    select.appendChild(opt);
-  });
-
-  select.value = valorAtual || 'TODAS';
-}
-
-export function renderDelegaciasCards(containerId = 'containerDelegaciasCards') {
-  renderizarTabelaDelegacias();
-}
-
-export function renderSubdivisoesCards(containerId = 'containerSubdivisoesCards') {
-  carregarListaSubdivisoes();
-}
-
-// Vincula atalhos globais diretos na janela para acionamento transparente
-window.abrirModalDelegaciaDirect = abrirModalDelegacia;
-window.abrirModalSubdivisaoDirect = abrirModalSubdivisao;
-window.excluirDelegaciaDirect = excluirDelegacia;

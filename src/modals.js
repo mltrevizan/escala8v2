@@ -87,7 +87,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   }
 
   let delFilterOptions = `<option value="TODAS">Todas as Unidades</option>`;
-  (appState.delegacias || []).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true })).forEach(d => {
+  (appState.delegacias || []).forEach(d => {
     delFilterOptions += `<option value="${d.id}">${d.nome}</option>`;
   });
   if (filtroUnidadeSelect) filtroUnidadeSelect.innerHTML = delFilterOptions;
@@ -103,7 +103,7 @@ window.abrirModalEscala = function(dataSugerida = null, escalaId = null, scopeTa
   if (buscaSrvInput) buscaSrvInput.value = '';
 
   if (escalaId) {
-    const esc = (appState.escalas || []).find(e => String(e.id) === String(escalaId));
+    const esc = (appState.escalas || []).find(e => e.id === escalaId);
     if (esc) {
       inputId.value = esc.id;
       inputData.value = esc.data;
@@ -129,7 +129,7 @@ window.atualizarTurnoPadraoDelegacia = function() {
 
   const tipo = document.getElementById('modal-esc-tipo')?.value || 'PLANTÃO';
   const selectTurno = document.getElementById('modal-esc-turno');
-  const delAtiva = (appState.delegacias || []).find(d => String(d.id) === String(appState.selectedDelegaciaId));
+  const delAtiva = (appState.delegacias || []).find(d => d.id === appState.selectedDelegaciaId);
 
   if (!selectTurno || !delAtiva) return;
 
@@ -155,21 +155,16 @@ window.filtrarServidoresModalInline = function() {
     const nome = card.getAttribute('data-nome') || '';
     const cargo = card.getAttribute('data-cargo') || '';
     const delId = card.getAttribute('data-del-id') || '';
-    const delNome = card.getAttribute('data-del-nome') || '';
 
     let atendeBusca = !busca || nome.includes(busca) || cargo.includes(busca);
     
     let atendeUnidade = true;
     if (unidadeFiltro !== 'TODAS') {
-      const delObj = (appState.delegacias || []).find(d => String(d.id) === String(unidadeFiltro));
-      if (delObj) {
-        const matchId = String(delId) === String(unidadeFiltro);
-        const matchNome = delNome && delNome.toUpperCase().trim() === delObj.nome.toUpperCase().trim();
-        const pertenceConsorcio = Array.isArray(delObj.delegaciasIds) && delObj.delegaciasIds.includes(delId);
-
-        atendeUnidade = matchId || matchNome || pertenceConsorcio;
+      const delObj = (appState.delegacias || []).find(d => d.id === unidadeFiltro);
+      if (delObj && delObj.delegaciasIds && delObj.delegaciasIds.length > 0) {
+        atendeUnidade = delId === unidadeFiltro || delObj.delegaciasIds.includes(delId);
       } else {
-        atendeUnidade = String(delId) === String(unidadeFiltro);
+        atendeUnidade = delId === unidadeFiltro;
       }
     }
 
@@ -190,7 +185,7 @@ function renderListaServidoresCheckboxes(idsSelecionados = [], modoEdicao = fals
       const n = normalizeText(srv.nome || '');
       return n !== 'administrador do sistema' && n !== 'admin' && n !== 'administrador';
     })
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true }));
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
   if (listaSrv.length === 0) {
     container.innerHTML = `<p class="text-xs text-slate-500 italic p-2">Nenhum servidor cadastrado no sistema.</p>`;
@@ -200,13 +195,13 @@ function renderListaServidoresCheckboxes(idsSelecionados = [], modoEdicao = fals
   const inputType = modoEdicao ? 'radio' : 'checkbox';
 
   container.innerHTML = listaSrv.map(srv => {
-    const isChecked = idsSelecionados.some(id => String(id) === String(srv.id));
-    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId));
+    const isChecked = idsSelecionados.includes(srv.id);
+    const del = (appState.delegacias || []).find(d => d.id === srv.delegaciaId);
     const isDel = (srv.cargo || '').toUpperCase().includes('DELEGADO');
 
     return `
       <label class="srv-checkbox-item flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer select-none"
-             data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}" data-del-id="${srv.delegaciaId || ''}" data-del-nome="${(srv.delegaciaNome || del?.nome || '').toLowerCase()}">
+             data-nome="${(srv.nome || '').toLowerCase()}" data-cargo="${(srv.cargo || '').toLowerCase()}" data-del-id="${srv.delegaciaId || ''}">
         <div class="flex items-center gap-2.5">
           <input type="${inputType}" name="modal_srv_ids" value="${srv.id}" ${isChecked ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4">
           <div>
@@ -253,11 +248,11 @@ window.salvarEscalaModal = async function(e) {
   const conflitosIndividuais = [];
 
   if (id) {
-    const idx = (appState.escalas || []).findIndex(e => String(e.id) === String(id));
+    const idx = (appState.escalas || []).findIndex(e => e.id === id);
     if (idx !== -1) {
       const esc = appState.escalas[idx];
       const novoSrvId = servidoresIds[0];
-      const srvObj = (appState.servidores || []).find(s => String(s.id) === String(novoSrvId));
+      const srvObj = (appState.servidores || []).find(s => s.id === novoSrvId);
 
       let idDelegaciaResolvido = srvObj?.delegaciaId;
       if (!idDelegaciaResolvido && srvObj?.delegaciaNome) {
@@ -274,7 +269,7 @@ window.salvarEscalaModal = async function(e) {
 
       await syncDocToFirestore('escalas', esc.id, esc);
 
-      const feriasObj = (appState.ferias || []).find(f => String(f.servidorId) === String(novoSrvId) && dataInicioIso >= f.dataInicio && dataInicioIso <= f.dataFim);
+      const feriasObj = (appState.ferias || []).find(f => f.servidorId === novoSrvId && dataInicioIso >= f.dataInicio && dataInicioIso <= f.dataFim);
       if (feriasObj && srvObj) {
         conflitosIndividuais.push({
           nome: srvObj.nome,
@@ -285,7 +280,7 @@ window.salvarEscalaModal = async function(e) {
     }
   } else {
     for (const sId of servidoresIds) {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(sId));
+      const srv = (appState.servidores || []).find(s => s.id === sId);
 
       let idDelegaciaResolvido = srv?.delegaciaId;
       if (!idDelegaciaResolvido && srv?.delegaciaNome) {
@@ -318,7 +313,7 @@ window.salvarEscalaModal = async function(e) {
         appState.escalas.push(novaEscala);
         await syncDocToFirestore('escalas', newEscId, novaEscala);
 
-        const feriasObj = (appState.ferias || []).find(f => String(f.servidorId) === String(sId) && dataSubsequent >= f.dataInicio && dataSubsequent <= f.dataFim);
+        const feriasObj = (appState.ferias || []).find(f => f.servidorId === sId && dataSubsequent >= f.dataInicio && dataSubsequent <= f.dataFim);
         if (feriasObj && srv) {
           conflitosIndividuais.push({
             nome: srv.nome,
@@ -360,7 +355,7 @@ window.abrirModalDetalhesTurno = function(titulo, horarioOuData, idsString) {
   }
 
   const ids = (idsString || '').split(',').filter(Boolean);
-  const escalas = (appState.escalas || []).filter(e => ids.includes(String(e.id)));
+  const escalas = (appState.escalas || []).filter(e => ids.includes(e.id));
 
   const containerCorpo = document.getElementById('modal-detalhes-corpo');
   const tituloEl = document.getElementById('modal-detalhes-titulo');
@@ -373,9 +368,9 @@ window.abrirModalDetalhesTurno = function(titulo, horarioOuData, idsString) {
     containerCorpo.innerHTML = `<p class="text-xs text-slate-500 italic p-4 text-center">Nenhum detalhe localizado para este lançamento.</p>`;
   } else {
     containerCorpo.innerHTML = escalas.map(esc => {
-      const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
-      const delEscala = (appState.delegacias || []).find(d => String(d.id) === String(esc.delegaciaId));
-      const delServidor = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
+      const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
+      const delEscala = (appState.delegacias || []).find(d => d.id === esc.delegaciaId);
+      const delServidor = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
 
       const lotacaoOrigem = delServidor ? delServidor.nome : (srv?.delegaciaNome || 'Lotação não informada');
       const unidadePlantao = delEscala ? delEscala.nome : 'Unidade Local';
@@ -407,7 +402,7 @@ window.abrirModalDetalhesTurno = function(titulo, horarioOuData, idsString) {
             ${esc.vtr ? `<div class="sm:col-span-2"><b>TAG ou VTR:</b> <span class="bg-indigo-100 text-indigo-900 border border-indigo-300 font-bold px-1.5 py-0.5 rounded text-[10px]">${esc.vtr}</span></div>` : ''}
           </div>
 
-          <div class="pt-2 border-slate-200 border-t flex justify-end gap-2">
+          <div class="pt-2 border-t border-slate-200 flex justify-end gap-2">
             <button onclick="window.fecharModalDetalhes(); window.abrirModalEscala(null, '${esc.id}', '${esc.scope}')" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px] shadow-xs cursor-pointer">
               ✏️ Editar
             </button>
@@ -430,7 +425,7 @@ window.fecharModalDetalhes = function() {
 window.excluirEscalaDoModal = async function(escalaId, scope) {
   if (!confirm("Deseja realmente excluir este plantão?")) return;
 
-  appState.escalas = appState.escalas.filter(e => String(e.id) !== String(escalaId));
+  appState.escalas = appState.escalas.filter(e => e.id !== escalaId);
   await syncDocToFirestore('escalas', escalaId, null, true);
 
   window.fecharModalDetalhes();

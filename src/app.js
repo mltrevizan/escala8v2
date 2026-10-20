@@ -4,16 +4,7 @@ import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderServidoresTable } from './servidores.js';
-import { 
-  initDelegacias, 
-  renderizarTabelaDelegacias, 
-  renderDelegaciasCards, 
-  popularDropdownDelegaciasComEscala,
-  carregarListaSubdivisoes,
-  abrirModalDelegacia,
-  abrirModalSubdivisao,
-  excluirDelegacia
-} from './delegacias.js';
+import { renderDelegaciasCards, popularDropdownDelegaciasComEscala } from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
 import { renderFeriasModule } from './ferias.js';
@@ -28,6 +19,7 @@ import {
   podeAcessarAbaFeriados 
 } from './permissions.js';
 
+// Intervalo de 6 Horas para Checagem Silenciosa do Ponteiro de Controle (6 * 60 * 60 * 1000 ms)
 const INTERVALO_CHECAGEM_6H_MS = 21600000;
 
 window.switchTab = async function(tabName) {
@@ -47,30 +39,25 @@ window.switchTab = async function(tabName) {
 
   appState.activeTab = tabName;
 
-  document.querySelectorAll('.tab-btn, [id^="tab-btn-"], [id^="btn-tab-"]').forEach(btn => {
+  document.querySelectorAll('.tab-btn, [id^="tab-btn-"]').forEach(btn => {
     btn.classList.remove('active', 'bg-black', 'text-white', 'shadow-sm');
   });
 
-  const btnAtivo = document.getElementById(`tab-btn-${tabName}`) || document.getElementById(`btn-tab-${tabName}`);
+  const btnAtivo = document.getElementById(`tab-btn-${tabName}`);
   if (btnAtivo) {
     btnAtivo.classList.add('active');
   }
 
-  document.querySelectorAll('.tab-content, [id^="tab-content-"], .module-container, section[id$="-container"]').forEach(content => {
+  document.querySelectorAll('.tab-content, [id^="tab-content-"]').forEach(content => {
     content.classList.add('hidden');
-    content.style.display = 'none';
   });
 
-  const targetContent = document.getElementById(`tab-content-${tabName}`) || 
-                        document.getElementById(`${tabName}-container`) || 
-                        document.getElementById(`container-${tabName}`) || 
-                        document.getElementById(tabName);
-
+  const targetContent = document.getElementById(`tab-content-${tabName}`);
   if (targetContent) {
     targetContent.classList.remove('hidden');
-    targetContent.style.display = 'block';
   }
 
+  // 🔑 CHECAGEM LEVE DE VERSÃO (1 LEITURA) APENAS PARA ABAS COM ALTA ROTATIVIDADE
   const abasComChecagemVersao = ['crf', 'gestao-crf', 'gestao-del', 'gestao-delegacias', 'servidores'];
   if (abasComChecagemVersao.includes(tabName) && typeof loadAllDataFromFirestore === 'function') {
     await loadAllDataFromFirestore(false);
@@ -81,6 +68,7 @@ window.switchTab = async function(tabName) {
       renderCalendarGrid('calendar-crf-container', 'CRF');
       break;
     case 'delegacia':
+      // Popula o dropdown e define a delegacia no estado ANTES de desenhar a grade
       popularDropdownDelegaciasComEscala('select-calendar-delegacia');
       renderCalendarGrid('calendar-delegacia-container', 'DELEGACIA');
       break;
@@ -96,8 +84,7 @@ window.switchTab = async function(tabName) {
       break;
     case 'unidades':
     case 'delegacias':
-      carregarListaSubdivisoes();
-      renderizarTabelaDelegacias();
+      renderDelegaciasCards('delegacias-container');
       break;
     case 'feriados':
       renderFeriadosModule('feriados-container');
@@ -169,10 +156,16 @@ function formatarDataBr(dataIso) {
   return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dataIso;
 }
 
+/**
+ * Configura a verificação passiva do ponteiro de controle a cada 6 horas para aplicações abertas continuamente.
+ */
 function iniciarChecagemPassiva6Horas() {
   setInterval(async () => {
     try {
+      console.log("[Verificação 6h] Checando ponteiro de controle no Firestore...");
       await loadAllDataFromFirestore(false);
+
+      // Redesenha a aba ativa em segundo plano apenas se houve alguma alteração de dados
       if (window.switchTab && appState.activeTab) {
         window.switchTab(appState.activeTab);
       }
@@ -184,12 +177,10 @@ function iniciarChecagemPassiva6Horas() {
 
 async function initApp() {
   try {
+    // 1. Carregamento inicial inteligente usando Cache e Ponteiro de Controle
     await loadAllDataFromFirestore(false);
-    initAuthModule();
 
-    if (typeof initDelegacias === 'function') {
-      initDelegacias();
-    }
+    initAuthModule();
 
     if (typeof initGeradorLoteModule === 'function') {
       initGeradorLoteModule();
@@ -200,17 +191,13 @@ async function initApp() {
     }
 
     window.switchTab('crf');
+
+    // 2. Ativa o temporizador de verificação passiva de 6 horas
     iniciarChecagemPassiva6Horas();
 
   } catch (err) {
     console.error("Erro na inicialização do sistema:", err);
   }
 }
-
-window.alternarAbaDirect = window.switchTab;
-window.popularDropdownDelegaciasComEscala = popularDropdownDelegaciasComEscala;
-window.abrirModalDelegaciaDirect = abrirModalDelegacia;
-window.abrirModalSubdivisaoDirect = abrirModalSubdivisao;
-window.excluirDelegaciaDirect = excluirDelegacia;
 
 document.addEventListener('DOMContentLoaded', initApp);

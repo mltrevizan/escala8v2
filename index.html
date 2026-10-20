@@ -43,16 +43,18 @@
     }
   </script>
 
-  <!-- ARQUIVO DE ESTILOS DA PASTA css/ (Com versão v18.0.0 para quebra de cache) -->
-  <link rel="stylesheet" href="./css/styles.css?v=18.0.0">
+  <!-- ARQUIVO DE ESTILOS DA PASTA css/ (Com versão para quebra de cache v14.0.0) -->
+  <link rel="stylesheet" href="./css/styles.css?v=14.0.0">
 
-  <!-- SDK Firebase v8 -->
+  <!-- SDK Firebase v8 (App, Firestore e Auth) -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
+  <!-- CREDENCIAIS OFICIAIS E CONTROLE DE CACHE FORÇADO -->
   <script>
-    const APP_BUILD_VERSION = '18.0.0';
+    // 🔑 LIMPEZA AUTOMÁTICA DE CACHE EM MUDANÇAS DE VERSÃO (v14.0.0)
+    const APP_BUILD_VERSION = '14.0.0';
     const VERSAO_SALVA = localStorage.getItem('escala8_build_version');
 
     if (VERSAO_SALVA !== APP_BUILD_VERSION) {
@@ -73,6 +75,7 @@
       };
       firebase.initializeApp(firebaseConfig);
 
+      // Ativação da persistência offline/cache do Firestore
       firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
         console.warn("Aviso ao ativar cache local do Firestore:", err.message);
       });
@@ -83,16 +86,18 @@
 
   <div class="max-w-7xl mx-auto w-full space-y-4">
     
-    <!-- Header Principal -->
+    <!-- Header Principal com Logo Institucional da PCPR e Login Status -->
     <header class="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border-b-4 border-pcpr-gold border-x border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-3">
         <img src="./logo-pcpr.png" alt="Logo PCPR" class="h-10 sm:h-12 w-auto object-contain">
+        
         <div>
           <h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">8ª CRF - ESCALAS DE PLANTÃO</h1>
           <p class="text-xs font-semibold text-slate-500">Controle de Escalas de Plantão da CRF e das Delegacias</p>
         </div>
       </div>
       
+      <!-- Área do Botão / Status de Autenticação -->
       <div id="app-status">
         <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-mono">Carregando...</span>
       </div>
@@ -100,12 +105,15 @@
 
     <!-- Barra de Navegação por Abas -->
     <nav class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-1">
+      <!-- ABAS PÚBLICAS -->
       <button id="tab-btn-crf" onclick="window.switchTab('crf')" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>📅</span> Escala CRF
       </button>
       <button id="tab-btn-delegacia" onclick="window.switchTab('delegacia')" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>🏢</span> Escala por Delegacia
       </button>
+
+      <!-- ABAS RESTRITAS -->
       <button id="tab-btn-gestao-crf" onclick="window.switchTab('gestao-crf')" class="tab-btn hidden px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
         <span>⚙️</span> Gestão CRF
       </button>
@@ -127,57 +135,14 @@
     </nav>
 
     <!-- CONTEÚDO DAS ABAS -->
+
     <main id="tab-content-crf" class="tab-content bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="calendar-crf-container"></div>
     </main>
 
-    <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-  <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div>
-        <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Subdivisões</h2>
-        <p class="text-[11px] text-slate-500">Cadastros de unidades, regimes de plantão e consórcios</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <button id="btnNovaDelegacia" class="px-3 py-2 bg-black hover:bg-slate-800 text-[#BEA55A] border border-[#BEA55A] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-          ➕ Nova Delegacia
-        </button>
-        <button id="btnNovaSubdivisao" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-          🏛️ Nova SDP
-        </button>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-xs">
-      <div>
-        <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Buscar Delegacia:</label>
-        <input type="text" id="buscaDelegacia" placeholder="Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
-      </div>
-      <div>
-        <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ Subdivisão (SDP):</label>
-        <select id="filtroSdpDelegacias" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-          <option value="TODAS">Todas as Subdivisões</option>
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <div class="overflow-x-auto font-sans">
-    <table class="w-full text-left text-xs border-collapse">
-      <thead>
-        <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-          <th class="p-3">Nome da Unidade</th>
-          <th class="p-3">Subdivisão (SDP)</th>
-          <th class="p-3">Regime</th>
-          <th class="p-3">Tipo</th>
-          <th class="p-3">Horários Padronizados</th>
-          <th class="p-3 text-right">Ações</th>
-        </tr>
-      </thead>
-      <tbody id="tbodyDelegacias" class="divide-y divide-slate-200"></tbody>
-    </table>
-  </div>
-</main>
+    <main id="tab-content-delegacia" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div id="calendar-delegacia-container"></div>
+    </main>
 
     <main id="tab-content-gestao-crf" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div id="gestao-crf-container"></div>
@@ -191,54 +156,8 @@
       <div id="feriados-container"></div>
     </main>
 
-    <!-- ESTRUTURA DA ABA UNIDADES / DELEGACIAS (RESTAURADA E COMPATÍVEL COM O DELEGACIAS.JS ORIGINAL) -->
     <main id="tab-content-unidades" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-      <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 font-sans">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 class="font-bold text-sm text-slate-800">Gestão de Delegacias e Subdivisões</h2>
-            <p class="text-[11px] text-slate-500">Cadastros de unidades, regimes de plantão e consórcios</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button id="btnNovaDelegacia" class="px-3 py-2 bg-black hover:bg-slate-800 text-[#BEA55A] border border-[#BEA55A] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-              ➕ Nova Delegacia
-            </button>
-            <button id="btnNovaSubdivisao" class="px-3 py-2 bg-[#2A2B2D] hover:bg-black text-white border border-slate-600 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer">
-              🏛️ Nova SDP
-            </button>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200 text-xs">
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🔍 Buscar Delegacia:</label>
-            <input type="text" id="buscaDelegacia" placeholder="Filtrar por nome..." class="w-full text-xs border border-slate-300 rounded-lg p-1.5 bg-white font-medium focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-slate-600 mb-0.5">🏛️ Subdivisão (SDP):</label>
-            <select id="filtroSdpDelegacias" class="w-full text-xs font-bold border border-slate-300 rounded-lg p-1.5 bg-white text-slate-800">
-              <option value="TODAS">Todas as Subdivisões</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto font-sans">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-              <th class="p-3">Nome da Unidade</th>
-              <th class="p-3">Subdivisão (SDP)</th>
-              <th class="p-3">Regime</th>
-              <th class="p-3">Tipo</th>
-              <th class="p-3">Horários Padronizados</th>
-              <th class="p-3 text-right">Ações</th>
-            </tr>
-          </thead>
-          <!-- CORPO DA TABELA REQUERIDO PELO DELEGACIAS.JS -->
-          <tbody id="tbodyDelegacias" class="divide-y divide-slate-200"></tbody>
-        </table>
-      </div>
+      <div id="delegacias-container"></div>
     </main>
 
     <main id="tab-content-servidores" class="tab-content hidden bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -251,64 +170,7 @@
 
   </div>
 
-  <!-- MODAL DELEGACIA (NATIVO) -->
-  <div id="modalDelegacia" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-      <div class="p-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-        <h3 id="modalDelegaciaTitulo" class="font-bold text-sm">Nova Delegacia</h3>
-        <button onclick="document.getElementById('modalDelegacia').classList.add('hidden')" class="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
-      </div>
-      <form id="formDelegacia" class="p-4 space-y-3 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Nome da Delegacia / Unidade:</label>
-          <input type="text" id="delNome" required placeholder="Ex: 14ª DRP GOIOERÊ" class="w-full border border-slate-300 rounded-lg p-2 font-semibold">
-        </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Subdivisão Regional (SDP):</label>
-          <select id="delSubdivisao" required class="w-full border border-slate-300 rounded-lg p-2 font-semibold bg-white">
-            <option value="">Selecione...</option>
-          </select>
-        </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Tipo de Unidade:</label>
-          <select id="delTipo" class="w-full border border-slate-300 rounded-lg p-2 font-semibold bg-white">
-            <option value="UNIDADE">UNIDADE</option>
-            <option value="SDP">SUBDIVISÃO (SDP)</option>
-            <option value="ESPECIALIZADA">ESPECIALIZADA</option>
-          </select>
-        </div>
-        <div class="flex items-center gap-2 pt-1">
-          <input type="checkbox" id="delIsConsorcio" class="rounded text-pcpr-gold focus:ring-pcpr-gold">
-          <label for="delIsConsorcio" class="font-bold text-slate-800">Plantão Unificado / Consórcio</label>
-        </div>
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" onclick="document.getElementById('modalDelegacia').classList.add('hidden')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg">Cancelar</button>
-          <button type="submit" class="px-4 py-1.5 bg-black hover:bg-slate-800 text-pcpr-gold border border-pcpr-gold font-bold rounded-lg shadow-xs">Salvar Delegacia</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL SUBDIVISÃO (NATIVO) -->
-  <div id="modalSubdivisao" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-      <div class="p-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-        <h3 id="modalSubdivisaoTitulo" class="font-bold text-sm">Nova Subdivisão</h3>
-        <button onclick="document.getElementById('modalSubdivisao').classList.add('hidden')" class="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
-      </div>
-      <form id="formSubdivisao" class="p-4 space-y-3 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Nome da Subdivisão (SDP):</label>
-          <input type="text" id="sdpNome" required placeholder="Ex: 7ª SDP UMUARAMA" class="w-full border border-slate-300 rounded-lg p-2 font-semibold">
-        </div>
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" onclick="document.getElementById('modalSubdivisao').classList.add('hidden')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg">Cancelar</button>
-          <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-black text-white font-bold rounded-lg shadow-xs">Salvar SDP</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script type="module" src="./src/app.js?v=18.0.0"></script>
+  <!-- Script Principal ES6 (Versão Incrementada v14.0.0 para quebrar cache antigo no Celular/Desktop) -->
+  <script type="module" src="./src/app.js?v=14.0.0"></script>
 </body>
 </html>
