@@ -262,18 +262,11 @@ export function renderizarListaTroncoGalhos() {
   container.innerHTML = htmlTotal;
 }
 
+export function carregarListaSubdivisoes() {
+  popularFiltroSdpsSelect();
+}
+
 export function initDelegacias() {
-  const formDelegacia = document.getElementById('formDelegacia');
-  const formSubdivisao = document.getElementById('formSubdivisao');
-
-  if (formDelegacia) {
-    formDelegacia.onsubmit = handleSalvarDelegacia;
-  }
-
-  if (formSubdivisao) {
-    formSubdivisao.onsubmit = handleSalvarSubdivisao;
-  }
-
   initFiltrosDelegacia();
   carregarListaSubdivisoes();
   renderizarListaTroncoGalhos();
@@ -617,7 +610,6 @@ export function abrirModalGerenciarSdps() {
   modal.classList.remove('hidden');
 }
 
-// 🟢 EXPORTAÇÃO DA FUNÇÃO EXIGIDA PELO APP.JS
 export function abrirModalSubdivisao(id = null) {
   if (id) {
     window.abrirModalEditarSdp(id);
@@ -805,7 +797,6 @@ function criarModalSdpListaDOM() {
       </div>
     </div>
 
-    <!-- FORMULÁRIO COMPLEMENTAR NOVA / EDITAR SDP -->
     <div id="modal-sdp-form" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50 font-sans">
       <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
         <div class="flex items-center justify-between border-b pb-3 shrink-0">
@@ -997,3 +988,8 @@ window.abrirModalPlantaoUnificado = abrirModalPlantaoUnificado;
 window.fecharModalPlantaoUnificado = fecharModalPlantaoUnificado;
 window.renderizarCheckboxesPlantaoUnificado = renderizarCheckboxesPlantaoUnificado;
 window.salvarPlantaoUnificadoModal = salvarPlantaoUnificadoModal;
+window.popularFiltroSdpsSelect = popularFiltroSdpsSelect;
+window.atualizarFiltrosDelegaciasList = atualizarFiltrosDelegaciasList;
+window.renderizarListaTroncoGalhos = renderizarListaTroncoGalhos;
+window.fecharModalDelegacia = fecharModalDelegacia;
+window.salvarDelegaciaModal = salvarDelegaciaModal;
