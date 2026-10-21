@@ -4,7 +4,14 @@ import { loadAllDataFromFirestore, syncDocToFirestore } from './db.js';
 import { renderCalendarGrid } from './calendar.js';
 import { renderGestaoCrfModule, renderGestaoDelegaciasModule } from './gestaoEscalas.js';
 import { renderServidoresTable } from './servidores.js';
-import { renderDelegaciasCards, popularDropdownDelegaciasComEscala } from './delegacias.js';
+import { 
+  initDelegacias,
+  renderDelegaciasCards, 
+  popularDropdownDelegaciasComEscala,
+  abrirModalDelegacia,
+  abrirModalSubdivisao,
+  excluirDelegacia
+} from './delegacias.js';
 import { initAuthModule } from './auth.js';
 import { initGeradorLoteModule } from './geradorLote.js';
 import { renderFeriasModule } from './ferias.js';
@@ -182,6 +189,11 @@ async function initApp() {
 
     initAuthModule();
 
+    // Inicialização do módulo de delegacias e seus manipuladores de formulários
+    if (typeof initDelegacias === 'function') {
+      initDelegacias();
+    }
+
     if (typeof initGeradorLoteModule === 'function') {
       initGeradorLoteModule();
     }
@@ -199,5 +211,12 @@ async function initApp() {
     console.error("Erro na inicialização do sistema:", err);
   }
 }
+
+// Expõe métodos essenciais no escopo global para acionamento transparente
+window.alternarAbaDirect = window.switchTab;
+window.popularDropdownDelegaciasComEscala = popularDropdownDelegaciasComEscala;
+window.abrirModalDelegaciaDirect = abrirModalDelegacia;
+window.abrirModalSubdivisaoDirect = abrirModalSubdivisao;
+window.excluirDelegaciaDirect = excluirDelegacia;
 
 document.addEventListener('DOMContentLoaded', initApp);
