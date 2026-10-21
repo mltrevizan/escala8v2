@@ -993,3 +993,4 @@ window.atualizarFiltrosDelegaciasList = atualizarFiltrosDelegaciasList;
 window.renderizarListaTroncoGalhos = renderizarListaTroncoGalhos;
 window.fecharModalDelegacia = fecharModalDelegacia;
 window.salvarDelegaciaModal = salvarDelegaciaModal;
+
