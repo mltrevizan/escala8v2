@@ -262,6 +262,40 @@ export function renderizarListaTroncoGalhos() {
   container.innerHTML = htmlTotal;
 }
 
+export function initDelegacias() {
+  const formDelegacia = document.getElementById('formDelegacia');
+  const formSubdivisao = document.getElementById('formSubdivisao');
+
+  if (formDelegacia) {
+    formDelegacia.onsubmit = handleSalvarDelegacia;
+  }
+
+  if (formSubdivisao) {
+    formSubdivisao.onsubmit = handleSalvarSubdivisao;
+  }
+
+  initFiltrosDelegacia();
+  carregarListaSubdivisoes();
+  renderizarListaTroncoGalhos();
+}
+
+export function initFiltrosDelegacia() {
+  const inputBusca = document.getElementById('filtro-del-busca');
+  const selectSdp = document.getElementById('filtro-del-sdp');
+
+  if (inputBusca) {
+    inputBusca.oninput = () => window.atualizarFiltrosDelegaciasList();
+  }
+
+  if (selectSdp) {
+    selectSdp.onchange = () => window.atualizarFiltrosDelegaciasList();
+  }
+}
+
+export function renderizarTabelaDelegacias() {
+  renderizarListaTroncoGalhos();
+}
+
 export function abrirModalDelegacia(delId = null) {
   let modal = document.getElementById('modal-delegacia');
   if (!modal) {
@@ -569,7 +603,7 @@ function criarModalDelegaciaDOM() {
 }
 
 // ==========================================
-// MÓDULO DE GERENCIAMENTO DE SDPs (SEM VÍNCULO DE DELEGACIAS)
+// MÓDULO DE GERENCIAMENTO DE SDPs
 // ==========================================
 
 export function abrirModalGerenciarSdps() {
@@ -581,6 +615,15 @@ export function abrirModalGerenciarSdps() {
 
   window.renderizarListaSdpsModal();
   modal.classList.remove('hidden');
+}
+
+// 🟢 EXPORTAÇÃO DA FUNÇÃO EXIGIDA PELO APP.JS
+export function abrirModalSubdivisao(id = null) {
+  if (id) {
+    window.abrirModalEditarSdp(id);
+  } else {
+    window.abrirModalNovaSdp();
+  }
 }
 
 export function fecharModalSdpLista() {
@@ -942,6 +985,7 @@ window.abrirModalDelegaciaDirect = abrirModalDelegacia;
 window.abrirModalSubdivisaoDirect = abrirModalGerenciarSdps;
 window.excluirDelegaciaDirect = excluirDelegacia;
 window.abrirModalGerenciarSdps = abrirModalGerenciarSdps;
+window.abrirModalSubdivisao = abrirModalSubdivisao;
 window.fecharModalSdpLista = fecharModalSdpLista;
 window.renderizarListaSdpsModal = renderizarListaSdpsModal;
 window.abrirModalNovaSdp = abrirModalNovaSdp;
