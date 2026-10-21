@@ -569,10 +569,10 @@ function criarModalDelegaciaDOM() {
 }
 
 // ==========================================
-// MÓDULO DE GERENCIAMENTO DE SDPs (GERENCIAR SDPs)
+// MÓDULO DE GERENCIAMENTO DE SDPs (SEM VÍNCULO DE DELEGACIAS)
 // ==========================================
 
-window.abrirModalGerenciarSdps = function() {
+export function abrirModalGerenciarSdps() {
   let modal = document.getElementById('modal-sdp-lista');
   if (!modal) {
     criarModalSdpListaDOM();
@@ -581,13 +581,13 @@ window.abrirModalGerenciarSdps = function() {
 
   window.renderizarListaSdpsModal();
   modal.classList.remove('hidden');
-};
+}
 
-window.fecharModalSdpLista = function() {
+export function fecharModalSdpLista() {
   document.getElementById('modal-sdp-lista')?.classList.add('hidden');
-};
+}
 
-window.renderizarListaSdpsModal = function() {
+export function renderizarListaSdpsModal() {
   const container = document.getElementById('sdp-lista-corpo');
   if (!container) return;
 
@@ -613,16 +613,16 @@ window.renderizarListaSdpsModal = function() {
       </td>
     </tr>
   `).join('');
-};
+}
 
-window.abrirModalNovaSdp = function() {
+export function abrirModalNovaSdp() {
   document.getElementById('sdp-form-id').value = '';
   document.getElementById('sdp-form-nome').value = '';
   document.getElementById('modal-sdp-form-titulo').innerText = '➕ Nova Subdivisão (SDP)';
   document.getElementById('modal-sdp-form')?.classList.remove('hidden');
-};
+}
 
-window.abrirModalEditarSdp = function(sdpId) {
+export function abrirModalEditarSdp(sdpId) {
   const sdp = (appState.sdps || []).find(s => String(s.id) === String(sdpId));
   if (!sdp) return;
 
@@ -630,13 +630,13 @@ window.abrirModalEditarSdp = function(sdpId) {
   document.getElementById('sdp-form-nome').value = sdp.nome || '';
   document.getElementById('modal-sdp-form-titulo').innerText = '✏️ Editar Subdivisão (SDP)';
   document.getElementById('modal-sdp-form')?.classList.remove('hidden');
-};
+}
 
-window.fecharModalSdpForm = function() {
+export function fecharModalSdpForm() {
   document.getElementById('modal-sdp-form')?.classList.add('hidden');
-};
+}
 
-window.salvarSdpForm = async function(e) {
+export async function salvarSdpForm(e) {
   e.preventDefault();
 
   try {
@@ -686,9 +686,9 @@ window.salvarSdpForm = async function(e) {
     console.error("Erro ao salvar SDP:", err);
     alert(`Erro ao salvar alterações da Subdivisão: ${err.message}`);
   }
-};
+}
 
-window.excluirSdpModalDirect = async function(id) {
+export async function excluirSdpModalDirect(id) {
   if (!id) return;
 
   const sdp = (appState.sdps || []).find(s => String(s.id) === String(id));
@@ -724,7 +724,7 @@ window.excluirSdpModalDirect = async function(id) {
     console.error("Erro ao excluir SDP:", err);
     alert(`Erro ao excluir Subdivisão: ${err.message}`);
   }
-};
+}
 
 function criarModalSdpListaDOM() {
   document.getElementById('modal-sdp-lista')?.remove();
@@ -794,7 +794,7 @@ function criarModalSdpListaDOM() {
 // MÓDULO PLANTÃO UNIFICADO / CONSÓRCIO
 // ==========================================
 
-window.abrirModalPlantaoUnificado = function(delId) {
+export function abrirModalPlantaoUnificado(delId) {
   let modal = document.getElementById('modal-plantao-unificado');
   if (!modal) {
     criarModalPlantaoUnificadoDOM();
@@ -809,13 +809,13 @@ window.abrirModalPlantaoUnificado = function(delId) {
 
   window.renderizarCheckboxesPlantaoUnificado(delTarget);
   modal.classList.remove('hidden');
-};
+}
 
-window.fecharModalPlantaoUnificado = function() {
+export function fecharModalPlantaoUnificado() {
   document.getElementById('modal-plantao-unificado')?.classList.add('hidden');
-};
+}
 
-window.renderizarCheckboxesPlantaoUnificado = function(delTarget) {
+export function renderizarCheckboxesPlantaoUnificado(delTarget) {
   const container = document.getElementById('unificado-delegacias-lista');
   if (!container) return;
 
@@ -850,9 +850,9 @@ window.renderizarCheckboxesPlantaoUnificado = function(delTarget) {
       </label>
     `;
   }).join('');
-};
+}
 
-window.salvarPlantaoUnificadoModal = async function(e) {
+export async function salvarPlantaoUnificadoModal(e) {
   e.preventDefault();
 
   try {
@@ -901,7 +901,7 @@ window.salvarPlantaoUnificadoModal = async function(e) {
     console.error("Erro ao salvar Plantão Unificado:", err);
     alert(`Erro ao atualizar Plantão Unificado: ${err.message}`);
   }
-};
+}
 
 function criarModalPlantaoUnificadoDOM() {
   document.getElementById('modal-plantao-unificado')?.remove();
@@ -941,3 +941,15 @@ function criarModalPlantaoUnificadoDOM() {
 window.abrirModalDelegaciaDirect = abrirModalDelegacia;
 window.abrirModalSubdivisaoDirect = abrirModalGerenciarSdps;
 window.excluirDelegaciaDirect = excluirDelegacia;
+window.abrirModalGerenciarSdps = abrirModalGerenciarSdps;
+window.fecharModalSdpLista = fecharModalSdpLista;
+window.renderizarListaSdpsModal = renderizarListaSdpsModal;
+window.abrirModalNovaSdp = abrirModalNovaSdp;
+window.abrirModalEditarSdp = abrirModalEditarSdp;
+window.fecharModalSdpForm = fecharModalSdpForm;
+window.salvarSdpForm = salvarSdpForm;
+window.excluirSdpModalDirect = excluirSdpModalDirect;
+window.abrirModalPlantaoUnificado = abrirModalPlantaoUnificado;
+window.fecharModalPlantaoUnificado = fecharModalPlantaoUnificado;
+window.renderizarCheckboxesPlantaoUnificado = renderizarCheckboxesPlantaoUnificado;
+window.salvarPlantaoUnificadoModal = salvarPlantaoUnificadoModal;
