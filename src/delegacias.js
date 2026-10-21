@@ -262,7 +262,6 @@ export function renderizarListaTroncoGalhos() {
   container.innerHTML = htmlTotal;
 }
 
-// 🔴 ADICIONADO 'export' explícito para evitar Uncaught SyntaxError no app.js
 export function abrirModalDelegacia(delId = null) {
   let modal = document.getElementById('modal-delegacia');
   if (!modal) {
@@ -441,7 +440,6 @@ export async function salvarDelegaciaModal(e) {
   }
 }
 
-// 🔴 ADICIONADO 'export' explícito
 export async function excluirDelegacia(id) {
   if (!confirm("Deseja realmente excluir esta delegacia?")) return;
 
@@ -571,10 +569,10 @@ function criarModalDelegaciaDOM() {
 }
 
 // ==========================================
-// MÓDULO DE GERENCIAMENTO DE SDPs (SEM VÍNCULO DE DELEGACIAS)
+// MÓDULO DE GERENCIAMENTO DE SDPs (GERENCIAR SDPs)
 // ==========================================
 
-export window.abrirModalGerenciarSdps = function() {
+window.abrirModalGerenciarSdps = function() {
   let modal = document.getElementById('modal-sdp-lista');
   if (!modal) {
     criarModalSdpListaDOM();
@@ -585,11 +583,11 @@ export window.abrirModalGerenciarSdps = function() {
   modal.classList.remove('hidden');
 };
 
-export window.fecharModalSdpLista = function() {
+window.fecharModalSdpLista = function() {
   document.getElementById('modal-sdp-lista')?.classList.add('hidden');
 };
 
-export window.renderizarListaSdpsModal = function() {
+window.renderizarListaSdpsModal = function() {
   const container = document.getElementById('sdp-lista-corpo');
   if (!container) return;
 
@@ -617,14 +615,14 @@ export window.renderizarListaSdpsModal = function() {
   `).join('');
 };
 
-export window.abrirModalNovaSdp = function() {
+window.abrirModalNovaSdp = function() {
   document.getElementById('sdp-form-id').value = '';
   document.getElementById('sdp-form-nome').value = '';
   document.getElementById('modal-sdp-form-titulo').innerText = '➕ Nova Subdivisão (SDP)';
   document.getElementById('modal-sdp-form')?.classList.remove('hidden');
 };
 
-export window.abrirModalEditarSdp = function(sdpId) {
+window.abrirModalEditarSdp = function(sdpId) {
   const sdp = (appState.sdps || []).find(s => String(s.id) === String(sdpId));
   if (!sdp) return;
 
@@ -634,11 +632,11 @@ export window.abrirModalEditarSdp = function(sdpId) {
   document.getElementById('modal-sdp-form')?.classList.remove('hidden');
 };
 
-export window.fecharModalSdpForm = function() {
+window.fecharModalSdpForm = function() {
   document.getElementById('modal-sdp-form')?.classList.add('hidden');
 };
 
-export window.salvarSdpForm = async function(e) {
+window.salvarSdpForm = async function(e) {
   e.preventDefault();
 
   try {
@@ -690,7 +688,7 @@ export window.salvarSdpForm = async function(e) {
   }
 };
 
-export window.excluirSdpModalDirect = async function(id) {
+window.excluirSdpModalDirect = async function(id) {
   if (!id) return;
 
   const sdp = (appState.sdps || []).find(s => String(s.id) === String(id));
@@ -796,7 +794,7 @@ function criarModalSdpListaDOM() {
 // MÓDULO PLANTÃO UNIFICADO / CONSÓRCIO
 // ==========================================
 
-export window.abrirModalPlantaoUnificado = function(delId) {
+window.abrirModalPlantaoUnificado = function(delId) {
   let modal = document.getElementById('modal-plantao-unificado');
   if (!modal) {
     criarModalPlantaoUnificadoDOM();
@@ -813,11 +811,11 @@ export window.abrirModalPlantaoUnificado = function(delId) {
   modal.classList.remove('hidden');
 };
 
-export window.fecharModalPlantaoUnificado = function() {
+window.fecharModalPlantaoUnificado = function() {
   document.getElementById('modal-plantao-unificado')?.classList.add('hidden');
 };
 
-export window.renderizarCheckboxesPlantaoUnificado = function(delTarget) {
+window.renderizarCheckboxesPlantaoUnificado = function(delTarget) {
   const container = document.getElementById('unificado-delegacias-lista');
   if (!container) return;
 
@@ -854,7 +852,7 @@ export window.renderizarCheckboxesPlantaoUnificado = function(delTarget) {
   }).join('');
 };
 
-export window.salvarPlantaoUnificadoModal = async function(e) {
+window.salvarPlantaoUnificadoModal = async function(e) {
   e.preventDefault();
 
   try {
