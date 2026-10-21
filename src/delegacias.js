@@ -972,6 +972,9 @@ function criarModalPlantaoUnificadoDOM() {
 }
 
 // Mapeamento de Atalhos Globais
+window.abrirModalDelegacia = abrirModalDelegacia;       // 👈 ADICIONE ESTA LINHA
+window.excluirDelegacia = excluirDelegacia;             // 👈 ADICIONE ESTA LINHA
+
 window.abrirModalDelegaciaDirect = abrirModalDelegacia;
 window.abrirModalSubdivisaoDirect = abrirModalGerenciarSdps;
 window.excluirDelegaciaDirect = excluirDelegacia;
