@@ -202,7 +202,6 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
   const setSdps = new Set(['7ª SDP', '8ª SDP', '21ª SDP']);
   (appState.delegacias || []).forEach(d => { if (d.subdivisao) setSdps.add(padronizarSdpStr(d.subdivisao)); });
   (appState.servidores || []).forEach(s => { if (s.subdivisao) setSdps.add(padronizarSdpStr(s.subdivisao)); });
-  (appState.escalas || []).forEach(e => { if (e.sdpId) setSdps.add(padronizarSdpStr(e.sdpId)); });
 
   const sdpsUnicas = [...setSdps].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -333,21 +332,27 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
       return true;
     });
 
+    // 🟢 FILTRAGEM RELACIONAL DA CRF VIA SERVIDOR E DELEGACIA
     if (scope === 'CRF') {
       if (sdpFiltroAtual !== 'TODOS') {
         escalasDoDia = escalasDoDia.filter(e => {
           const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
-          const del = (appState.delegacias || []).find(d => String(d.id) === String(e.delegaciaId));
+          const del = srv ? (appState.delegacias || []).find(d => String(d.id) === String(srv.delegaciaId)) : (appState.delegacias || []).find(d => String(d.id) === String(e.delegaciaId));
 
           const sdpDel = del?.subdivisao ? padronizarSdpStr(del.subdivisao) : '';
           const sdpSrv = srv?.subdivisao ? padronizarSdpStr(srv.subdivisao) : '';
+          const sdpEsc = e.sdpId ? padronizarSdpStr(e.sdpId) : '';
 
-          return sdpDel === sdpFiltroAtual || sdpSrv === sdpFiltroAtual;
+          return sdpDel === sdpFiltroAtual || sdpSrv === sdpFiltroAtual || sdpEsc === sdpFiltroAtual;
         });
       }
 
       if (delFiltroAtual !== 'TODAS') {
-        escalasDoDia = escalasDoDia.filter(e => String(e.delegaciaId) === String(delFiltroAtual));
+        escalasDoDia = escalasDoDia.filter(e => {
+          const srv = (appState.servidores || []).find(s => String(s.id) === String(e.servidorId));
+          const idDelegaciaEfetiva = srv?.delegaciaId || e.delegaciaId;
+          return String(idDelegaciaEfetiva) === String(delFiltroAtual);
+        });
       }
     }
 
@@ -920,10 +925,14 @@ window.salvarTrocaDelegadoSubmit = async function(e) {
   const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
+  // 🟢 SINCRONIZA O SERVIDOR E A DELEGACIA ID DA ESCALA COM A LOTAÇÃO DO NOVO DELEGADO
   esc.servidorId = novoServidorId;
   if (srvNovo) {
     esc.servidorNome = srvNovo.nome;
     esc.servidorCargo = srvNovo.cargo || 'DELEGADO';
+    if (srvNovo.delegaciaId) {
+      esc.delegaciaId = srvNovo.delegaciaId;
+    }
   }
 
   try {
@@ -1040,10 +1049,14 @@ window.salvarTrocaApjSubmit = async function(e) {
   const srvAnterior = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
   const srvNovo = (appState.servidores || []).find(s => String(s.id) === String(novoServidorId));
 
+  // 🟢 SINCRONIZA O SERVIDOR E A DELEGACIA ID DA ESCALA COM A LOTAÇÃO DO NOVO APJ
   esc.servidorId = novoServidorId;
   if (srvNovo) {
     esc.servidorNome = srvNovo.nome;
     esc.servidorCargo = srvNovo.cargo || 'APJ';
+    if (srvNovo.delegaciaId) {
+      esc.delegaciaId = srvNovo.delegaciaId;
+    }
   }
 
   try {
