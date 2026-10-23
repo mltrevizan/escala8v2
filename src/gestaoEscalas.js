@@ -1320,24 +1320,27 @@ window.excluirEscalaGestaoDirect = async function(id, scopeTarget) {
 };
 
 window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
-  const { currentYear, currentMonth, selectedDelegaciaId } = appState;
+  const { selectedDelegaciaId } = appState;
 
+  // 1. Puxa TODOS os lançamentos da base de dados sem trava de Mês/Ano
   const escalasFiltradas = (appState.escalas || []).filter(e => {
     if (e.scope !== scopeTarget) return false;
     if (scopeTarget === 'DELEGACIA' && String(e.delegaciaId) !== String(selectedDelegaciaId)) return false;
-    const [ano, mes] = e.data.split('-').map(Number);
-    return ano === currentYear && (mes - 1) === currentMonth;
+    return true;
   });
 
-  if (escalasFiltradas.length === 0) {
-    alert("Não há escalas registradas para exportar neste mês.");
+  if (!escalasFiltradas || escalasFiltradas.length === 0) {
+    alert("Não há escalas registradas na base de dados para exportar.");
     return;
   }
 
+  // 2. Ordena cronologicamente todos os lançamentos por data
+  escalasFiltradas.sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+
   let csvContent = "\uFEFFData,Policial,Cargo,Lotacao,Turno,Modalidade,VTR\n";
   escalasFiltradas.forEach(esc => {
-    const srv = (appState.servidores || []).find(s => s.id === esc.servidorId);
-    const del = (appState.delegacias || []).find(d => d.id === srv?.delegaciaId);
+    const srv = (appState.servidores || []).find(s => String(s.id) === String(esc.servidorId));
+    const del = (appState.delegacias || []).find(d => String(d.id) === String(srv?.delegaciaId));
     csvContent += `"${esc.data}","${srv?.nome || ''}","${srv?.cargo || ''}","${del?.nome || ''}","${esc.turno || ''}","${normalizarTipoModalidade(esc.tipo)}","${esc.vtr || ''}"\n`;
   });
 
@@ -1345,7 +1348,7 @@ window.exportarEscalaCrfCsv = function(scopeTarget = 'CRF') {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.setAttribute("href", url);
-  link.setAttribute("download", `escala_${scopeTarget.toLowerCase()}_${currentYear}_${currentMonth + 1}.csv`);
+  link.setAttribute("download", `escala_${scopeTarget.toLowerCase()}_completa_todos_os_meses.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
