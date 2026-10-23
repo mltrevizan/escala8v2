@@ -448,7 +448,7 @@ export async function renderCalendarGrid(containerId, scope = 'CRF') {
             const cargoPolicial = srv ? srv.cargo : (esc.servidorCargo || esc.cargoServidor || esc.cargo || 'APJ');
 
             const isDel = String(cargoPolicial).toUpperCase().includes('DELEGADO');
-            const prefixo = isDel ? 'DEL.' : 'APJ';
+            const prefixo = isDel ? 'DEL' : 'APJ';
             
             let corTexto = 'text-slate-900';
             if (isSobreaviso) corTexto = 'text-white font-semibold';
@@ -537,7 +537,7 @@ function renderBalaoPeriodo(titulo, horario, escalasArray, bgStyle, dateStr) {
     const isDel = String(cargoPolicial).toUpperCase().includes('DELEGADO');
     const isExtra = esc.tipo === 'EXTRAJORNADA' || esc.tipo === 'SDP';
 
-    const prefixo = isDel ? 'DEL.' : 'APJ';
+    const prefixo = isDel ? 'DEL' : 'APJ';
     const nomeExibicao = formatarNomeOperacional(nomePolicial, prefixo);
 
     if (isExtra) {
