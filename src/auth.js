@@ -33,24 +33,30 @@ export function initAuthModule() {
     if (user) {
       await loadAllDataFromFirestore();
 
+      const emailAuthNorm = (user.email || '').toLowerCase().trim();
+      const loginAuthPrefix = emailAuthNorm.split('@')[0];
+
       const srv = (appState.servidores || []).find(s => {
         const emailSrv = obterEmailAutenticacao(s);
-        return emailSrv === user.email.toLowerCase() || 
-               (s.email && s.email.toLowerCase() === user.email.toLowerCase()) ||
-               (s.emailRecuperacao && s.emailRecuperacao.toLowerCase() === user.email.toLowerCase());
+        return emailSrv === emailAuthNorm || 
+               (s.email && s.email.toLowerCase().trim() === emailAuthNorm) ||
+               (s.emailRecuperacao && s.emailRecuperacao.toLowerCase().trim() === emailAuthNorm) ||
+               (s.login && s.login.toLowerCase().trim() === loginAuthPrefix);
       });
+
+      const isAdminAccount = emailAuthNorm === 'admin@policiacivil.pr.gov.br' || loginAuthPrefix === 'admin';
 
       appState.currentUser = {
         uid: user.uid,
         id: srv ? String(srv.id) : user.uid,
         servidorId: srv ? String(srv.id) : null,
         email: user.email,
-        login: srv ? srv.login : user.email.split('@')[0],
-        nome: srv ? srv.nome : (user.displayName || 'ADMINISTRADOR DO SISTEMA'),
-        cargo: srv ? srv.cargo : 'DELEGADO',
-        perfil: srv ? (srv.nivelAcesso || srv.perfil) : 'Administrador',
+        login: srv ? srv.login : loginAuthPrefix,
+        nome: srv ? srv.nome : (isAdminAccount ? 'ADMINISTRADOR DO SISTEMA' : (user.displayName || user.email)),
+        cargo: srv ? srv.cargo : (isAdminAccount ? 'DELEGADO' : 'VISUALIZADOR'),
+        perfil: srv ? (srv.nivelAcesso || srv.perfil || 'APJ') : (isAdminAccount ? 'ADMINISTRADOR' : 'Visualizador'),
         delegaciaId: srv ? srv.delegaciaId : null,
-        subdivisao: srv ? srv.subdivisao : '8ª SDP',
+        subdivisao: srv ? srv.subdivisao : null,
         forcarTrocaSenha: srv?.forcarTrocaSenha || srv?.senhaResetada || false
       };
 
