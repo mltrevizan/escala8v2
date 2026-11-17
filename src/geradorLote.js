@@ -553,7 +553,7 @@ window.moverPolicialFila = function(index, direcao) {
   renderizarPainelModo();
 };
 
-// 🔑 LÓGICA DE GERAÇÃO EM LOTE REAJUSTADA PARA ROTACIONAR CORRETAMENTE O SOBREAVISO
+// 🔑 LÓGICA DE GERAÇÃO EM LOTE CORRIGIDA PARA RESPEITAR DURAÇÃO EM DIAS NO SOBREAVISO E PLANTÃO
 window.executarGeradorLote = async function(e) {
   e.preventDefault();
 
@@ -574,11 +574,10 @@ window.executarGeradorLote = async function(e) {
   const config = isSobreaviso ? delObj?.sobreavisoConfig : delObj?.plantaoConfig;
   const turnoPadraoCalculado = config?.intervalo || (scope === 'CRF' ? '12h (D)' : '24h');
 
-  // Se o turno configurado for em blocos de dias (ex: 2 dias), calcula a duração do bloco.
-  // Caso contrário (24h / 12h), cada plantão dura 1 dia.
+  // Calcula a duração do bloco em dias tanto para Plantão Local quanto para Sobreaviso
   let duracaoDiasBloco = 1;
-  if (turnoPadraoCalculado.includes('dias') && !isSobreaviso) {
-    duracaoDiasBloco = parseInt(turnoPadraoCalculado) || 1;
+  if (turnoPadraoCalculado.includes('dias')) {
+    duracaoDiasBloco = parseInt(turnoPadraoCalculado, 10) || 1;
   }
 
   if (!dataInicio || !dataFim || dataFim < dataInicio) {
@@ -643,7 +642,8 @@ window.executarGeradorLote = async function(e) {
   let idxDia = 0;
   while (idxDia < diasValidos.length) {
     const dtIso = diasValidos[idxDia];
-    const datasDoBloco = gerarDatasMultiplasContinuas(dtIso, duracaoDiasBloco);
+    const datasDoBloco = gerarDatasMultiplasContinuas(dtIso, duracaoDiasBloco)
+      .filter(d => d <= dataFim);
 
     if (geradorState.modo === 'INDIVIDUAL') {
       const sId = geradorState.policiaisSelecionados[filaIndex % geradorState.policiaisSelecionados.length];
@@ -658,7 +658,7 @@ window.executarGeradorLote = async function(e) {
           delegaciaId: delegaciaId,
           scope: scope,
           tipo: tipoModalidade,
-          turno: isSobreaviso ? '24h' : turnoPadraoCalculado,
+          turno: turnoPadraoCalculado,
           vtr: geradorState.vtrIndividual || ''
         };
 
@@ -683,7 +683,7 @@ window.executarGeradorLote = async function(e) {
             delegaciaId: delegaciaId,
             scope: scope,
             tipo: tipoModalidade,
-            turno: isSobreaviso ? '24h' : turnoPadraoCalculado,
+            turno: turnoPadraoCalculado,
             vtr: equipeAtiva.vtr || ''
           };
 
